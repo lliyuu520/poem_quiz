@@ -1,0 +1,124 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:poem_quiz/data/grade.dart';
+import 'package:poem_quiz/data/progress_store.dart';
+import 'package:poem_quiz/data/topics.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  group('按科目隔离的存档', () {
+    test('不同科目的进度互不影响', () async {
+      final poetry = await ProgressStore.load(topicId: 'poetry');
+      await poetry.recordSession(
+        score: 1200,
+        answered: 10,
+        correct: 8,
+        maxCombo: 5,
+        wrongIds: const <String>['唐|李白|静夜思'],
+        clearedIds: const <String>['唐|李白|望庐山瀑布'],
+        careerMode: true,
+      );
+
+      final other = await ProgressStore.load(topicId: 'pinyin');
+      expect(other.bestScore, 0, reason: '拼音科目不应看到诗词的最高分');
+      expect(other.wrongPoemIds, isEmpty);
+      expect(other.masteredPoemIds, isEmpty);
+
+      // 重新加载诗词科目，数据仍在。
+      final reloaded = await ProgressStore.load(topicId: 'poetry');
+      expect(reloaded.bestScore, 1200);
+      expect(reloaded.wrongPoemIds, contains('唐|李白|静夜思'));
+      expect(reloaded.masteredPoemIds, contains('唐|李白|望庐山瀑布'));
+    });
+
+    test('存储键带科目前缀', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      await store.recordSession(
+        score: 500,
+        answered: 5,
+        correct: 5,
+        maxCombo: 5,
+        wrongIds: const <String>[],
+        clearedIds: const <String>[],
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getInt('poetry_best_score'), 500);
+      expect(prefs.getInt('best_score'), isNull, reason: '不应再写无前缀的旧键');
+    });
+  });
+
+  group('重置生涯', () {
+    test('重置后已掌握清空，其他统计保留', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      await store.recordSession(
+        score: 900,
+        answered: 10,
+        correct: 9,
+        maxCombo: 7,
+        wrongIds: const <String>['唐|李白|静夜思'],
+        clearedIds: const <String>['唐|杜甫|春望', '唐|李白|早发白帝城'],
+        careerMode: true,
+      );
+      expect(store.masteredPoemIds.length, 2);
+
+      await store.resetCareer();
+
+      expect(store.masteredPoemIds, isEmpty, reason: '生涯进度应清空');
+      expect(store.bestScore, 900, reason: '最高分不应受重置影响');
+      expect(store.wrongPoemIds, contains('唐|李白|静夜思'), reason: '错题本不应受重置影响');
+
+      // 重置要落盘，重新加载后仍是空。
+      final reloaded = await ProgressStore.load(topicId: 'poetry');
+      expect(reloaded.masteredPoemIds, isEmpty);
+      expect(reloaded.bestScore, 900);
+    });
+
+    test('重置后原本被排除的条目重新可出题', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      final allIds = kPoetryTopic.entries.map((e) => e.id).toList();
+      await store.recordSession(
+        score: 0,
+        answered: allIds.length,
+        correct: allIds.length,
+        maxCombo: 0,
+        wrongIds: const <String>[],
+        clearedIds: allIds,
+        careerMode: true,
+      );
+      expect(store.masteredPoemIds.length, allIds.length);
+
+      await store.resetCareer();
+      expect(store.masteredPoemIds, isEmpty);
+    });
+  });
+
+  group('科目定义', () {
+    test('诗词科目的分组与副标题可用', () {
+      final topic = kPoetryTopic;
+      expect(topic.entries, isNotEmpty);
+      for (final e in topic.entries) {
+        expect(topic.groupOf(e), isNotEmpty, reason: '${e.title} 分组为空');
+        expect(topic.metaOf(e), isNotEmpty, reason: '${e.title} 副标题为空');
+      }
+    });
+
+    test('分组覆盖全部条目且数量合理', () {
+      final groups = kPoetryTopic.entries.map(kPoetryTopic.groupOf).toSet();
+      expect(groups, contains('唐'));
+      expect(groups, contains('宋'));
+      expect(groups.length, lessThan(20), reason: '分组过多说明取错了字段');
+    });
+
+    test('countForGrade 与年级包含关系一致', () {
+      final topic = kPoetryTopic;
+      expect(topic.countForGrade(GradeLevel.g1), lessThan(topic.countForGrade(GradeLevel.g5)));
+      expect(topic.countForGrade(GradeLevel.g9), lessThan(topic.entries.length),
+          reason: '九年级题池不应包含拓展档条目');
+      expect(topic.countForGrade(GradeLevel.extension), greaterThan(0));
+    });
+  });
+}
