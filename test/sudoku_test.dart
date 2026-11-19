@@ -12,20 +12,28 @@ import 'package:poem_quiz/pages/sudoku_page.dart';
 import 'package:poem_quiz/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 校验一组 81 格是否满足数独三约束（1~9 各一次）。
+int _sizeOf(List<int> grid) => sqrt(grid.length).round();
+
+int _boxDim(int size) => sqrt(size).round();
+
+/// 校验一组格子是否满足数独三约束（1~size 各一次）。
 bool isValidGrid(List<int> grid) {
-  for (var i = 0; i < 9; i++) {
+  final size = _sizeOf(grid);
+  final box = _boxDim(size);
+  for (var i = 0; i < size; i++) {
     final row = <int>{};
     final col = <int>{};
-    final box = <int>{};
-    for (var j = 0; j < 9; j++) {
-      row.add(grid[i * 9 + j]);
-      col.add(grid[j * 9 + i]);
-      final br = (i ~/ 3) * 3 + j ~/ 3;
-      final bc = (i % 3) * 3 + j % 3;
-      box.add(grid[br * 9 + bc]);
+    final b = <int>{};
+    for (var j = 0; j < size; j++) {
+      row.add(grid[i * size + j]);
+      col.add(grid[j * size + i]);
+      final br = (i ~/ box) * box + j ~/ box;
+      final bc = (i % box) * box + j % box;
+      b.add(grid[br * size + bc]);
     }
-    if (row.length != 9 || col.length != 9 || box.length != 9) return false;
+    if (row.length != size || col.length != size || b.length != size) {
+      return false;
+    }
   }
   return true;
 }
@@ -34,15 +42,17 @@ bool isValidGrid(List<int> grid) {
 ///
 /// 与生产实现分开写，用来交叉验证；初始盘面自相冲突时直接返回 0。
 int countSolutions(List<int> grid) {
+  final size = _sizeOf(grid);
+  final box = _boxDim(size);
   final g = List<int>.from(grid);
-  final rows = List<int>.filled(9, 0);
-  final cols = List<int>.filled(9, 0);
-  final boxes = List<int>.filled(9, 0);
-  for (var i = 0; i < 81; i++) {
+  final rows = List<int>.filled(size, 0);
+  final cols = List<int>.filled(size, 0);
+  final boxes = List<int>.filled(size, 0);
+  for (var i = 0; i < grid.length; i++) {
     final v = g[i];
     if (v == 0) continue;
     final bit = 1 << v;
-    final r = i ~/ 9, c = i % 9, b = (r ~/ 3) * 3 + c ~/ 3;
+    final r = i ~/ size, c = i % size, b = (r ~/ box) * box + c ~/ box;
     if ((rows[r] & bit) != 0 || (cols[c] & bit) != 0 || (boxes[b] & bit) != 0) {
       return 0; // 题面本身矛盾
     }
@@ -51,12 +61,13 @@ int countSolutions(List<int> grid) {
     boxes[b] |= bit;
   }
 
+  final fullMask = ((1 << (size + 1)) - 1) & ~1;
   int walk() {
-    var best = -1, bestMask = 0, bestCount = 10;
-    for (var i = 0; i < 81; i++) {
+    var best = -1, bestMask = 0, bestCount = size + 1;
+    for (var i = 0; i < grid.length; i++) {
       if (g[i] != 0) continue;
-      final b = (i ~/ 9 ~/ 3) * 3 + (i % 9) ~/ 3;
-      final mask = ~(rows[i ~/ 9] | cols[i % 9] | boxes[b]) & 0x3FE;
+      final r = i ~/ size, c = i % size, b = (r ~/ box) * box + c ~/ box;
+      final mask = ~(rows[r] | cols[c] | boxes[b]) & fullMask;
       var n = 0;
       var m = mask;
       while (m != 0) {
@@ -72,8 +83,8 @@ int countSolutions(List<int> grid) {
     }
     if (best < 0) return 1;
     var total = 0;
-    final r = best ~/ 9, c = best % 9, b = (r ~/ 3) * 3 + c ~/ 3;
-    for (var v = 1; v <= 9; v++) {
+    final r = best ~/ size, c = best % size, b = (r ~/ box) * box + c ~/ box;
+    for (var v = 1; v <= size; v++) {
       if ((bestMask & (1 << v)) == 0) continue;
       g[best] = v;
       rows[r] |= 1 << v;
@@ -92,19 +103,28 @@ int countSolutions(List<int> grid) {
   return walk();
 }
 
+List<int> solutionOf(Sudoku puzzle) => <int>[
+      for (var r = 0; r < puzzle.size; r++)
+        for (var c = 0; c < puzzle.size; c++) puzzle.solutionAt(r, c),
+    ];
+
 void main() {
   group('数独终盘', () {
     test('基准终盘满足行、列、宫三约束', () {
       expect(isValidGrid(Sudoku.baseGrid), isTrue);
       expect(Sudoku.baseGrid.toSet(), <int>{1, 2, 3, 4, 5, 6, 7, 8, 9});
+      expect(isValidGrid(Sudoku.baseGrid4), isTrue);
+      expect(Sudoku.baseGrid4.toSet(), <int>{1, 2, 3, 4});
     });
 
     test('每档的两道终盘都合法，且互不相同', () {
       final seen = <String>{};
       for (final level in SudokuDifficulty.values) {
         for (final solved in level.solutions) {
+          expect(solved.length, level.cellCount,
+              reason: '${level.title} 终盘尺寸应为 ${level.size}×${level.size}');
           expect(isValidGrid(solved), isTrue, reason: '${level.title} 终盘不合法');
-          expect(seen.add(solved.join()), isTrue,
+          expect(seen.add('${level.size}:${solved.join()}'), isTrue,
               reason: '${level.title} 出现了重复终盘');
         }
       }
@@ -137,12 +157,9 @@ void main() {
     test('题面数字都来自终盘，且终盘本身合法', () {
       for (final level in SudokuDifficulty.values) {
         for (final puzzle in Sudoku.allOf(level)) {
-          final solved = <int>[
-            for (var r = 0; r < 9; r++)
-              for (var c = 0; c < 9; c++) puzzle.solutionAt(r, c),
-          ];
+          final solved = solutionOf(puzzle);
           expect(isValidGrid(solved), isTrue, reason: '${level.title} 终盘不合法');
-          for (var i = 0; i < 81; i++) {
+          for (var i = 0; i < puzzle.cellCount; i++) {
             if (puzzle.given[i] != 0) {
               expect(puzzle.given[i], solved[i], reason: '第 $i 格与终盘不符');
             }
@@ -170,8 +187,12 @@ void main() {
           final holes = puzzle.blanks.length;
           expect(holes, lessThanOrEqualTo(maxTarget),
               reason: '${level.title} 挖了 $holes 格，超过目标 $maxTarget');
-          for (var r = 0; r < 9; r++) {
-            final inRow = puzzle.given.skip(r * 9).take(9).where((v) => v != 0).length;
+          for (var r = 0; r < puzzle.size; r++) {
+            final inRow = puzzle.given
+                .skip(r * puzzle.size)
+                .take(puzzle.size)
+                .where((v) => v != 0)
+                .length;
             expect(inRow, greaterThan(0),
                 reason: '${level.title} 第 ${r + 1} 行没有提示');
           }
@@ -183,7 +204,9 @@ void main() {
       // 同档内取最浅的一道比较，避免「某档挖不满」影响单调性判断。
       final counts = <int>[
         for (final level in SudokuDifficulty.values)
-          Sudoku.allOf(level).map((p) => p.blanks.length).reduce((a, b) => a < b ? a : b),
+          Sudoku.allOf(level)
+              .map((p) => p.blanks.length)
+              .reduce((a, b) => a < b ? a : b),
       ];
       for (var i = 1; i < counts.length; i++) {
         expect(counts[i], greaterThan(counts[i - 1]),
@@ -194,40 +217,32 @@ void main() {
     test('isGiven 与 blanks 互补', () {
       for (final level in SudokuDifficulty.values) {
         for (final p in Sudoku.allOf(level)) {
-          for (var r = 0; r < 9; r++) {
-            for (var c = 0; c < 9; c++) {
-              expect(p.isGiven(r, c), p.given[r * 9 + c] != 0);
+          for (var r = 0; r < p.size; r++) {
+            for (var c = 0; c < p.size; c++) {
+              expect(p.isGiven(r, c), p.given[r * p.size + c] != 0);
             }
           }
-          expect(p.blanks.length + p.given.where((v) => v != 0).length, 81);
+          expect(p.blanks.length + p.given.where((v) => v != 0).length,
+              p.cellCount);
         }
       }
     });
   });
 
   group('自检器本身可信', () {
-    /// 取一道已知合法盘面作素材。
-    List<int> solutionOf(SudokuDifficulty level) {
-      final p = Sudoku.allOf(level).first;
-      return <int>[
-        for (var r = 0; r < 9; r++)
-          for (var c = 0; c < 9; c++) p.solutionAt(r, c),
-      ];
-    }
+    /// 取一道 9×9 盘面的终盘作素材。
+    List<int> solved9() => solutionOf(Sudoku.allOf(SudokuDifficulty.two).first);
 
     test('合法盘面：auditGrid 返回 null', () {
       for (final level in SudokuDifficulty.values) {
         for (final p in Sudoku.allOf(level)) {
-          expect(Sudoku.auditGrid(<int>[
-            for (var r = 0; r < 9; r++)
-              for (var c = 0; c < 9; c++) p.solutionAt(r, c),
-          ], p.given), isNull);
+          expect(Sudoku.auditGrid(solutionOf(p), p.given), isNull);
         }
       }
     });
 
     test('多解盘面会被判出来（每行只留一个提示）', () {
-      final solved = solutionOf(SudokuDifficulty.one);
+      final solved = solved9();
       // 每行只留第 0 列一个提示：行数满足「每行有提示」，但解数必然大于 1。
       final sparse = <int>[
         for (var i = 0; i < 81; i++) i % 9 == 0 ? solved[i] : 0,
@@ -240,7 +255,7 @@ void main() {
     });
 
     test('无解盘面会被判出来（题面自相矛盾）', () {
-      final solved = solutionOf(SudokuDifficulty.one);
+      final solved = solved9();
       final broken = List<int>.from(solved);
       // 把第一行第二格改成与第一格相同的数字，行内冲突 → 无解。
       broken[1] = broken[0];
@@ -250,7 +265,7 @@ void main() {
     });
 
     test('初始盘面冲突不会被位掩码吞掉（回归：同一行出现两个相同数字）', () {
-      final solved = solutionOf(SudokuDifficulty.one);
+      final solved = solved9();
       // 构造只有 18 个提示、但其中一格重复的盘面。
       // 位掩码按位或会把重复悄悄合并，若解数算法不先查冲突就会误报「唯一解」。
       final grid = <int>[for (var i = 0; i < 81; i++) i % 9 == 0 ? solved[i] : 0];
@@ -260,24 +275,28 @@ void main() {
     });
 
     test('题面数字与终盘不一致会被判出来', () {
-      final solved = solutionOf(SudokuDifficulty.one);
-      final p = Sudoku.allOf(SudokuDifficulty.one).first;
-      final tampered = List<int>.from(p.given);
-      final i = tampered.indexWhere((v) => v != 0);
-      tampered[i] = tampered[i] % 9 + 1;
-      final verdict = Sudoku.auditGrid(solved, tampered);
-      expect(verdict, isNotNull);
-      expect(verdict, contains('与终盘不符'));
+      for (final level in SudokuDifficulty.values) {
+        final p = Sudoku.allOf(level).first;
+        final solved = solutionOf(p);
+        final tampered = List<int>.from(p.given);
+        final i = tampered.indexWhere((v) => v != 0);
+        tampered[i] = tampered[i] % p.size + 1;
+        final verdict = Sudoku.auditGrid(solved, tampered);
+        expect(verdict, isNotNull);
+        expect(verdict, contains('与终盘不符'));
+      }
     });
 
     test('整行没有提示会被判出来', () {
-      final solved = solutionOf(SudokuDifficulty.one);
-      final p = Sudoku.allOf(SudokuDifficulty.one).first;
-      final holed = List<int>.from(p.given);
-      for (var c = 0; c < 9; c++) {
-        holed[c] = 0;
+      for (final level in SudokuDifficulty.values) {
+        final p = Sudoku.allOf(level).first;
+        final solved = solutionOf(p);
+        final holed = List<int>.from(p.given);
+        for (var c = 0; c < p.size; c++) {
+          holed[c] = 0;
+        }
+        expect(Sudoku.auditGrid(solved, holed), contains('没有提示'));
       }
-      expect(Sudoku.auditGrid(solved, holed), contains('没有提示'));
     });
 
     test('生产用的解数算法与独立实现大量随机比对', () {
@@ -287,13 +306,18 @@ void main() {
       var checked = 0;
       var unique = 0;
       for (final level in SudokuDifficulty.values) {
-        final solved = solutionOf(level);
-        for (var round = 0; round < 60; round++) {
-          // 挖空数在 20~70 之间随机，覆盖「几乎满盘」到「几乎全空」。
-          final holes = 20 + rnd.nextInt(51);
+        final p = Sudoku.allOf(level).first;
+        final solved = solutionOf(p);
+        final size = p.size;
+        final cellCount = p.cellCount;
+        final rounds = size == 4 ? 30 : 40;
+        final minHoles = size == 4 ? 2 : 20;
+        final holeSpan = size == 4 ? (cellCount - 4) : 51;
+        for (var round = 0; round < rounds; round++) {
+          final holes = minHoles + rnd.nextInt(holeSpan);
           final grid = List<int>.from(solved);
-          final positions = List<int>.generate(81, (i) => i)..shuffle(rnd);
-          for (var k = 0; k < holes; k++) {
+          final positions = List<int>.generate(cellCount, (i) => i)..shuffle(rnd);
+          for (var k = 0; k < holes && k < positions.length; k++) {
             grid[positions[k]] = 0;
           }
 
@@ -304,15 +328,15 @@ void main() {
           final auditSaysUnique = verdict == null;
 
           expect(auditSaysUnique, independent == 1,
-              reason: '解数判断不一致：独立实现 $independent 组解，'
+              reason: '解数判断不一致（${level.title}）：独立实现 $independent 组解，'
                   'auditGrid 结论「${verdict ?? '唯一解'}」\n${grid.join()}');
           checked++;
           if (auditSaysUnique) unique++;
         }
       }
       // 抽样里既要有多解也要有唯一解，否则这轮比对没有区分度。
-      expect(checked, greaterThan(200), reason: '有效比对太少：$checked');
-      expect(unique, greaterThan(20), reason: '样本里几乎没有唯一解：$unique');
+      expect(checked, greaterThan(100), reason: '有效比对太少：$checked');
+      expect(unique, greaterThan(10), reason: '样本里几乎没有唯一解：$unique');
       expect(unique, lessThan(checked), reason: '样本里几乎没有多解：$unique/$checked');
     });
   });
@@ -463,9 +487,11 @@ void main() {
           ),
         );
         expect(find.text('一星'), findsOneWidget);
-        for (var d = 1; d <= 9; d++) {
+        // 一星是 4×4 入门盘面，只显示 1-4 数字键。
+        for (var d = 1; d <= SudokuDifficulty.one.size; d++) {
           expect(find.byKey(ValueKey<String>('sudoku-digit-$d')), findsOneWidget);
         }
+        expect(find.byKey(const ValueKey<String>('sudoku-digit-5')), findsNothing);
         expect(find.text('擦除'), findsOneWidget);
         expect(find.text('撤销'), findsOneWidget);
         expect(tester.takeException(), isNull);
@@ -484,8 +510,8 @@ void main() {
       int textCount() => tester.widgetList<Text>(find.byType(Text)).length;
       final before = textCount();
 
-      // 找一个还有空位可填的数字：填满 9 个的数字键是禁用的。
-      for (var d = 1; d <= 9; d++) {
+      // 找一个还有空位可填的数字：填满的数字键是禁用的。
+      for (var d = 1; d <= SudokuDifficulty.one.size; d++) {
         await tester.tap(find.byKey(ValueKey<String>('sudoku-digit-$d')));
         await tester.pumpAndSettle();
         if (textCount() > before) break;

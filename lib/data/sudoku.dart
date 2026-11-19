@@ -1,10 +1,13 @@
 import 'dart:math';
 
-/// 数独（九宫格）盘面与挖空。
+/// 数独盘面与挖空。
 ///
 /// 与诗词/拼音/数学不同，数独**没有题库也没有年级**：盘面按 [SudokuDifficulty]
-/// 难度档由固定终盘现生成。终盘用固定种子做合法置换（换行块、换列块、换数字），
-/// 挖空顺序也用固定种子打乱，所以同一档每次都是同一批盘面，随机只用在「开哪一道」。
+/// 难度档由固定终盘现生成。终盘用固定种子做合法置换（换行带/换列带、带内换行/
+/// 换列、换数字），挖空顺序也用固定种子打乱，所以同一档每次都是同一批盘面，
+/// 随机只用在「开哪一道」。
+///
+/// 一星是 4×4 四宫小盘面，先熟悉「行、列、宫不重复」的规则；其余档位是 9×9。
 ///
 /// 挖空后必须仍然**唯一解**，否则「填满即算对」会把多解盘面上的另一种填法判成冲突。
 /// 生成阶段用 [auditGrid] 逐盘校验，`open()` 在 debug 下再校验一次。
@@ -16,22 +19,31 @@ class Sudoku {
 
   final List<int> _solution;
 
-  /// 题面：0 表示空格，按行优先共 81 格。
+  /// 题面：0 表示空格，按行优先共 [cellCount] 格。
   final List<int> given;
 
+  /// 盘面边长（4 或 9）。
+  int get size => difficulty.size;
+
+  /// 宫的边长（2 或 3）。
+  int get boxDim => difficulty.boxDim;
+
+  /// 格子总数。
+  int get cellCount => difficulty.cellCount;
+
   /// 某格的正确答案（答错反馈里给出）。
-  int solutionAt(int row, int col) => _solution[indexOf(row, col)];
+  int solutionAt(int row, int col) => _solution[indexOf(row, col, size)];
 
   /// 该格是否为题面给定的数字（不可修改）。
-  bool isGiven(int row, int col) => given[indexOf(row, col)] != 0;
+  bool isGiven(int row, int col) => given[indexOf(row, col, size)] != 0;
 
   /// 空格坐标，按从上到下、从左到右排列；第一个即开局默认选中的格子。
   List<(int, int)> get blanks => <(int, int)>[
-        for (var i = 0; i < 81; i++)
-          if (given[i] == 0) (i ~/ 9, i % 9),
+        for (var i = 0; i < cellCount; i++)
+          if (given[i] == 0) (i ~/ size, i % size),
       ];
 
-  static int indexOf(int row, int col) => row * 9 + col;
+  static int indexOf(int row, int col, [int size = 9]) => row * size + col;
 
   /// 取某一档的一道盘面。同一档的盘面集合固定，开局时随机挑一道。
   static Sudoku open(SudokuDifficulty level, Random? random) {
@@ -53,7 +65,7 @@ class Sudoku {
 
   /// 自检本盘面，返回问题描述；全部通过时返回 null。
   ///
-  /// 检查四件事：终盘满足三约束、题面数字与终盘一致、题面**有且只有一组解**、
+  /// 检查四件事：终盘满足约束、题面数字与终盘一致、题面**有且只有一组解**、
   /// 每行至少留一格提示。测试会对所有档位所有盘面穷举调用，
   /// `open()` 在 debug 下也会跑一次——多解或无解会立刻暴露，不会带到孩子手里。
   String? audit() => auditGrid(_solution, given);
@@ -61,38 +73,44 @@ class Sudoku {
   /// 盘面自检的实现。[solution] 是终盘、[given] 是题面（0 为空格）。
   ///
   /// 单独抽出来是因为生成阶段手里只有 `_Puzzle`，还没有构造出 `Sudoku`，
-  /// 而自检必须发生在**缓存写入之前**。
+  /// 而自检必须发生在**缓存写入之前**。盘面尺寸由格子总数自动推断（16→4×4，
+  /// 81→9×9）。
   static String? auditGrid(List<int> solution, List<int> given) {
-    for (var r = 0; r < 9; r++) {
-      if (!_unitIsComplete(<int>[for (var c = 0; c < 9; c++) solution[r * 9 + c]])) {
-        return '终盘第 ${r + 1} 行不是 1~9 各一次';
+    final size = _sizeOf(solution);
+    final box = _boxDim(size);
+
+    for (var r = 0; r < size; r++) {
+      if (!_unitIsComplete(<int>[for (var c = 0; c < size; c++) solution[r * size + c]], size)) {
+        return '终盘第 ${r + 1} 行不是 1~$size 各一次';
       }
     }
-    for (var c = 0; c < 9; c++) {
-      if (!_unitIsComplete(<int>[for (var r = 0; r < 9; r++) solution[r * 9 + c]])) {
-        return '终盘第 ${c + 1} 列不是 1~9 各一次';
+    for (var c = 0; c < size; c++) {
+      if (!_unitIsComplete(<int>[for (var r = 0; r < size; r++) solution[r * size + c]], size)) {
+        return '终盘第 ${c + 1} 列不是 1~$size 各一次';
       }
     }
-    for (var b = 0; b < 9; b++) {
-      final r0 = (b ~/ 3) * 3;
-      final c0 = (b % 3) * 3;
-      if (!_unitIsComplete(<int>[
-        for (var r = r0; r < r0 + 3; r++)
-          for (var c = c0; c < c0 + 3; c++) solution[r * 9 + c],
-      ])) {
-        return '终盘第 ${b + 1} 宫不是 1~9 各一次';
+    for (var br = 0; br < box; br++) {
+      for (var bc = 0; bc < box; bc++) {
+        final r0 = br * box;
+        final c0 = bc * box;
+        if (!_unitIsComplete(<int>[
+          for (var r = r0; r < r0 + box; r++)
+            for (var c = c0; c < c0 + box; c++) solution[r * size + c],
+        ], size)) {
+          return '终盘第 ${br * box + bc + 1} 宫不是 1~$size 各一次';
+        }
       }
     }
 
-    for (var i = 0; i < 81; i++) {
+    for (var i = 0; i < solution.length; i++) {
       if (given[i] != 0 && given[i] != solution[i]) {
-        return '第 ${i ~/ 9 + 1} 行第 ${i % 9 + 1} 列的题面数字与终盘不符';
+        return '第 ${i ~/ size + 1} 行第 ${i % size + 1} 列的题面数字与终盘不符';
       }
     }
 
     if (given.every((v) => v == 0)) return '题面全空，没有提示';
-    for (var r = 0; r < 9; r++) {
-      if (_givenInRow(given, r) == 0) return '第 ${r + 1} 行没有提示';
+    for (var r = 0; r < size; r++) {
+      if (_givenInRow(given, r, size) == 0) return '第 ${r + 1} 行没有提示';
     }
 
     final count = _solutionCount(List<int>.from(given));
@@ -101,14 +119,22 @@ class Sudoku {
     return null;
   }
 
-  static bool _unitIsComplete(List<int> unit) =>
-      unit.length == 9 && unit.toSet().length == 9 && !unit.contains(0);
+  static bool _unitIsComplete(List<int> unit, int size) =>
+      unit.length == size && unit.toSet().length == size && !unit.contains(0);
 
-  /// 基准终盘：第一行 1~9，第 r 行由第一行左移 `3*(r%3) + r~/3` 位得到。
-  ///
-  /// 位移量 0、3、6、1、4、7、2、5、8 两两不同，所以每列也是 1~9 各一次；
-  /// 每个 band 的三行位移互差 3，正好把每宫的九格铺满。其余终盘由它做合法置换得到。
-  static const List<int> baseGrid = <int>[
+  /// 9×9 基准终盘（保留给测试与外部引用）。
+  static const List<int> baseGrid = baseGrid9;
+
+  /// 4×4 基准终盘：2×2 宫，行/列/宫各含 1~4。
+  static const List<int> baseGrid4 = <int>[
+    1, 2, 3, 4, //
+    3, 4, 1, 2, //
+    2, 1, 4, 3, //
+    4, 3, 2, 1, //
+  ];
+
+  /// 9×9 基准终盘：第一行 1~9，第 r 行由第一行左移 `3*(r%3) + r~/3` 位得到。
+  static const List<int> baseGrid9 = <int>[
     1, 2, 3, 4, 5, 6, 7, 8, 9, //
     4, 5, 6, 7, 8, 9, 1, 2, 3, //
     7, 8, 9, 1, 2, 3, 4, 5, 6, //
@@ -120,24 +146,29 @@ class Sudoku {
     9, 1, 2, 3, 4, 5, 6, 7, 8, //
   ];
 
-  /// 合法置换：行块/列块整块重排、块内行/列重排、数字改名。
+  /// 指定尺寸的基准终盘。
+  static List<int> baseGridFor(int size) => size == 4 ? baseGrid4 : baseGrid9;
+
+  /// 合法置换：行带/列带整带重排、带内行/列重排、数字改名。
   /// 这三种都不破坏行、列、宫约束，所以不必逐盘手抄校验。
-  static List<int> permuted(Random rnd) {
-    final bands = <int>[0, 1, 2]..shuffle(rnd);
-    final stacks = <int>[0, 1, 2]..shuffle(rnd);
+  static List<int> permuted(int size, Random rnd) {
+    final b = _boxDim(size);
+    final base = baseGridFor(size);
+    final bands = List<int>.generate(b, (i) => i)..shuffle(rnd);
+    final stacks = List<int>.generate(b, (i) => i)..shuffle(rnd);
     final rowOrder = <int>[
-      for (final b in bands)
-        for (final r in (<int>[0, 1, 2]..shuffle(rnd))) b * 3 + r,
+      for (final band in bands)
+        for (final r in (List<int>.generate(b, (i) => i)..shuffle(rnd))) band * b + r,
     ];
     final colOrder = <int>[
-      for (final s in stacks)
-        for (final c in (<int>[0, 1, 2]..shuffle(rnd))) s * 3 + c,
+      for (final stack in stacks)
+        for (final c in (List<int>.generate(b, (i) => i)..shuffle(rnd))) stack * b + c,
     ];
-    final digits = <int>[1, 2, 3, 4, 5, 6, 7, 8, 9]..shuffle(rnd);
+    final digits = List<int>.generate(size, (i) => i + 1)..shuffle(rnd);
 
     return <int>[
       for (final r in rowOrder)
-        for (final c in colOrder) digits[baseGrid[r * 9 + c] - 1],
+        for (final c in colOrder) digits[base[r * size + c] - 1],
     ];
   }
 
@@ -157,7 +188,7 @@ class Sudoku {
               // 理论上挖空循环已逐步校验过唯一解，走到这里说明生成逻辑被改坏了。
               // 兜底：退到浅挖（唯一解概率接近 1），再不行就让 assert 炸掉。
               assert(false, '${level.title} 挖 $holes 格后自检失败：$problem');
-              puzzle = _carve(solved, 30);
+              puzzle = _carve(solved, max(0, holes ~/ 2));
               assert(
                 auditGrid(puzzle.solution, puzzle.given) == null,
                 '兜底盘面仍然不合法：${auditGrid(puzzle.solution, puzzle.given)}',
@@ -175,7 +206,7 @@ class Sudoku {
   /// 满盘只有一组解，而唯一解盘面再少一个提示只会让解变多，
   /// 因此每次只在「仍是唯一解」时才真正挖掉，中途不会滑向多解。
   ///
-  /// 挖空顺序用固定种子打乱（按位置顺序挖会把提示数字全挤在右下角）。
+  /// 挖空顺序用固定种子打乱（按位置顺序挖会把提示数字全挤在一角）。
   /// 一档挖不到目标数时换几个种子重试，取挖得最深的那次；全部种子固定，
   /// 所以同一档每次都挖出同一批题。
   static _Puzzle _carve(List<int> solution, int target) {
@@ -197,14 +228,16 @@ class Sudoku {
   static const int _carveAttempts = 8;
 
   static List<int> _carveOnce(List<int> solution, int target, int attempt) {
+    final size = _sizeOf(solution);
+    final cellCount = solution.length;
     final open = List<int>.from(solution);
-    final order = List<int>.generate(81, (i) => i)
+    final order = List<int>.generate(cellCount, (i) => i)
       ..shuffle(Random(_seedOf(solution) ^ (target * 7919) ^ (attempt * 104729)));
     var holes = 0;
     for (final i in order) {
       if (holes >= target) break;
       // 每行至少留一格提示：整行空白会让多解概率大增，也拖慢唯一解校验。
-      if (_givenInRow(open, i ~/ 9) <= 1) continue;
+      if (_givenInRow(open, i ~/ size, size) <= 1) continue;
       final backup = open[i];
       open[i] = 0;
       if (_solutionCount(open) == 1) {
@@ -225,10 +258,10 @@ class Sudoku {
     return h;
   }
 
-  static int _givenInRow(List<int> grid, int row) {
+  static int _givenInRow(List<int> grid, int row, int size) {
     var n = 0;
-    for (var c = 0; c < 9; c++) {
-      if (grid[row * 9 + c] != 0) n++;
+    for (var c = 0; c < size; c++) {
+      if (grid[row * size + c] != 0) n++;
     }
     return n;
   }
@@ -239,14 +272,16 @@ class Sudoku {
   /// 先检查初始盘面是否自相冲突——位掩码按位或会把重复数字悄悄合并，
   /// 不查这一步，「同一行两个 5」会被当成合法题面继续回溯。
   static int _solutionCount(List<int> grid) {
-    final rows = List<int>.filled(9, 0);
-    final cols = List<int>.filled(9, 0);
-    final boxes = List<int>.filled(9, 0);
-    for (var i = 0; i < 81; i++) {
+    final size = _sizeOf(grid);
+    final box = _boxDim(size);
+    final rows = List<int>.filled(size, 0);
+    final cols = List<int>.filled(size, 0);
+    final boxes = List<int>.filled(size, 0);
+    for (var i = 0; i < grid.length; i++) {
       final v = grid[i];
       if (v == 0) continue;
       final bit = 1 << v;
-      final r = i ~/ 9, c = i % 9, b = _boxOf(r, c);
+      final r = i ~/ size, c = i % size, b = _boxOf(r, c, box);
       // 该数字已在同行/同列/同宫出现过，说明题面本身矛盾，直接判 0 组解。
       if ((rows[r] & bit) != 0 || (cols[c] & bit) != 0 || (boxes[b] & bit) != 0) {
         return 0;
@@ -255,7 +290,7 @@ class Sudoku {
       cols[c] |= bit;
       boxes[b] |= bit;
     }
-    return _countFrom(grid, rows, cols, boxes, 2);
+    return _countFrom(grid, rows, cols, boxes, 2, size, box);
   }
 
   /// 回溯计数。[limit] 是上限，数到它就停。
@@ -265,14 +300,17 @@ class Sudoku {
     List<int> cols,
     List<int> boxes,
     int limit,
+    int size,
+    int box,
   ) {
     var best = -1;
     var bestMask = 0;
-    var bestCount = 10;
-    for (var i = 0; i < 81; i++) {
+    var bestCount = size + 1;
+    final fullMask = ((1 << (size + 1)) - 1) & ~1; // bits 1..size
+    for (var i = 0; i < grid.length; i++) {
       if (grid[i] != 0) continue;
-      final mask =
-          ~(rows[i ~/ 9] | cols[i % 9] | boxes[_boxOf(i ~/ 9, i % 9)]) & 0x3FE;
+      final r = i ~/ size, c = i % size;
+      final mask = ~(rows[r] | cols[c] | boxes[_boxOf(r, c, box)]) & fullMask;
       final n = _popCount(mask);
       if (n == 0) return 0;
       if (n < bestCount) {
@@ -285,14 +323,14 @@ class Sudoku {
     if (best < 0) return 1;
 
     var total = 0;
-    final r = best ~/ 9, c = best % 9, b = _boxOf(r, c);
-    for (var v = 1; v <= 9; v++) {
+    final r = best ~/ size, c = best % size, b = _boxOf(r, c, box);
+    for (var v = 1; v <= size; v++) {
       if ((bestMask & (1 << v)) == 0) continue;
       grid[best] = v;
       rows[r] |= 1 << v;
       cols[c] |= 1 << v;
       boxes[b] |= 1 << v;
-      total += _countFrom(grid, rows, cols, boxes, limit - total);
+      total += _countFrom(grid, rows, cols, boxes, limit - total, size, box);
       grid[best] = 0;
       rows[r] &= ~(1 << v);
       cols[c] &= ~(1 << v);
@@ -302,7 +340,11 @@ class Sudoku {
     return total;
   }
 
-  static int _boxOf(int row, int col) => (row ~/ 3) * 3 + col ~/ 3;
+  static int _sizeOf(List<int> grid) => sqrt(grid.length).round();
+
+  static int _boxDim(int size) => sqrt(size).round();
+
+  static int _boxOf(int row, int col, int box) => (row ~/ box) * box + col ~/ box;
 
   static int _popCount(int mask) {
     var n = 0;
@@ -324,14 +366,17 @@ class _Puzzle {
 
 /// 数独难度关卡。从 [one] 开始逐级解锁：完成上一档 [unlockAfter] 局才开本档，
 /// 所以孩子是一级一级往上走，而不是一进来就挑最难。
+///
+/// [one] 是 4×4 四宫小盘面，先熟悉规则；其余是 9×9。
 enum SudokuDifficulty {
-  one('一星', '入门：只挖少量格，先熟悉规则', 0, <int>[30, 34]),
-  two('二星', '留白变多，要开始推了', 3, <int>[36, 40]),
-  three('三星', '每宫都有几处空白，需要耐心', 3, <int>[44, 48]),
-  four('四星', '留白过半，得试着假设再验证', 4, <int>[52, 54]),
-  five('五星', '几乎全空，考验推理链', 4, <int>[56, 58]);
+  one('一星', '4×4 小盘面，先熟悉行、列、宫不重复', 0, <int>[6, 8], 4),
+  two('二星', '9×9 留白变多，要开始推了', 3, <int>[36, 40], 9),
+  three('三星', '每宫都有几处空白，需要耐心', 3, <int>[44, 48], 9),
+  four('四星', '留白过半，得试着假设再验证', 4, <int>[52, 54], 9),
+  five('五星', '几乎全空，考验推理链', 4, <int>[56, 58], 9);
 
-  const SudokuDifficulty(this.title, this.remark, this.unlockAfter, this.holes);
+  const SudokuDifficulty(
+      this.title, this.remark, this.unlockAfter, this.holes, this.size);
 
   final String title;
   final String remark;
@@ -342,6 +387,15 @@ enum SudokuDifficulty {
   /// 该档的挖空目标（挖到这么多格为止）。
   final List<int> holes;
 
+  /// 盘面边长（4 或 9）。
+  final int size;
+
+  /// 宫的边长（2 或 3）。
+  int get boxDim => sqrt(size).round();
+
+  /// 格子总数。
+  int get cellCount => size * size;
+
   /// 上一档；一星没有上一档。
   SudokuDifficulty? get previous => index == 0 ? null : values[index - 1];
 
@@ -351,8 +405,8 @@ enum SudokuDifficulty {
 
   /// 本档的终盘。每档两道，由基准终盘按固定种子置换，互不相同。
   List<List<int>> get solutions => <List<int>>[
-        Sudoku.permuted(Random(20261119 + index * 2)),
-        Sudoku.permuted(Random(20261119 + index * 2 + 1)),
+        Sudoku.permuted(size, Random(20261119 + index * 2)),
+        Sudoku.permuted(size, Random(20261119 + index * 2 + 1)),
       ];
 }
 

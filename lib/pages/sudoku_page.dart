@@ -76,7 +76,7 @@ class _SudokuPageState extends State<SudokuPage> {
     _history.clear();
     _selected = _puzzle.blanks.isEmpty
         ? null
-        : _puzzle.blanks.first.$1 * 9 + _puzzle.blanks.first.$2;
+        : _puzzle.blanks.first.$1 * _puzzle.size + _puzzle.blanks.first.$2;
     _seconds = 0;
     _mistakes = 0;
     _settled = false;
@@ -104,19 +104,23 @@ class _SudokuPageState extends State<SudokuPage> {
       }
     }
 
-    for (var r = 0; r < 9; r++) {
-      scan(<int>[for (var c = 0; c < 9; c++) r * 9 + c]);
+    final size = _puzzle.size;
+    final box = _puzzle.boxDim;
+    for (var r = 0; r < size; r++) {
+      scan(<int>[for (var c = 0; c < size; c++) r * size + c]);
     }
-    for (var c = 0; c < 9; c++) {
-      scan(<int>[for (var r = 0; r < 9; r++) r * 9 + c]);
+    for (var c = 0; c < size; c++) {
+      scan(<int>[for (var r = 0; r < size; r++) r * size + c]);
     }
-    for (var b = 0; b < 9; b++) {
-      final r0 = (b ~/ 3) * 3;
-      final c0 = (b % 3) * 3;
-      scan(<int>[
-        for (var r = r0; r < r0 + 3; r++)
-          for (var c = c0; c < c0 + 3; c++) r * 9 + c,
-      ]);
+    for (var br = 0; br < box; br++) {
+      for (var bc = 0; bc < box; bc++) {
+        final r0 = br * box;
+        final c0 = bc * box;
+        scan(<int>[
+          for (var r = r0; r < r0 + box; r++)
+            for (var c = c0; c < c0 + box; c++) r * size + c,
+        ]);
+      }
     }
     return bad;
   }
@@ -131,13 +135,15 @@ class _SudokuPageState extends State<SudokuPage> {
   void _input(int digit) {
     final index = _selected;
     if (_settled || index == null) return;
-    if (_puzzle.isGiven(index ~/ 9, index % 9)) return;
+    final size = _puzzle.size;
+    final r = index ~/ size, c = index % size;
+    if (_puzzle.isGiven(r, c)) return;
     if (_values[index] == digit) return;
 
     setState(() {
       _history.add((index, _values[index]));
       _values[index] = digit;
-      if (digit != 0 && digit != _puzzle.solutionAt(index ~/ 9, index % 9)) {
+      if (digit != 0 && digit != _puzzle.solutionAt(r, c)) {
         _mistakes++;
       }
     });
@@ -147,7 +153,8 @@ class _SudokuPageState extends State<SudokuPage> {
   void _erase() {
     final index = _selected;
     if (_settled || index == null) return;
-    if (_puzzle.isGiven(index ~/ 9, index % 9)) return;
+    final size = _puzzle.size;
+    if (_puzzle.isGiven(index ~/ size, index % size)) return;
     if (_values[index] == 0) return;
     setState(() {
       _history.add((index, _values[index]));
@@ -335,6 +342,8 @@ class _SudokuPageState extends State<SudokuPage> {
           child: _Board(
             values: _values,
             given: _puzzle.given,
+            size: _puzzle.size,
+            boxDim: _puzzle.boxDim,
             conflicts: _conflicts,
             selected: _selected,
             onTap: _select,
@@ -354,7 +363,7 @@ class _SudokuPageState extends State<SudokuPage> {
           runSpacing: 10,
           alignment: WrapAlignment.center,
           children: <Widget>[
-            for (var d = 1; d <= 9; d++)
+            for (var d = 1; d <= _puzzle.size; d++)
               _NumberKey(
                 digit: d,
                 used: _remainingOf(d) == 0,
@@ -395,10 +404,12 @@ class _SudokuPageState extends State<SudokuPage> {
   }
 
   bool get _isSelectedGiven =>
-      _selected != null && _puzzle.isGiven(_selected! ~/ 9, _selected! % 9);
+      _selected != null &&
+      _puzzle.isGiven(_selected! ~/ _puzzle.size, _selected! % _puzzle.size);
 
-  /// 这个数字还差几个没填（9 减去盘面上已有的个数）。
-  int _remainingOf(int digit) => 9 - _values.where((v) => v == digit).length;
+  /// 这个数字还差几个没填（满额减去盘面上已有的个数）。
+  int _remainingOf(int digit) =>
+      _puzzle.size - _values.where((v) => v == digit).length;
 }
 
 class _Stat extends StatelessWidget {
@@ -428,14 +439,16 @@ class _Stat extends StatelessWidget {
   }
 }
 
-/// 九宫格盘面。
+/// 数独盘面（4×4 或 9×9）。
 ///
-/// 宫线（每三格）画粗、格线画细；选中格用金边，同行/列/宫淡底，
+/// 宫线画粗、格线画细；选中格用金边，同行/列/宫淡底，
 /// 与选中格数字相同的格子也淡底，方便一眼扫出还能填哪。
 class _Board extends StatelessWidget {
   const _Board({
     required this.values,
     required this.given,
+    required this.size,
+    required this.boxDim,
     required this.conflicts,
     required this.selected,
     required this.onTap,
@@ -443,6 +456,8 @@ class _Board extends StatelessWidget {
 
   final List<int> values;
   final List<int> given;
+  final int size;
+  final int boxDim;
   final Set<int> conflicts;
   final int? selected;
   final ValueChanged<int> onTap;
@@ -459,24 +474,25 @@ class _Board extends StatelessWidget {
       ),
       child: Column(
         children: <Widget>[
-          for (var r = 0; r < 9; r++)
+          for (var r = 0; r < size; r++)
             Expanded(
               child: Row(
                 children: <Widget>[
-                  for (var c = 0; c < 9; c++)
+                  for (var c = 0; c < size; c++)
                     Expanded(
                       child: _Cell(
-                        value: values[r * 9 + c],
-                        isGiven: given[r * 9 + c] != 0,
-                        conflict: conflicts.contains(r * 9 + c),
-                        selected: selected == r * 9 + c,
+                        value: values[r * size + c],
+                        isGiven: given[r * size + c] != 0,
+                        conflict: conflicts.contains(r * size + c),
+                        selected: selected == r * size + c,
                         related: _isRelated(r, c),
-                        sameValue: selectedValue != 0 && values[r * 9 + c] == selectedValue,
-                        boxTop: r % 3 == 0,
-                        boxLeft: c % 3 == 0,
-                        boxBottom: r == 8,
-                        boxRight: c == 8,
-                        onTap: () => onTap(r * 9 + c),
+                        sameValue:
+                            selectedValue != 0 && values[r * size + c] == selectedValue,
+                        boxTop: r % boxDim == 0,
+                        boxLeft: c % boxDim == 0,
+                        boxBottom: r == size - 1,
+                        boxRight: c == size - 1,
+                        onTap: () => onTap(r * size + c),
                       ),
                     ),
                 ],
@@ -491,9 +507,11 @@ class _Board extends StatelessWidget {
   bool _isRelated(int r, int c) {
     final s = selected;
     if (s == null) return false;
-    final sr = s ~/ 9, sc = s % 9;
+    final sr = s ~/ size, sc = s % size;
     if (sr == r && sc == c) return false;
-    return sr == r || sc == c || (sr ~/ 3 == r ~/ 3 && sc ~/ 3 == c ~/ 3);
+    return sr == r ||
+        sc == c ||
+        (sr ~/ boxDim == r ~/ boxDim && sc ~/ boxDim == c ~/ boxDim);
   }
 }
 
@@ -582,7 +600,7 @@ class _Cell extends StatelessWidget {
   }
 }
 
-/// 数字键。该数字已填满 9 个时变淡，提示不用再找。
+/// 数字键。该数字已填满时变淡，提示不用再找。
 class _NumberKey extends StatelessWidget {
   const _NumberKey({
     required this.digit,
