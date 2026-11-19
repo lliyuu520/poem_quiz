@@ -12,9 +12,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class UpdateService {
   UpdateService({this.platform = const MethodChannel('poem_quiz/installer')});
 
-  /// 版本清单地址。dist 仓库更新时同步改这个常量。
-  static const String manifestUrl =
-      'https://cdn.jsdelivr.net/gh/lliyuu520/poem_quiz-dist@main/version.json';
+  /// 版本清单地址。按顺序尝试：OSS CDN 优先，jsDelivr 兜底。
+  /// dist 仓库或 OSS 更新时同步改这里的内容源。
+  static const List<String> manifestUrls = <String>[
+    'https://oss.lliyuu520.cn/apk/version.json',
+    'https://cdn.jsdelivr.net/gh/lliyuu520/poem_quiz-dist@main/version.json',
+  ];
 
   final MethodChannel platform;
 
@@ -27,23 +30,27 @@ class UpdateService {
 
   /// 拉取版本清单。失败抛 [UpdateException]。
   Future<RemoteVersion> fetchManifest() async {
-    try {
-      final client = HttpClient();
-      final req = await client.getUrl(Uri.parse(manifestUrl));
-      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final resp = await req.close().timeout(const Duration(seconds: 15));
-      final body = await utf8.decoder.bind(resp).join();
-      client.close();
-      if (resp.statusCode != 200) {
-        throw UpdateException('服务器返回 ${resp.statusCode}');
+    UpdateException? lastError;
+    for (final url in manifestUrls) {
+      try {
+        final client = HttpClient();
+        final req = await client.getUrl(Uri.parse(url));
+        req.headers.set(HttpHeaders.acceptHeader, 'application/json');
+        final resp = await req.close().timeout(const Duration(seconds: 15));
+        final body = await utf8.decoder.bind(resp).join();
+        client.close();
+        if (resp.statusCode != 200) {
+          throw UpdateException('服务器返回 ${resp.statusCode}');
+        }
+        return RemoteVersion.fromJson(
+            jsonDecode(body) as Map<String, dynamic>);
+      } on UpdateException catch (e) {
+        lastError = e;
+      } catch (e) {
+        lastError = UpdateException('无法连接更新服务器：$e');
       }
-      return RemoteVersion.fromJson(
-          jsonDecode(body) as Map<String, dynamic>);
-    } on UpdateException {
-      rethrow;
-    } catch (e) {
-      throw UpdateException('无法连接更新服务器：$e');
     }
+    throw lastError ?? const UpdateException('无法连接更新服务器');
   }
 
   /// 下载 [version] 的 APK，回调下载进度（0.0~1.0）。

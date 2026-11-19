@@ -1,12 +1,13 @@
 name: poem_quiz
 description: "日知 —— 古诗词与识字答题本，离线自用。"
 publish_to: 'none'
-version: 0.2.1+3
+version: 0.2.2+4
 
 environment:
   sdk: ^3.13.4
 
 dependencies:
+  audioplayers: ^6.8.1
   flutter:
     sdk: flutter
   shared_preferences: ^2.5.6
@@ -18,6 +19,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/audio/
   fonts:
     - family: WenKai
       fonts:
