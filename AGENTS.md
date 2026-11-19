@@ -11,7 +11,7 @@
 ## 常用命令
 
 ```bash
-flutter test                          # 82 个用例，改引擎/学龄/题型/布局必跑
+flutter test                          # 85 个用例，改引擎/学龄/题型/布局必跑
 flutter analyze                       # analysis_options 已 exclude build/ android/
 flutter run                           # 调试
 flutter build apk --release           # → build/app/outputs/flutter-apk/app-release.apk（约 17MB）
@@ -27,7 +27,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 |---|---|
 | `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 搜索提示 + 存储键前缀 |
 | `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学）、`kDefaultTopic`；新增科目在这里加一条 |
-| `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：321 条，按年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
+| `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，按年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：196 条一年级口算，规则生成；`MathExpr` 解析算式 |
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：109 首，唐 65 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位：一年级~九年级 + 拓展，**只收窄题池范围，不过滤题型** |
@@ -75,6 +75,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - 题池**累加 + 加权**：选 N 年级时池为 1..N，本年级权重 1、低一档 1/3、再低 1/9，依次递减。衰减取 1/3 而非 1/2，是因为低年级条目本来就多（一年级 8 首对六年级累计 71 首），1/2 会让低年级题反超本年级。拓展档不参与年级累加。
 - 年级分布：一 8 / 二 11 / 三 13 / 四 12 / 五 15 / 六 12 / 七 8 / 八 7 / 九 5 / 拓展 18。单年级池小是正常的，一局题数自适应（`total` 取实际题数）。
 - **拼音题库由脚本生成，不要手改 `pinyin.dart`**：`python -I tool/gen_pinyin.py` 用 pypinyin 按词组算声调（多音字取词内读音，如「长大 zhǎng」「银行 háng」「倔强 jiàng」），儿化与轻声在脚本的 `OVERRIDES` 里定向修正。手写 300+ 条必然出现声调错误，一个错调就是一道错题。
+- **pypinyin 不保证轻声**：亲属叠词「爸爸/妈妈/哥哥/姐姐/妹妹」它给原调，「衣服」给 fú，只有「弟弟/伯伯/婆婆」给对了。这些已写进 `OVERRIDES`。测试分两层——白名单查「有没有调号」，`亲属叠词与常见轻声词读音符合规范` 逐条钉死「调号对不对」，只靠白名单会把轻声错误放过去。
 - 拼音题库**字词与读音都必须唯一**：同音字（如「木/目」都是 mù）会让「选字词」题出现两个正确选项，测试会拦。
 - 干扰项必须来自**别的条目**，且作者题排除同作者、标题题排除同名、拼音「选读音」排除同读音、「选字词」排除同字词，否则选项里会出现重复正确答案。拼音接入时漏掉这一条，诗词题库下会抽出两个「李白」。
 - 填空题：字池需能精确拼出答案（同一字出现几次就放几次），干扰字不得与答案字重复；`_plain()` 的正则负责去标点，长度计算、挖空、字池都依赖它——改正则要同时检查 `_minLineLength` 与 `blankLen` 分支。

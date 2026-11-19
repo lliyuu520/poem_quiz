@@ -64,16 +64,39 @@ void main() {
       // 每个音节都应带调号。拼音标注里这几类本就不标调。
       const toned = 'āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ';
       const neutral = {
-        'zi', 'de', 'le', 'tou', 'ba', 'ne', 'ma', 'yi', 'ge', 'a', 'r',
-        'di', 'jie', 'mei', 'bo', 'po',
-        // 口语里读轻声的常见词：暖和、钥匙、折腾
-        'huo', 'shi', 'teng',
+        // 名词后缀与助词
+        'zi', 'de', 'le', 'tou', 'ne', 'ma', 'ba', 'a', 'r',
+        // 口语轻声：暖和、钥匙、折腾、衣服、便宜
+        'huo', 'shi', 'teng', 'fu', 'yi',
+        // 叠词第二字：弟弟、伯伯、婆婆（pypinyin 直接给轻声的）
+        'di', 'bo', 'po', 'ge', 'jie', 'mei',
       };
       for (final e in kPinyin) {
         for (final syl in e.author.split(' ')) {
           final ok = syl.split('').any(toned.contains) || neutral.contains(syl);
           expect(ok, isTrue, reason: '${e.title} 的「$syl」既无声调也非常见轻声');
         }
+      }
+    });
+
+    test('亲属叠词与常见轻声词读音符合规范', () {
+      // 白名单只能判断「有没有调号」，判断不了「调号对不对」。
+      // 下面这些是 pypinyin 给过原调的，逐条钉死，防止回退。
+      const expected = <String, String>{
+        '爸爸': 'bà ba',
+        '妈妈': 'mā ma',
+        '哥哥': 'gē ge',
+        '姐姐': 'jiě jie',
+        '妹妹': 'mèi mei',
+        '弟弟': 'dì di',
+        '伯伯': 'bó bo',
+        '婆婆': 'pó po',
+        '衣服': 'yī fu',
+      };
+      final byTitle = <String, String>{for (final e in kPinyin) e.title: e.author};
+      for (final entry in expected.entries) {
+        expect(byTitle[entry.key], entry.value,
+            reason: '「${entry.key}」的读音应为 ${entry.value}，实际 ${byTitle[entry.key] ?? '（缺失）'}');
       }
     });
 
