@@ -6,7 +6,7 @@
 
 - 交付形态：**只有 Android APK**，自用。web 平台已于 2026-11-18 移除（`web/`、`build/web/`、`analysis_options` 的 exclude 一并清理）。
 - 不做微信小程序 / 小游戏：微信按注册形态判类目，个人主体没有能承载交互式答题的类目，小游戏需换 Cocos/Canvas 重写。不要再提议 Taro/uni-app/小游戏迁移，也不要重新加 web 平台。
-- 无后端、无网络请求、无账号体系。新增功能默认也保持这一点。
+- 默认纯离线：题库内置、进度存本地、无账号体系。**唯一的联网点**是设置页「检查更新」（用户手动点击），不做后台轮询、不发统计数据。新增功能默认保持离线。
 
 ## 常用命令
 
@@ -98,7 +98,9 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 ## 平台注意事项
 
 - 仅 Android。`minSdk`/`targetSdk` 走 `flutter.*` 默认值，未额外指定。
-- release 包目前用 debug 签名（`signingConfig = debug`），自用可接受；若要长期安装升级，应先建自己的 keystore，否则换机重装会丢本地存档。
+- **正式签名**：release 用 `D:/tools/keys/poem_quiz.keystore`（30 年有效期），配置在 `android/keystore.properties`（不入库，缺失时回落 debug 签名）。**keystore 或密码丢失 = 无法覆盖安装，只能卸载重装丢全部存档**，务必异地备份。
+- **分发**：APK 与版本清单托管在 `poem_quiz-dist` 公开仓库，经 jsDelivr 分发（国内直连）。发版流程见 README。jsDelivr 对同名文件有顽固缓存，发版时版本清单用新文件名（version-N.json）。
+- **App 内检查更新**：设置页「关于」区，清单地址在 `lib/data/update_service.dart` 的 `manifestUrl`。模拟器里 DNS 被污染会导致 HandshakeException，真机正常——验证全链路要上真机。
 - `android:label="诗词问答"`，图标由 `tool/gen_icon.py` 生成（朱印方章），改图标重跑该脚本而不是手改 png。
 - 字号仍硬编码（`serif(32)` 之类），**不做等比缩放**；响应式只用于「限宽」与「横屏分栏」，见下条。
 - **平板适配**：断点集中在 `lib/widgets/adaptive.dart`（compact <600 / medium 600~839 / expanded ≥840）。页面用 `ContentFrame` 限宽居中，答题页在 expanded 下走左右双栏（左题干、右作答 + 常驻按钮）。新增页面套 `ContentFrame` 即可，不要另写断点。
