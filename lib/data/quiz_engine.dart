@@ -119,6 +119,8 @@ class QuizEngine {
         return _mathBlank(poem, optionCount);
       case QuestionKind.mathCompare:
         return _mathCompare(poem, optionCount);
+      case QuestionKind.idiomBlank:
+        return _idiomBlank(poem);
     }
   }
 
@@ -438,6 +440,56 @@ class QuizEngine {
       blankBefore: before,
       blankAfter: after,
       answerChars: target.split(''),
+      charPool: pool,
+    );
+  }
+
+  /// 成语选字：从四字成语中挖去一字，从其他成语里取干扰字组成字池。
+  Question? _idiomBlank(Poem entry) {
+    final chars = entry.title.split('');
+    if (chars.length < 4) return null;
+
+    final blankIndex = _random.nextInt(chars.length);
+    final answerChar = chars[blankIndex];
+
+    final before = chars.sublist(0, blankIndex).join();
+    final after = chars.sublist(blankIndex + 1).join();
+
+    final pool = <String>[answerChar];
+    final answerSet = <String>{answerChar};
+
+    // 优先从本题库其他成语中取干扰字（去重且不含答案字）。
+    final distractors = poems
+        .where((p) => p.id != entry.id)
+        .expand((p) => p.title.split(''))
+        .where((c) => !answerSet.contains(c))
+        .toList()
+      ..shuffle(_random);
+    for (final c in distractors) {
+      if (pool.length >= 6) break;
+      if (answerSet.add(c)) pool.add(c);
+    }
+
+    // 兜底：极小题库时用常见汉字补足字池。
+    if (pool.length < 4) {
+      const fallback = '的一是在不了有和人这中大为上个国我以要他时来用们生到作地于出就分对成会可主发年动同工也能下过子说产种面而方后多定行学法所民得经十三之进着等部度家电力里如水化高自二理起小物现实加量都两体制机当使点从业本去把性好应开它合还因由其些然前外天政四日那社义事平形相全表间样与关各重新线内数正心反你明看原又么利比或但质气第向道命此变条只没结解问意建月公无系军很情者最立代想已通并提直题党程展五果料象员革位入常文总次品式活设及管特件长求老头基资边流路级少图山统接知较将组见计别她手角期根论运农指几九区强放决西被干做必战先回则任取据处队南给色光门即保治北造百规热领七海口东导器压志世金增争济阶油思术极交受联什认六共权收证改清己美再采转更单风切打白教速花带安场身车例真务具万每目至达走积示议声报斗完类八离华名确才科张信马节话米整空元况今集温传土许步群广石记需段研界拉林律叫且究观越织装影算低持音众书布复容儿须际商非验连断深难近矿千周委素技备半办青省列习响约支般史感劳便团往酸历市克何除消构府称太准精值号率族维划选标写存候毛亲快效斯院查江型眼王按格养易置派层片始却专状育厂京识适属圆包火住调满县局照参红细引听该铁价严龙飞';
+
+      for (final c in fallback.split('')) {
+        if (pool.length >= 6) break;
+        if (answerSet.add(c)) pool.add(c);
+      }
+    }
+    pool.shuffle(_random);
+
+    return Question(
+      kind: QuestionKind.idiomBlank,
+      poem: entry,
+      prompt: '点选字块，补全这个成语',
+      focus: '$before□$after',
+      key: '${entry.id}|idiomBlank|$blankIndex',
+      blankBefore: before,
+      blankAfter: after,
+      answerChars: <String>[answerChar],
       charPool: pool,
     );
   }

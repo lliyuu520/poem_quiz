@@ -1,6 +1,7 @@
 import '../models/poem.dart';
 import '../models/question.dart';
 import '../theme/app_theme.dart';
+import 'chengyu.dart';
 import 'math.dart';
 import 'pinyin.dart';
 import 'poems.dart';
@@ -145,9 +146,47 @@ const Topic kSudokuTopic = Topic(
   intro: '九宫格每行、每列、每宫 1~9 各一次。填错会标红，可以撤销重来。',
 );
 
+/// 成语科目：选字补全成语，按学龄分档。
+const Topic kChengyuTopic = Topic(
+  id: 'chengyu',
+  name: '成语',
+  unit: '条',
+  groupLabel: '类别',
+  searchHint: '搜成语、拼音或释义',
+  entries: kChengyu,
+  groupOf: _chengyuGroupOf,
+  metaOf: _chengyuMeta,
+  kinds: <QuestionKind>{QuestionKind.idiomBlank},
+  nameOf: _chengyuName,
+  summaryOf: _chengyuSummary,
+  tagline: '四字成语，选字补全',
+  intro: '点选字块补全成语，按学龄分档练习常用成语。',
+  seal: '语\nquiz',
+  accent: AppColors.chengyu,
+  accentSoft: AppColors.chengyuSoft,
+  summaryFromId: _chengyuSummaryFromId,
+  detailOf: _chengyuDetail,
+);
+
+String _chengyuGroupOf(Poem p) => p.dynasty;
+String _chengyuMeta(Poem p) => p.author;
+String _chengyuName(Poem p) => p.title;
+String _chengyuSummary(Poem p) => '${p.title} · ${p.author}';
+String _chengyuDetail(Poem p) => p.lines.join('\n');
+
+/// 成语条目 id 是「分组|拼音|成语」，摘要要写成「一心一意 · yì xīn yí yì」。
+String _chengyuSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
+
 /// 预留科目：成语。接入时把 [Topic.entries] 换成自己的题库，
 /// 并把 [Topic.id] 用作存储键前缀，进度自然与诗词隔离。
-final List<Topic> kTopics = <Topic>[kPoetryTopic, kPinyinTopic, kMathTopic, kSudokuTopic];
+final List<Topic> kTopics = <Topic>[
+  kPoetryTopic,
+  kPinyinTopic,
+  kMathTopic,
+  kChengyuTopic,
+  kSudokuTopic,
+];
 
 /// 启动时的默认科目。
 Topic get kDefaultTopic => kTopics.first;

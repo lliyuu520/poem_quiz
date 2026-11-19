@@ -18,13 +18,15 @@ class AppColors {
   static const line = Color(0xFFE1D5BC);
 
   /// 科目印色：骨架四科一致，只换这一组颜色，切科目时整屏随之变。
-  /// 诗词沿用朱印，拼音青、数学赭、数独靛。
+  /// 诗词沿用朱印，拼音青、数学赭、数独靛、成语绛紫。
   static const pinyin = Color(0xFF2F6A63);
   static const pinyinSoft = Color(0xFFE1EDEA);
   static const math = Color(0xFF8C5A2B);
   static const mathSoft = Color(0xFFF2E7DA);
   static const sudoku = Color(0xFF33465C);
   static const sudokuSoft = Color(0xFFE4E9F0);
+  static const chengyu = Color(0xFF7A3E3E);
+  static const chengyuSoft = Color(0xFFF0E4E2);
 }
 
 /// 诗词正文用的衬线字体。Android 上会落到 Noto Serif CJK。
