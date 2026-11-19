@@ -1,10 +1,8 @@
-"""生成 app 图标：朱红方印 + 米白「日」字。
+"""生成 app 图标：朱红方印 + 米白「日知」二字。
 
-「日知」取《论语》「日知其所亡」，标志只留一个「日」——单字在
-小尺寸下仍可辨识，也不像原来的「诗」只覆盖四科里的一科。
-
+「日知」取《论语》「日知其所亡」，两字竖排于方印内。
 图标沿用 app 内的配色（宣纸 #F8F2E6 / 朱印 #A63A2E），
-字体缺失时退化为几何笔画，保证任何环境都能产出图。
+字体缺失时退化为几何笔画兜底。
 """
 
 import os
@@ -41,20 +39,57 @@ def load_font(size):
     return None
 
 
-def draw_glyph(draw, box, fill):
+def draw_ri(draw, box, fill):
     """字体不可用时的兜底：「日」字——外框 + 中间一横。"""
     x0, y0, x1, y1 = box
     w = x1 - x0
     h = y1 - y0
     t = max(2, int(w * 0.13))
-    # 外框：上下两横 + 左右两竖。
     draw.rectangle([x0, y0, x1, y0 + t], fill=fill)
     draw.rectangle([x0, y1 - t, x1, y1], fill=fill)
     draw.rectangle([x0, y0, x0 + t, y1], fill=fill)
     draw.rectangle([x1 - t, y0, x1, y1], fill=fill)
-    # 中间一横，略微收紧，避免与上下横粘连。
     mid = y0 + int((h - t) / 2)
     draw.rectangle([x0 + t, mid, x1 - t, mid + t], fill=fill)
+
+
+def draw_zhi(draw, box, fill):
+    """字体不可用时的兜底：「知」字的简化笔画。"""
+    x0, y0, x1, y1 = box
+    w = x1 - x0
+    h = y1 - y0
+    t = max(2, int(w * 0.12))
+    # 右侧「口」
+    rx0 = x0 + int(w * 0.46)
+    ry0 = y0 + int(h * 0.30)
+    draw.rectangle([rx0, ry0, x1, ry0 + t], fill=fill)
+    draw.rectangle([rx0, y1 - t, x1, y1], fill=fill)
+    draw.rectangle([rx0, ry0, rx0 + t, y1], fill=fill)
+    draw.rectangle([x1 - t, ry0, x1, y1], fill=fill)
+    # 左侧「矢」简化：短横、撇、横
+    draw.rectangle([x0, y0 + int(h * 0.08), x0 + int(w * 0.48), y0 + int(h * 0.08) + t], fill=fill)
+    draw.line(
+        [(x0 + int(w * 0.22), y0 + int(h * 0.10)), (x0 + int(w * 0.04), y1 - int(h * 0.08))],
+        fill=fill,
+        width=t,
+    )
+    draw.line(
+        [(x0 + int(w * 0.14), y0 + int(h * 0.52)), (rx0 + int(t * 0.2), y0 + int(h * 0.52))],
+        fill=fill,
+        width=t,
+    )
+
+
+def draw_fallback(draw, box, fill):
+    """在给定区域内竖排绘制「日」「知」的几何兜底。"""
+    x0, y0, x1, y1 = box
+    h = y1 - y0
+    gap = int(h * 0.06)
+    cell_h = (h - gap) // 2
+    top = (x0, y0, x1, y0 + cell_h)
+    bottom = (x0, y0 + cell_h + gap, x1, y0 + cell_h + gap + cell_h)
+    draw_ri(draw, top, fill)
+    draw_zhi(draw, bottom, fill)
 
 
 def render(size):
@@ -84,27 +119,35 @@ def render(size):
         width=max(1, int(s * 0.008)),
     )
 
-    font = load_font(int(s * 0.56))
+    chars = ["日", "知"]
+    font = load_font(int(s * 0.33))
+    text_left = inner + int(s * 0.10)
+    text_right = s - inner - int(s * 0.10)
+    text_top = inner + int(s * 0.08)
+    text_bottom = s - inner - int(s * 0.08)
+
     if font is not None:
-        text = "日"
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-        draw.text(
-            ((s - tw) / 2 - bbox[0], (s - th) / 2 - bbox[1]),
-            text,
-            font=font,
-            fill=PAPER,
-        )
+        bboxes = [draw.textbbox((0, 0), c, font=font) for c in chars]
+        heights = [b[3] - b[1] for b in bboxes]
+        widths = [b[2] - b[0] for b in bboxes]
+        gap = int(s * 0.01)
+        total_h = sum(heights) + gap
+        available_h = text_bottom - text_top
+        y = text_top + max(0, (available_h - total_h) // 2)
+        for c, b, tw, th in zip(chars, bboxes, widths, heights):
+            x = (s - tw) / 2 - b[0]
+            draw.text((x, y - b[1]), c, font=font, fill=PAPER)
+            y += th + gap
     else:
-        pad = int(s * 0.26)
-        draw_glyph(draw, (pad, pad, s - pad, s - pad), PAPER)
+        draw_fallback(draw, (text_left, text_top, text_right, text_bottom), PAPER)
 
     return img.resize((size, size), Image.LANCZOS)
 
 
 def main():
-    res_root = sys.argv[1]
+    res_root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+        os.path.dirname(__file__), "..", "android", "app", "src", "main", "res"
+    )
     for folder, size in SIZES.items():
         out_dir = os.path.join(res_root, folder)
         os.makedirs(out_dir, exist_ok=True)
