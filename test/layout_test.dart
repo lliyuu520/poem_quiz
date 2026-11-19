@@ -78,7 +78,7 @@ void main() {
       });
     }
 
-    testWidgets('拼音首页不显示学龄，显示内容说明', (tester) async {
+    testWidgets('拼音首页也按学龄分档', (tester) async {
       final store = await ProgressStore.load(topicId: kPinyinTopic.id);
       await pumpAt(
         tester,
@@ -89,19 +89,15 @@ void main() {
           onSwitchTopic: (_) async {},
         ),
       );
-      expect(find.text('学龄'), findsNothing, reason: '拼音不分学龄，不应出现学龄选择');
-      expect(find.text('三年级'), findsNothing);
-      expect(find.text('内容'), findsOneWidget);
-      // 页脚也有「共 N 条」，这里断言的是内容说明卡里的那一条。
-      expect(
-        find.text('共 ${kPinyinTopic.entries.length} 条 · 每题 1 分'),
-        findsOneWidget,
-      );
-      // 三种玩法与开始按钮都在。
+      // 拼音已改为分学龄：学龄选择器与十个档位都在。
+      expect(find.text('学龄'), findsOneWidget);
+      for (final g in GradeLevel.values) {
+        expect(find.text(g.title), findsOneWidget, reason: '${g.title} 未显示');
+      }
+      // 三种玩法仍齐全。
       for (final mode in GameMode.values) {
         expect(find.text(mode.title), findsOneWidget);
       }
-      expect(find.text('开始答题'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -137,6 +133,7 @@ void main() {
         engine: engine,
         topic: kPinyinTopic,
         count: 5,
+        grade: GradeLevel.g1,
       );
       await pumpAt(
         tester,

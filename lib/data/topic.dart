@@ -24,7 +24,6 @@ class Topic {
     required this.groupOf,
     required this.metaOf,
     required this.kinds,
-    this.graded = true,
     this.nameOf,
     this.summaryOf,
   });
@@ -54,10 +53,6 @@ class Topic {
   /// 本科目能出的题型。玩法只决定「练哪几类」，不跨科目混用题型。
   final Set<QuestionKind> kinds;
 
-  /// 是否按学龄分档。拼音只在一年级系统学习，给高年级出拼音题没有意义，
-  /// 所以拼音科目 [graded] 为 false，界面上不显示学龄选择。
-  final bool graded;
-
   /// 条目在列表里的展示名。诗词是「《静夜思》」，拼音不需要书名号。
   final String Function(Poem entry)? nameOf;
 
@@ -68,7 +63,6 @@ class Topic {
 
   String displaySummaryOf(Poem entry) => summaryOf?.call(entry) ?? entry.source;
 
-  /// 该科目在某个学龄档位下可出的条目数。不分档的科目返回全部。
-  int countForGrade(GradeLevel grade) =>
-      graded ? grade.countIn(entries) : entries.length;
+  /// 该科目在某个学龄档位下可出的条目数。
+  int countForGrade(GradeLevel grade) => grade.countIn(entries);
 }

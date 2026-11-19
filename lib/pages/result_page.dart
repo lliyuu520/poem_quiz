@@ -91,11 +91,7 @@ class ResultPage extends StatelessWidget {
                   InkCard(
                     child: Column(
                       children: <Widget>[
-                        // 不分学龄的科目（拼音）显示科目名，不显示学龄。
-                        _Row(
-                          label: session.grade == null ? '科目' : '学龄',
-                          value: session.grade?.title ?? session.topic.name,
-                        ),
+                        _Row(label: '学龄', value: session.grade.title),
                         const SizedBox(height: 12),
                         _Row(label: '答对', value: '${session.correctCount} 题'),
                         const SizedBox(height: 12),

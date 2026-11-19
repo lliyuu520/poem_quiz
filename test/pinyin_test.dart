@@ -30,18 +30,51 @@ void main() {
       expect(readings.toSet().length, readings.length, reason: '有重复读音');
     });
 
-    test('数量够出满一局', () {
-      // 26 条起步，验证架构用；扩展到完整题库前至少能出 10 题。
-      expect(kPinyin.length, greaterThanOrEqualTo(20));
+    test('规模足以支撑每个年级出满一局', () {
+      expect(kPinyin.length, greaterThanOrEqualTo(300));
+      // 每个年级都要有足够条目出一局 10 题（含累加后更低年级）。
+      for (final g in GradeLevel.values.where((g) => g.grade >= 1 && g.grade <= 6)) {
+        final n = kPinyinTopic.countForGrade(g);
+        expect(n, greaterThanOrEqualTo(10), reason: '${g.title} 只有 $n 条，出不满一局');
+      }
     });
   });
 
   group('拼音科目', () {
-    test('不分学龄', () {
-      expect(kPinyinTopic.graded, isFalse);
-      // 不分档时学龄取任何值都应返回全部条目，而不是按 grade 过滤。
-      expect(kPinyinTopic.countForGrade(GradeLevel.g1), kPinyin.length);
-      expect(kPinyinTopic.countForGrade(GradeLevel.g9), kPinyin.length);
+    test('按学龄分档，题池随年级扩大', () {
+      // 一年级只含一年级条目；六年级含全部。
+      expect(kPinyinTopic.countForGrade(GradeLevel.g1),
+          kPinyin.where((e) => e.grade == 1).length);
+      expect(kPinyinTopic.countForGrade(GradeLevel.g6), kPinyin.length);
+      expect(kPinyinTopic.countForGrade(GradeLevel.g1),
+          lessThan(kPinyinTopic.countForGrade(GradeLevel.g3)));
+    });
+
+    test('每个年级都有条目', () {
+      for (final g in GradeLevel.values) {
+        if (g.grade >= 1 && g.grade <= 6) {
+          final n = kPinyin.where((e) => e.grade == g.grade).length;
+          expect(n, greaterThan(0), reason: '${g.title} 没有拼音条目');
+        }
+      }
+    });
+
+    test('读音都带声调或为轻声', () {
+      // 除轻声（zi/de/le/tou/ba 等）、叠词第二字（di/jie/mei/ge）与儿化 r 外，
+      // 每个音节都应带调号。拼音标注里这几类本就不标调。
+      const toned = 'āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ';
+      const neutral = {
+        'zi', 'de', 'le', 'tou', 'ba', 'ne', 'ma', 'yi', 'ge', 'a', 'r',
+        'di', 'jie', 'mei', 'bo', 'po',
+        // 口语里读轻声的常见词：暖和、钥匙、折腾
+        'huo', 'shi', 'teng',
+      };
+      for (final e in kPinyin) {
+        for (final syl in e.author.split(' ')) {
+          final ok = syl.split('').any(toned.contains) || neutral.contains(syl);
+          expect(ok, isTrue, reason: '${e.title} 的「$syl」既无声调也非常见轻声');
+        }
+      }
     });
 
     test('只出拼音题型', () {
@@ -130,14 +163,15 @@ void main() {
   });
 
   group('会话', () {
-    test('拼音会话不带学龄，带科目', () {
+    test('拼音会话带学龄与科目', () {
       final s = buildSession(
         engine: pinyinEngine(17),
         topic: kPinyinTopic,
         count: 5,
+        grade: GradeLevel.g2,
       );
       expect(s.topic.id, 'pinyin');
-      expect(s.grade, isNull);
+      expect(s.grade, GradeLevel.g2);
       expect(s.questions.length, 5);
       expect(s.total, 5);
     });
@@ -147,6 +181,7 @@ void main() {
         engine: pinyinEngine(19),
         topic: kPinyinTopic,
         count: 5,
+        grade: GradeLevel.g4,
       );
       for (final q in s.questions) {
         expect(isPinyinKind(q.kind), isTrue);

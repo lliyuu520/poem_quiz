@@ -51,12 +51,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _start() async {
     // 记下学龄，下次打开沿用。写盘不阻塞开局。
-    if (widget.topic.graded) unawaited(_store.setLastGrade(_grade));
+    unawaited(_store.setLastGrade(_grade));
     final session = buildSession(
       engine: _engine,
       topic: widget.topic,
       count: _mode.count,
-      grade: widget.topic.graded ? _grade : null,
+      grade: _grade,
       preferPoemIds: _mode.useWrongBook
           ? _store.wrongPoemIds
           : const <String>[],
@@ -131,24 +131,17 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 26),
 
                   // 拼音不分学龄：只在一年级系统学习，给高年级出拼音题没意义。
-                  if (widget.topic.graded) ...<Widget>[
-                    const RuleDivider(label: '学龄'),
-                    const SizedBox(height: 12),
-                    _GradePicker(
-                      selected: _grade,
-                      onChanged: (g) {
-                        setState(() => _grade = g);
-                        _store.setLastGrade(g);
-                      },
-                      topic: widget.topic,
-                    ),
-                    const SizedBox(height: 22),
-                  ] else ...<Widget>[
-                    const RuleDivider(label: '内容'),
-                    const SizedBox(height: 12),
-                    _PinyinIntro(topic: widget.topic),
-                    const SizedBox(height: 22),
-                  ],
+                  const RuleDivider(label: '学龄'),
+                  const SizedBox(height: 12),
+                  _GradePicker(
+                    selected: _grade,
+                    onChanged: (g) {
+                      setState(() => _grade = g);
+                      _store.setLastGrade(g);
+                    },
+                    topic: widget.topic,
+                  ),
+                  const SizedBox(height: 22),
 
                   const RuleDivider(label: '玩法'),
                   const SizedBox(height: 12),
@@ -442,33 +435,6 @@ class _GradePicker extends StatelessWidget {
       topic.entries.where((e) => e.grade == grade).length;
 }
 
-/// 不分学龄的科目（拼音）用这一段替代学龄选择器。
-class _PinyinIntro extends StatelessWidget {
-  const _PinyinIntro({required this.topic});
-
-  final Topic topic;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            '共 ${topic.entries.length} ${topic.unit} · 每题 1 分',
-            style: serif(13, weight: FontWeight.w600, spacing: 1),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '看字词选读音、看读音选字词。拼音只在一年级系统学习，所以不分学龄档。',
-            style: const TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _GradeTile extends StatelessWidget {
   const _GradeTile({

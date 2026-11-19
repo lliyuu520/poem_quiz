@@ -28,8 +28,10 @@ String _poemMeta(Poem p) => '${p.dynasty} · ${p.author}';
 
 /// 拼音科目。
 ///
-/// **不分学龄**：拼音只在一年级系统学习，给高年级出拼音题没有意义，
-/// 所以 `graded: false`，首页不显示学龄选择。
+/// **按学龄分档**（2026-11-19 改）：题库按年级难度递进——
+/// 一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、
+/// 四年级易错声韵母、五六年级多音字。高年级题目天然覆盖低年级语音现象，
+/// 所以沿用 [GradeLevel] 的累加加权题池。
 const Topic kPinyinTopic = Topic(
   id: 'pinyin',
   name: '拼音',
@@ -40,7 +42,6 @@ const Topic kPinyinTopic = Topic(
   groupOf: _pinyinGroupOf,
   metaOf: _pinyinMeta,
   kinds: <QuestionKind>{QuestionKind.pinyinOf, QuestionKind.wordOf},
-  graded: false,
   // 拼音条目不需要书名号，直接显示字词。
   nameOf: _pinyinName,
   summaryOf: _pinyinSummary,
