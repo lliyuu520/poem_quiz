@@ -3,8 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'grade.dart';
-
 /// 本地存档。
 ///
 /// 每个科目一份独立的存档（最高分、正确率、错题本、生涯进度互不干扰），
@@ -21,7 +19,6 @@ class ProgressStore extends ChangeNotifier {
   static const _kSessions = 'sessions';
   static const _kWrong = 'wrong_poems';
   static const _kMastered = 'career_mastered';
-  static const _kLastGrade = 'last_grade';
   static const _kStages = 'stage_cleared';
   static const _kStageBest = 'stage_best_seconds';
 
@@ -41,9 +38,6 @@ class ProgressStore extends ChangeNotifier {
 
   /// 生涯模式下已掌握的条目 id。生涯模式不再出这些题的题。
   final Set<String> masteredPoemIds = <String>{};
-
-  /// 上次选择的学龄档位，下次打开沿用。默认三年级。
-  GradeLevel lastGrade = GradeLevel.g3;
 
   /// 数独各难度档的完成局数，键是档位名（`one`~`five`）。
   ///
@@ -90,8 +84,6 @@ class ProgressStore extends ChangeNotifier {
       }
     }
 
-    lastGrade = gradeFromValue(_prefs.getInt(_key(_kLastGrade)) ?? GradeLevel.g3.grade);
-
     final stages = _prefs.getString(_key(_kStages));
     if (stages != null) {
       try {
@@ -115,14 +107,6 @@ class ProgressStore extends ChangeNotifier {
         stageBestSeconds.clear();
       }
     }
-  }
-
-  /// 记住学龄档位，下次进入首页时沿用。
-  Future<void> setLastGrade(GradeLevel grade) async {
-    if (lastGrade == grade) return;
-    lastGrade = grade;
-    await _prefs.setInt(_key(_kLastGrade), grade.grade);
-    notifyListeners();
   }
 
   double get accuracy {

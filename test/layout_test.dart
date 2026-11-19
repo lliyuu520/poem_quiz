@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poem_quiz/data/grade.dart';
+import 'package:poem_quiz/data/profile.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
@@ -35,6 +36,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// 加载个人档案；[birth] 非空时预置出生年月（学龄由它推算）。
+  Future<UserProfile> loadProfile({(int, int)? birth}) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      if (birth != null) 'birth_year': birth.$1,
+      if (birth != null) 'birth_month': birth.$2,
+    });
+    return UserProfile.load();
+  }
+
+  /// 首页/设置页用例里的期望档位。推算规则本身由 grade_test 钉死，
+  /// 这里只验证「界面展示的档位 = 推算结果」这条接线，所以直接调它取期望值。
+  GradeLevel expectGradeOf(int year, int month) => gradeForBirth(year, month);
+
   /// 三种典型窗口：手机竖屏、平板竖屏、平板横屏。
   const phone = Size(400, 800);
   const tabletPortrait = Size(800, 1280);
@@ -59,41 +73,42 @@ void main() {
     ]) {
       testWidgets('$name 渲染无溢出', (tester) async {
         final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+        final profile = await loadProfile(birth: (2018, 9));
         await pumpAt(
           tester,
           size,
           () => HomePage(
             store: store,
             topic: kPoetryTopic,
+            profile: profile,
             onSwitchTopic: (_) async {},
           ),
         );
-        expect(find.text('诗词问答'), findsOneWidget);
+        expect(find.text('诗词'), findsWidgets);
         expect(find.text('学龄'), findsOneWidget);
-        // 十个档位都在。
-        for (final g in GradeLevel.values) {
-          expect(find.text(g.title), findsOneWidget, reason: '${g.title} 未显示');
-        }
+        // 学龄卡按出生年月展示推算档位，不再列出十个可选档。
+        final gradeTitle = expectGradeOf(2018, 9).title;
+        expect(find.text(gradeTitle), findsOneWidget);
+        expect(find.text('拓展'), findsNothing, reason: '已设出生年月时不应落拓展档');
         expect(tester.takeException(), isNull);
       });
     }
 
-    testWidgets('拼音首页也按学龄分档', (tester) async {
+    testWidgets('拼音首页也按学龄推算', (tester) async {
       final store = await ProgressStore.load(topicId: kPinyinTopic.id);
+      final profile = await loadProfile(birth: (2018, 9));
       await pumpAt(
         tester,
         phone,
         () => HomePage(
           store: store,
           topic: kPinyinTopic,
+          profile: profile,
           onSwitchTopic: (_) async {},
         ),
       );
-      // 拼音已改为分学龄：学龄选择器与十个档位都在。
       expect(find.text('学龄'), findsOneWidget);
-      for (final g in GradeLevel.values) {
-        expect(find.text(g.title), findsOneWidget, reason: '${g.title} 未显示');
-      }
+      expect(find.text(expectGradeOf(2018, 9).title), findsOneWidget);
       // 三种玩法仍齐全。
       for (final mode in GameMode.values) {
         expect(find.text(mode.title), findsOneWidget);
@@ -101,49 +116,61 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('数学首页按学龄分档，标题与玩法文案随科目走', (tester) async {
+    testWidgets('数学首页按学龄推算，标题与玩法文案随科目走', (tester) async {
       final store = await ProgressStore.load(topicId: kMathTopic.id);
+      final profile = await loadProfile(birth: (2018, 9));
       await pumpAt(
         tester,
         phone,
         () => HomePage(
           store: store,
           topic: kMathTopic,
+          profile: profile,
           onSwitchTopic: (_) async {},
         ),
       );
-      expect(find.text('数学问答'), findsOneWidget);
+      expect(find.text('数学'), findsWidgets);
       expect(find.text('学龄'), findsOneWidget);
       expect(find.text('内容'), findsNothing);
-      for (final g in GradeLevel.values) {
-        expect(find.text(g.title), findsOneWidget, reason: '${g.title} 未显示');
-      }
+      expect(find.text(expectGradeOf(2018, 9).title), findsOneWidget);
       expect(find.textContaining('答对的数学不再出现'), findsOneWidget);
       expect(find.textContaining('答对的诗'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('数学首页沿用存档学龄并按该学龄出题', (tester) async {
-      SharedPreferences.setMockInitialValues(<String, Object>{
-        '${kMathTopic.id}_last_grade': GradeLevel.g2.grade,
-      });
-      final store = await ProgressStore.load(topicId: kMathTopic.id);
+    testWidgets('未设置出生年月时提示补填，设置后按推算学龄出题', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final profile = await loadProfile();
       await pumpAt(
         tester,
         phone,
         () => HomePage(
           store: store,
-          topic: kMathTopic,
+          topic: kPoetryTopic,
+          profile: profile,
           onSwitchTopic: (_) async {},
         ),
       );
+      expect(find.textContaining('未设置出生年月'), findsOneWidget);
 
+      final filled = await loadProfile(birth: (2017, 3));
+      final expected = expectGradeOf(2017, 3);
+      await pumpAt(
+        tester,
+        phone,
+        () => HomePage(
+          store: store,
+          topic: kPoetryTopic,
+          profile: filled,
+          onSwitchTopic: (_) async {},
+        ),
+      );
+      expect(find.text(expected.title), findsOneWidget);
       await tester.tap(find.text('开始答题'));
       await tester.pumpAndSettle();
-
       final page = tester.widget<QuizPage>(find.byType(QuizPage));
-      expect(page.session.grade, GradeLevel.g2,
-          reason: '数学已分学龄，开局应沿用用户选择的学龄');
+      expect(page.session.grade, expected,
+          reason: '开局应按出生年月推算的档位出题');
       expect(tester.takeException(), isNull);
     });
   });
@@ -258,19 +285,23 @@ void main() {
       ('手机', phone),
       ('平板横屏', tabletLandscape),
     ]) {
-      testWidgets('$name 渲染科目区', (tester) async {
+      testWidgets('$name 渲染出生年月与生涯模式区', (tester) async {
         final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+        final profile = await loadProfile(birth: (2018, 9));
         await pumpAt(
           tester,
           size,
           () => SettingsPage(
             store: store,
             topic: kPoetryTopic,
-            onSwitchTopic: (_) async {},
+            profile: profile,
           ),
         );
-        expect(find.text('科目'), findsOneWidget);
-        expect(find.text(kPoetryTopic.name), findsOneWidget);
+        expect(find.text('学龄'), findsOneWidget);
+        expect(find.text('2018 年 9 月'), findsOneWidget);
+        expect(find.textContaining('推算学龄：${expectGradeOf(2018, 9).title}'),
+            findsOneWidget);
+        expect(find.text('生涯模式'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }

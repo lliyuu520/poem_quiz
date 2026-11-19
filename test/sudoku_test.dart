@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poem_quiz/data/grade.dart';
+import 'package:poem_quiz/data/profile.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/sudoku.dart';
 import 'package:poem_quiz/data/topics.dart';
@@ -398,16 +399,18 @@ void main() {
 
     testWidgets('首页列出五档关卡，未达标的档位锁着', (tester) async {
       final store = await ProgressStore.load(topicId: kSudokuTopic.id);
+      final profile = await UserProfile.load();
       await pumpAt(
         tester,
         phone,
         () => HomePage(
           store: store,
           topic: kSudokuTopic,
+          profile: profile,
           onSwitchTopic: (_) async {},
         ),
       );
-      expect(find.text('数独'), findsOneWidget);
+      expect(find.text('数独'), findsWidgets);
       expect(find.text('关卡'), findsOneWidget);
       expect(find.text('学龄'), findsNothing);
       expect(find.text('玩法'), findsNothing);
@@ -428,12 +431,14 @@ void main() {
         '${kSudokuTopic.id}_stage_cleared': '{"one":3}',
       });
       final store = await ProgressStore.load(topicId: kSudokuTopic.id);
+      final profile = await UserProfile.load();
       await pumpAt(
         tester,
         phone,
         () => HomePage(
           store: store,
           topic: kSudokuTopic,
+          profile: profile,
           onSwitchTopic: (_) async {},
         ),
       );

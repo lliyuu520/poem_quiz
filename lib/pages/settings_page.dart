@@ -1,39 +1,59 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../data/grade.dart';
+import '../data/profile.dart';
 import '../data/progress_store.dart';
-import '../data/update_service.dart';
 import '../data/topic.dart';
-import '../data/topics.dart';
+import '../data/update_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
 
-/// 设置页：科目切换与生涯进度重置。
+/// 设置页：出生年月、生涯进度重置与检查更新。
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.store,
     required this.topic,
-    required this.onSwitchTopic,
+    required this.profile,
   });
 
   final ProgressStore store;
   final Topic topic;
 
-  /// 切换科目：由根壳换存档并重建页面树。
-  final Future<void> Function(Topic topic) onSwitchTopic;
+  /// 全局个人档案。改出生年月后监听它的界面（首页推算卡）随之刷新。
+  final UserProfile profile;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  /// 切换科目后先回首页——当前页的 store 已经属于旧科目，留着会显示错数据。
-  Future<void> _switchTopic(Topic topic) async {
-    if (topic.id == widget.topic.id) return;
-    await widget.onSwitchTopic(topic);
+  /// 选出生年月。学龄档位由它推算，首页推算卡随档案变更自动刷新。
+  Future<void> _pickBirth() async {
+    final profile = widget.profile;
+    final now = DateTime.now();
+    // 孩子场景：默认给当前推算档对应的入学年；未设置时给 2018 年 9 月。
+    final initialYear = profile.birthYear ?? now.year - 8;
+    final initialMonth = profile.birthMonth ?? 9;
+
+    final year = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _YearPickerDialog(initialYear: initialYear, now: now),
+    );
+    if (year == null || !mounted) return;
+
+    final month = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _MonthPickerDialog(initialMonth: initialMonth),
+    );
+    if (month == null || !mounted) return;
+
+    await profile.setBirth(year: year, month: month);
     if (!mounted) return;
-    Navigator.of(context).popUntil((r) => r.isFirst);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('学龄已按出生年月更新')));
   }
 
   Future<void> _confirmResetCareer() async {
@@ -72,9 +92,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // store 是 ChangeNotifier：重置后进度条与按钮状态靠它更新。
+    // store 与 profile 都是 ChangeNotifier：重置进度、改出生年月后界面靠它们刷新。
     return AnimatedBuilder(
-      animation: widget.store,
+      animation: Listenable.merge(<Listenable>[widget.store, widget.profile]),
       builder: (context, _) => _buildPage(context),
     );
   }
@@ -83,6 +103,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final store = widget.store;
     final mastered = store.masteredPoemIds.length;
     final total = widget.topic.entries.length;
+    final profile = widget.profile;
 
     return Scaffold(
       body: PaperBackground(
@@ -116,35 +137,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 16),
                   const Padding(
                     padding: EdgeInsets.only(left: 12),
-                    child: RuleDivider(label: '科目'),
+                    child: RuleDivider(label: '学龄'),
                   ),
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Column(
-                      children: <Widget>[
-                        for (final t in kTopics) ...<Widget>[
-                          _TopicTile(
-                            topic: t,
-                            selected: t.id == widget.topic.id,
-                            onTap: () => _switchTopic(t),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            kTopics.length == 1
-                                ? '成语等科目接入后会出现在这里，进度与错题本各自独立。'
-                                : '各科目的进度与错题本互相独立。',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.inkFaint,
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: _BirthTile(
+                      profile: profile,
+                      onTap: _pickBirth,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -233,20 +233,18 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-/// 科目选项：单选，点击即切换。
-class _TopicTile extends StatelessWidget {
-  const _TopicTile({
-    required this.topic,
-    required this.selected,
-    required this.onTap,
-  });
+/// 出生年月设置项：展示当前值与推算出的学龄档位，点击弹两级选择。
+class _BirthTile extends StatelessWidget {
+  const _BirthTile({required this.profile, required this.onTap});
 
-  final Topic topic;
-  final bool selected;
+  final UserProfile profile;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final hasBirth = profile.hasBirth;
+    final grade = gradeForBirth(profile.birthYear, profile.birthMonth);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -254,20 +252,36 @@ class _TopicTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkCard(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          borderColor: selected ? AppColors.gold : null,
           child: Row(
             children: <Widget>[
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.sealSoft,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: const Icon(
+                  Icons.cake_outlined,
+                  size: 19,
+                  color: AppColors.seal,
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      topic.name,
+                      hasBirth
+                          ? '${profile.birthYear} 年 ${profile.birthMonth} 月'
+                          : '设置出生年月',
                       style: serif(16, weight: FontWeight.w600, spacing: 2),
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '共 ${topic.entries.length} ${topic.unit}',
+                      hasBirth ? '推算学龄：${grade.title}' : '学龄档位按出生年月自动推算',
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.inkSoft,
@@ -276,23 +290,113 @@ class _TopicTile extends StatelessWidget {
                   ],
                 ),
               ),
-              // 与玩法卡一致：单选语义用圆点，不用勾。
-              Container(
-                width: 18,
-                height: 18,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected ? AppColors.seal : AppColors.line,
-                    width: selected ? 5 : 1.4,
-                  ),
-                ),
-              ),
+              const Icon(Icons.chevron_right, size: 18, color: AppColors.inkFaint),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 年份选择：固定列表滚轮，范围是当前年份往前推到 1950。
+class _YearPickerDialog extends StatelessWidget {
+  const _YearPickerDialog({required this.initialYear, required this.now});
+
+  final int initialYear;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    // 出生年份不太会早于 1950；上限是当前年份（不满周岁也算）。
+    final first = 1950;
+    final last = now.year;
+    final years = <int>[for (var y = last; y >= first; y--) y];
+    final controller = FixedExtentScrollController(
+      initialItem: years.indexOf(
+        initialYear.clamp(first, last).toInt(),
+      ),
+    );
+
+    return _CupertinoStyleDialog(
+      title: '出生年份',
+      child: Expanded(
+        child: CupertinoPicker(
+          scrollController: controller,
+          itemExtent: 40,
+          onSelectedItemChanged: (_) {},
+          children: <Widget>[
+            for (final y in years)
+              Center(child: Text('$y', style: serif(16, spacing: 2))),
+          ],
+        ),
+      ),
+      onConfirm: () => Navigator.pop(context, years[controller.selectedItem]),
+    );
+  }
+}
+
+/// 月份选择：1~12 月滚轮。
+class _MonthPickerDialog extends StatelessWidget {
+  const _MonthPickerDialog({required this.initialMonth});
+
+  final int initialMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller =
+        FixedExtentScrollController(initialItem: initialMonth - 1);
+
+    return _CupertinoStyleDialog(
+      title: '出生月份',
+      child: Expanded(
+        child: CupertinoPicker(
+          scrollController: controller,
+          itemExtent: 40,
+          onSelectedItemChanged: (_) {},
+          children: <Widget>[
+            for (var m = 1; m <= 12; m++)
+              Center(child: Text('$m 月', style: serif(16, spacing: 2))),
+          ],
+        ),
+      ),
+      onConfirm: () => Navigator.pop(context, controller.selectedItem + 1),
+    );
+  }
+}
+
+/// 滚轮选择弹窗的公共外壳：标题 + 取消/确定 + 内容区。
+class _CupertinoStyleDialog extends StatelessWidget {
+  const _CupertinoStyleDialog({
+    required this.title,
+    required this.child,
+    required this.onConfirm,
+  });
+
+  final String title;
+  final Widget child;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.card,
+      title: Text(title, style: serif(18)),
+      content: SizedBox(
+        width: 240,
+        height: 220,
+        child: Column(children: <Widget>[child]),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: onConfirm,
+          child: const Text('确定', style: TextStyle(color: AppColors.seal)),
+        ),
+      ],
     );
   }
 }
@@ -374,7 +478,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    _currentName.isEmpty ? '诗词问答' : '诗词问答 v$_currentName',
+                    _currentName.isEmpty ? '日知' : '日知 v$_currentName',
                     style: serif(14, weight: FontWeight.w600, spacing: 1),
                   ),
                 ),

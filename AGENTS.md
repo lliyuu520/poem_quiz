@@ -11,7 +11,7 @@
 ## 常用命令
 
 ```bash
-flutter test                          # 113 个用例，改引擎/学龄/题型/布局必跑
+flutter test                          # 119 个用例，改引擎/学龄/题型/布局必跑
 flutter analyze                       # analysis_options 已 exclude build/ android/
 flutter run                           # 调试
 flutter build apk --release           # → build/app/outputs/flutter-apk/app-release.apk（约 17MB）
@@ -30,7 +30,8 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，按年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：196 条一年级口算，规则生成；`MathExpr` 解析算式 |
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：109 首，唐 65 / 宋 34 / 其余零散 |
-| `lib/data/grade.dart` | 学龄档位：一年级~九年级 + 拓展，**只收窄题池范围，不过滤题型** |
+| `lib/data/grade.dart` | 学龄档位：一年级~九年级 + 拓展，**只收窄题池范围，不过滤题型**；`gradeForBirth()` 按出生年月推算档位 |
+| `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
 | `lib/data/quiz_engine.dart` | 出题：九类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解） |
 | `lib/data/quiz_session.dart` | 一局状态：进度、连击、计分 |
@@ -40,6 +41,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/theme/app_theme.dart`、`lib/widgets/common.dart` | 宣纸 + 墨 + 朱印视觉体系 |
 | `test/quiz_engine_test.dart` | 题库完整性、出题正确性、计分、学龄题池与加权、生涯模式 |
+| `test/grade_test.dart` | 出生年月 → 学龄档位推算规则（入学分界、学年跨年、拓展档兜底） |
 | `test/layout_test.dart` | 三种窗口宽度下的渲染与横屏分栏（布局改动必跑） |
 | `test/pinyin_test.dart` | 拼音题库完整性、声调标注、分年级题池、两种拼音题型 |
 | `test/math_test.dart` | 数学题库、算式解析、三种算式题型、评语与摘要格式 |
@@ -55,7 +57,8 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`tagline`/`intro`/`seal`（首页文案）、`unit`/`searchHint` 等文案。
 - **题型随科目走，不随玩法走**：`Topic.kinds` 决定本科目能出哪些题型，`buildSession` 不传 `kinds` 时自动取科目题型，不会跨科目混题。玩法只决定题数与是否用错题本/生涯。
 - **学龄分档**：诗词与拼音都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
-- **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库全标 `grade: 1`，所以自动为 false，首页隐藏学龄选择、`buildSession` 用题库里唯一的年级。补上二年级数学题后无需改代码，学龄选择会自动出现。
+- **学龄由出生年月推算，不是用户选择的**（2026-11-19 改）：`gradeForBirth(birthYear, birthMonth)` 按 9 月 1 日入学分界推出在读年级，九年级以上与未入学都落拓展档。出生年月存 `UserProfile`（裸键 `birth_year` / `birth_month`，全局一份，不属于任何科目），设置页修改；首页学龄区是**只读推算卡**（`_GradeCard`），点击进设置页，不再有 3×3 年级选择器，`ProgressStore` 也不再有 `lastGrade`。数学题库补二年级后（乘除条目已标 `grade: 2`）同样走推算档。
+- **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库现在含一、二年级条目（`graded` 自动为 true），但推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
 - **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
 - **棋盘玩法科目（数独）**：`Topic.mode = TopicMode.sudoku`，`entries` 与 `kinds` 为空。盘面由 `Sudoku.open(difficulty)` 按难度档现生成，不走 `QuizEngine`。这类科目 `graded` 恒为 true（空题库推导），首页把学龄选择器换成**难度关卡列表**（一星~五星），并隐藏玩法卡、学习模式与错题本——它们都建立在题库之上。新增棋盘类玩法时复用 `TopicMode` 与首页的 `isBoardGame` 分支，不要再往题库抽象里塞。
@@ -68,9 +71,9 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 ## 启动前状态
 
-`main.dart` 是**有状态根壳**：启动时读 `last_topic`（SharedPreferences 里的裸键，不带科目前缀）决定默认科目，`await ProgressStore.load(topicId:)` 后 `runApp`。切换科目时根壳重建 `ProgressStore` 并 `setState`，`HomePage` 用 `ValueKey(topic.id)` 强制整棵重建，避免残留上一个科目的选中态。
+`main.dart` 是**有状态根壳**：启动时读 `last_topic`（SharedPreferences 里的裸键，不带科目前缀）决定默认科目，`await ProgressStore.load(topicId:)` 与 `UserProfile.load()` 后 `runApp`。切换科目时根壳重建 `ProgressStore` 并 `setState`，`HomePage` 用 `ValueKey(topic.id)` 强制整棵重建，避免残留上一个科目的选中态。
 
-`ProgressStore` 和 `Topic` 通过构造函数一路传给页面，页面用 `setState` + `AnimatedBuilder(animation: store)` 刷新，**没有 Provider/Riverpod/GetX**，不要为此引入状态管理库。
+`ProgressStore`、`UserProfile` 和 `Topic` 通过构造函数一路传给页面，页面用 `setState` + `AnimatedBuilder(animation: store)` 刷新，**没有 Provider/Riverpod/GetX**，不要为此引入状态管理库。
 
 ## 数据与算法约束（改代码前必读）
 

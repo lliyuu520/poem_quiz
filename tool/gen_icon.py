@@ -1,4 +1,7 @@
-"""生成 app 图标：朱红方印 + 米白「诗」字。
+"""生成 app 图标：朱红方印 + 米白「日」字。
+
+「日知」取《论语》「日知其所亡」，标志只留一个「日」——单字在
+小尺寸下仍可辨识，也不像原来的「诗」只覆盖四科里的一科。
 
 图标沿用 app 内的配色（宣纸 #F8F2E6 / 朱印 #A63A2E），
 字体缺失时退化为几何笔画，保证任何环境都能产出图。
@@ -39,24 +42,19 @@ def load_font(size):
 
 
 def draw_glyph(draw, box, fill):
-    """字体不可用时的兜底：用矩形笔画拼一个「诗」字的意象。"""
+    """字体不可用时的兜底：「日」字——外框 + 中间一横。"""
     x0, y0, x1, y1 = box
     w = x1 - x0
     h = y1 - y0
-    t = max(2, int(w * 0.11))
-    # 左半：三横一竖，取「讠」的骨架
-    for i in range(3):
-        y = y0 + int(h * (0.18 + i * 0.24))
-        draw.rectangle([x0, y, x0 + int(w * 0.30), y + t], fill=fill)
-    draw.rectangle([x0 + int(w * 0.02), y0 + int(h * 0.15), x0 + int(w * 0.02) + t, y1 - int(h * 0.1)], fill=fill)
-    # 右半：方形框架，取「寺」的骨架
-    rx0 = x0 + int(w * 0.42)
-    rx1 = x1
-    for i in range(2):
-        y = y0 + int(h * (0.22 + i * 0.30))
-        draw.rectangle([rx0, y, rx1, y + t], fill=fill)
-    draw.rectangle([rx0 + int((rx1 - rx0) * 0.45), y0 + int(h * 0.22), rx0 + int((rx1 - rx0) * 0.45) + t, y1 - int(h * 0.05)], fill=fill)
-    draw.rectangle([rx0, y1 - int(h * 0.12), rx1, y1 - int(h * 0.12) + t], fill=fill)
+    t = max(2, int(w * 0.13))
+    # 外框：上下两横 + 左右两竖。
+    draw.rectangle([x0, y0, x1, y0 + t], fill=fill)
+    draw.rectangle([x0, y1 - t, x1, y1], fill=fill)
+    draw.rectangle([x0, y0, x0 + t, y1], fill=fill)
+    draw.rectangle([x1 - t, y0, x1, y1], fill=fill)
+    # 中间一横，略微收紧，避免与上下横粘连。
+    mid = y0 + int((h - t) / 2)
+    draw.rectangle([x0 + t, mid, x1 - t, mid + t], fill=fill)
 
 
 def render(size):
@@ -86,9 +84,9 @@ def render(size):
         width=max(1, int(s * 0.008)),
     )
 
-    font = load_font(int(s * 0.52))
+    font = load_font(int(s * 0.56))
     if font is not None:
-        text = "诗"
+        text = "日"
         bbox = draw.textbbox((0, 0), text, font=font)
         tw = bbox[2] - bbox[0]
         th = bbox[3] - bbox[1]

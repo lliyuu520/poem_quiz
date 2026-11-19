@@ -420,28 +420,36 @@ class _BlankPrompt extends StatelessWidget {
   Widget build(BuildContext context) {
     final chosen = picked.map((i) => question.charPool[i]).toList();
     final showAnswer = verdict != null && verdict == false;
+    final textStyle = serif(22, height: 1.6, spacing: 3);
 
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 2,
-      runSpacing: 6,
+    // 上句与下句分行：写字格单独一行，避免长句把格子挤到换行。
+    return Column(
       children: <Widget>[
-        Text(question.blankBefore, style: serif(22, height: 1.6, spacing: 3)),
-        for (var i = 0; i < question.answerChars.length; i++)
-          _Slot(
-            // 答错时显示正确字，答对时显示玩家选的字。
-            char: showAnswer
-                ? question.answerChars[i]
-                : (i < chosen.length ? chosen[i] : null),
-            correct: showAnswer,
-          ),
-        Text(question.blankAfter, style: serif(22, height: 1.6, spacing: 3)),
+        Text(question.blankBefore, style: textStyle),
+        const SizedBox(height: 12),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (var i = 0; i < question.answerChars.length; i++)
+              _Slot(
+                // 答错时显示正确字，答对时显示玩家选的字。
+                char: showAnswer
+                    ? question.answerChars[i]
+                    : (i < chosen.length ? chosen[i] : null),
+                correct: showAnswer,
+              ),
+            Text(question.blankAfter, style: textStyle),
+          ],
+        ),
       ],
     );
   }
 }
 
+/// 写字格：虚线方框 + 圆角，像作业本上的田字格。
 class _Slot extends StatelessWidget {
   const _Slot({required this.char, required this.correct});
 
@@ -450,30 +458,28 @@ class _Slot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = correct ? AppColors.jade : AppColors.seal;
     return Container(
-      width: 28,
-      height: 32,
-      margin: const EdgeInsets.symmetric(horizontal: 1),
+      width: 44,
+      height: 44,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: correct
-                ? AppColors.jade
-                : AppColors.inkFaint.withValues(alpha: 0.6),
-            width: 1.5,
-          ),
+        color: char == null
+            ? AppColors.card.withValues(alpha: 0.5)
+            : (correct ? AppColors.jadeSoft : AppColors.sealSoft),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: char == null
+              ? AppColors.inkFaint.withValues(alpha: 0.7)
+              : color,
+          width: char == null ? 1 : 1.4,
         ),
       ),
       child: char == null
           ? null
           : Text(
               char!,
-              style: serif(
-                22,
-                spacing: 0,
-                color: correct ? AppColors.jade : AppColors.ink,
-              ),
+              style: serif(21, spacing: 0, color: color),
             ),
     );
   }

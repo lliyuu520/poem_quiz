@@ -69,3 +69,32 @@ GradeLevel gradeFromValue(int value) {
   }
   return GradeLevel.g3;
 }
+
+/// 按出生年月推算当前学龄档位。
+///
+/// 学龄只由出生年月决定（9 月 1 日为入学分界，与成都现行口径一致）：
+/// 推算出「今年在读几年级」，映射到 [GradeLevel]。九年级之后（含高中及以上）
+/// 一律落拓展档。出生年月未设置（[birthYear] 为 null）也返回拓展档，
+/// 由调用方在界面上提示去设置页补填。
+///
+/// [today] 仅测试注入用，生产传当前时间。
+GradeLevel gradeForBirth(int? birthYear, int? birthMonth, {DateTime? today}) {
+  final now = today ?? DateTime.now();
+  if (birthYear == null || birthMonth == null || birthMonth < 1 || birthMonth > 12) {
+    return GradeLevel.extension;
+  }
+
+  // 入学年份：9 月 1 日（含）后出生的孩子次年 9 月入学。
+  var schoolYear = birthYear + 6;
+  if (birthMonth >= 9) schoolYear += 1;
+
+  // 学年跨自然年：9~12 月读的是「今年 −1」学年的下学期。
+  final anchor = now.month >= 9 ? now.year : now.year - 1;
+  final gradeInSchool = anchor - schoolYear + 1;
+
+  if (gradeInSchool >= 1 && gradeInSchool <= 9) {
+    return gradeFromValue(gradeInSchool);
+  }
+  // 未入学或已毕业出九年级：都进拓展档（课外名篇不按年级收窄）。
+  return GradeLevel.extension;
+}

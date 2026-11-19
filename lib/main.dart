@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'data/profile.dart';
 import 'data/progress_store.dart';
 import 'data/topic.dart';
 import 'data/topics.dart';
@@ -19,18 +20,29 @@ Future<void> main() async {
     orElse: () => kDefaultTopic,
   );
   final store = await ProgressStore.load(topicId: topic.id);
-  runApp(PoemQuizApp(initialStore: store, initialTopic: topic));
+  final profile = await UserProfile.load();
+  runApp(PoemQuizApp(
+    initialStore: store,
+    initialTopic: topic,
+    initialProfile: profile,
+  ));
 }
 
-/// 根壳：持有当前科目与对应存档。
+/// 根壳：持有当前科目、对应存档与全局个人档案。
 ///
 /// 切换科目时重建 [ProgressStore]（每个科目一份独立存档），
 /// 并整棵树重建，避免上一个科目的引擎、错题本缓存残留。
 class PoemQuizApp extends StatefulWidget {
-  const PoemQuizApp({super.key, required this.initialStore, required this.initialTopic});
+  const PoemQuizApp({
+    super.key,
+    required this.initialStore,
+    required this.initialTopic,
+    required this.initialProfile,
+  });
 
   final ProgressStore initialStore;
   final Topic initialTopic;
+  final UserProfile initialProfile;
 
   @override
   State<PoemQuizApp> createState() => _PoemQuizAppState();
@@ -39,6 +51,7 @@ class PoemQuizApp extends StatefulWidget {
 class _PoemQuizAppState extends State<PoemQuizApp> {
   late Topic _topic = widget.initialTopic;
   late ProgressStore _store = widget.initialStore;
+  late final UserProfile _profile = widget.initialProfile;
 
   /// 切换科目。存档按科目隔离，所以必须换一份 [ProgressStore]。
   Future<void> switchTopic(Topic topic) async {
@@ -56,7 +69,7 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '学而时习',
+      title: '日知',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       // key 让切换科目时 HomePage 整棵重建，不会残留上一个科目的选中态。
@@ -64,6 +77,7 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
         key: ValueKey<String>(_topic.id),
         store: _store,
         topic: _topic,
+        profile: _profile,
         onSwitchTopic: switchTopic,
       ),
     );

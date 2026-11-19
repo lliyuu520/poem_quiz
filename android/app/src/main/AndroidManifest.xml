@@ -2,7 +2,7 @@
     <!-- 默认离线；仅设置页手动「检查更新」时联网（下载版本清单与新 APK）。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="诗词问答"
+        android:label="日知"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

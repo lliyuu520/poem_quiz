@@ -1,5 +1,8 @@
+import 'package:flutter/material.dart';
+
 import '../models/poem.dart';
 import '../models/question.dart';
+import '../theme/app_theme.dart';
 import 'grade.dart';
 
 /// 科目的玩法形态。
@@ -35,6 +38,8 @@ class Topic {
     this.intro = '',
     this.mode = TopicMode.quiz,
     this.headline,
+    this.accent = AppColors.seal,
+    this.accentSoft = AppColors.sealSoft,
     this.nameOf,
     this.summaryOf,
     this.marks,
@@ -61,8 +66,14 @@ class Topic {
   /// 玩法形态。问答科目走题库出题，数独走棋盘。
   final TopicMode mode;
 
-  /// 首页大标题的覆盖值。不传时按「<科目名>问答」拼（数独不叫「问答」）。
+  /// 首页大标题的覆盖值。不传时直接用科目名（数独就叫「数独」）。
   final String? headline;
+
+  /// 本科目的印色。骨架四科一致，只换这一组颜色，切科目时整屏随之变。
+  ///
+  /// [accent] 用于朱印、主按钮、选中态；[accentSoft] 是其淡底。
+  final Color accent;
+  final Color accentSoft;
 
   /// 条目所属分组。诗词取朝代，拼音取声母，算术取运算类型。
   final String Function(Poem entry) groupOf;
@@ -103,8 +114,9 @@ class Topic {
   /// 不传时按诗词格式拼，因为书名号是默认展示名的一部分。
   final String Function(List<String> parts)? summaryFromId;
 
-  /// 首页大标题，如「诗词问答」。数独这类科目用 [headline] 覆盖。
-  String get quizTitle => headline ?? '$name问答';
+  /// 首页大标题。四科都直接用科目名——「数独问答」不成立，而
+  /// 「诗词问答」也曾把范围说得比实际窄。
+  String get quizTitle => headline ?? name;
 
   /// 是否走棋盘玩法（数独）。这类科目没有题库、题型、学习模式与错题本。
   bool get isBoardGame => mode == TopicMode.sudoku;

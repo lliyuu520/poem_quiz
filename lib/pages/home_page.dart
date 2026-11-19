@@ -1,13 +1,13 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../data/grade.dart';
+import '../data/profile.dart';
 import '../data/progress_store.dart';
 import '../data/quiz_engine.dart';
 import '../data/quiz_session.dart';
 import '../data/sudoku.dart';
 import '../data/topic.dart';
+import '../data/topics.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
@@ -17,17 +17,21 @@ import 'study_page.dart';
 import 'sudoku_page.dart';
 import 'wrong_book_page.dart';
 
-/// 首页：选学龄、选玩法，开始一局。
+/// 首页：按出生年月定学龄、选玩法，开始一局。
 class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
     required this.store,
     required this.topic,
+    required this.profile,
     required this.onSwitchTopic,
   });
 
   final ProgressStore store;
   final Topic topic;
+
+  /// 全局个人档案（出生年月）。学龄由它推算，改动后根壳整树重建。
+  final UserProfile profile;
 
   /// 切换科目。由根壳重建存档与页面树。
   final Future<void> Function(Topic topic) onSwitchTopic;
@@ -39,8 +43,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final QuizEngine _engine = QuizEngine(poems: widget.topic.entries);
 
-  /// 当前选中的学龄与玩法。玩法默认「快问快答」，学龄沿用上次选择。
-  GradeLevel _grade = GradeLevel.g3;
+  /// 当前选中的玩法。玩法默认「快问快答」；学龄不再手选，由出生年月推算。
   GameMode _mode = GameMode.quick;
 
   /// 数独当前选中的难度档。开局时沿用上次通关的最高档。
@@ -49,7 +52,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _grade = widget.store.lastGrade;
     _difficulty = _highestUnlocked;
   }
 
@@ -71,10 +73,15 @@ class _HomePageState extends State<HomePage> {
 
   /// 本局使用的学龄档位。
   ///
-  /// 跨年级的科目用用户选的那档；只有一年级内容的科目（数学）题库全标 grade 1，
-  /// 若沿用存档里的三年级会算出空题池，所以强制取题库里唯一的那个年级。
+  /// 由出生年月推算（见 [gradeForBirth]）：跨年级的科目直接用推算结果；
+  /// 题库只有单一年级的科目（如全是一年级口算的数学）推算档再高也没题可出，
+  /// 强制取题库里唯一的那个年级。
   GradeLevel get _activeGrade {
-    if (widget.topic.graded) return _grade;
+    final birth = gradeForBirth(
+      widget.profile.birthYear,
+      widget.profile.birthMonth,
+    );
+    if (widget.topic.graded) return birth;
     final only = widget.topic.entries.first.grade;
     return GradeLevel.values.firstWhere(
       (g) => g.grade == only,
@@ -95,8 +102,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     final grade = _activeGrade;
-    // 记下学龄，下次打开沿用。写盘不阻塞开局。
-    if (widget.topic.graded) unawaited(_store.setLastGrade(grade));
     final session = buildSession(
       engine: _engine,
       topic: widget.topic,
@@ -139,14 +144,14 @@ class _HomePageState extends State<HomePage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  /// 设置页：科目切换与生涯重置都收在这里。
+  /// 设置页：出生年月与生涯重置都收在这里。
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SettingsPage(
           store: _store,
           topic: widget.topic,
-          onSwitchTopic: widget.onSwitchTopic,
+          profile: widget.profile,
         ),
       ),
     );
@@ -173,7 +178,12 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   _TitleBlock(store: _store, topic: widget.topic, onSettings: _openSettings),
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 18),
+                  _TopicTabs(
+                    currentId: widget.topic.id,
+                    onSelect: widget.onSwitchTopic,
+                  ),
+                  const SizedBox(height: 20),
 
                   // 数独不走题库也不分学龄：整块难度关卡列表，逐级解锁。
                   if (widget.topic.isBoardGame) ...<Widget>[
@@ -186,17 +196,14 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 22),
                   ] else if (widget.topic.graded) ...<Widget>[
-                    // 跨多个年级才值得选学龄；只有一年级内容的科目（数学）
-                    // 选了也没区别，改展示内容说明。
+                    // 学龄由出生年月推算，不再让用户选；这里只读展示推算结果。
                     const RuleDivider(label: '学龄'),
                     const SizedBox(height: 12),
-                    _GradePicker(
-                      selected: _grade,
-                      onChanged: (g) {
-                        setState(() => _grade = g);
-                        _store.setLastGrade(g);
-                      },
+                    _GradeCard(
+                      grade: _activeGrade,
+                      profile: widget.profile,
                       topic: widget.topic,
+                      onOpenSettings: _openSettings,
                     ),
                     const SizedBox(height: 22),
                   ] else ...<Widget>[
@@ -306,6 +313,85 @@ enum GameMode {
   String subtitleFor(Topic topic) => subtitle.replaceAll('{name}', topic.name);
 }
 
+/// 科目页签：四科是第一层结构，直接摆在首页；切科由根壳换存档并重建页面树。
+///
+/// 底部一条细线 + 当前科目的短横，用各科墨色标出选中态。
+class _TopicTabs extends StatelessWidget {
+  const _TopicTabs({
+    required this.currentId,
+    required this.onSelect,
+  });
+
+  final String currentId;
+  final Future<void> Function(Topic topic) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.line, width: 1)),
+      ),
+      child: Row(
+        children: <Widget>[
+          for (final topic in kTopics) ...<Widget>[
+            Expanded(
+              child: _TopicTab(
+                topic: topic,
+                selected: topic.id == currentId,
+                onTap: () => onSelect(topic),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TopicTab extends StatelessWidget {
+  const _TopicTab({
+    required this.topic,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final Topic topic;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? topic.accent : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Text(
+            topic.name,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              color: selected ? AppColors.ink : AppColors.inkFaint,
+              letterSpacing: 2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TitleBlock extends StatelessWidget {
   const _TitleBlock({
     required this.store,
@@ -372,7 +458,7 @@ class _TitleBlock extends StatelessWidget {
               height: 52,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AppColors.seal,
+                color: topic.accent,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
@@ -454,106 +540,100 @@ class _MiniDivider extends StatelessWidget {
   }
 }
 
-/// 学龄档位：一年级到九年级横排，「拓展」单独一行，与年级题池区分开。
-class _GradePicker extends StatelessWidget {
-  const _GradePicker({
-    required this.selected,
-    required this.onChanged,
+/// 学龄推算卡：只读展示由出生年月推算出的档位与题池概况。
+///
+/// 点击进设置页改出生年月——学龄是「用户是谁」的属性，不在首页反复调整。
+class _GradeCard extends StatelessWidget {
+  const _GradeCard({
+    required this.grade,
+    required this.profile,
     required this.topic,
+    required this.onOpenSettings,
   });
 
-  final GradeLevel selected;
-  final ValueChanged<GradeLevel> onChanged;
+  final GradeLevel grade;
+  final UserProfile profile;
   final Topic topic;
-
-  static const List<GradeLevel> _grades = <GradeLevel>[
-    GradeLevel.g1,
-    GradeLevel.g2,
-    GradeLevel.g3,
-    GradeLevel.g4,
-    GradeLevel.g5,
-    GradeLevel.g6,
-    GradeLevel.g7,
-    GradeLevel.g8,
-    GradeLevel.g9,
-  ];
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        // 九个年级一行放不下，用 3×3 网格，与下方玩法的纵向节奏一致。
-        for (var row = 0; row < 3; row++) ...<Widget>[
-          Row(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpenSettings,
+        borderRadius: BorderRadius.circular(14),
+        child: InkCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          child: Row(
             children: <Widget>[
-              for (var col = 0; col < 3; col++)
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(right: col == 2 ? 0 : 8),
-                    child: _GradeTile(
-                      grade: _grades[row * 3 + col],
-                      selected: _grades[row * 3 + col] == selected,
-                      onTap: () => onChanged(_grades[row * 3 + col]),
-                    ),
-                  ),
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.sealSoft,
+                  borderRadius: BorderRadius.circular(9),
                 ),
+                child: Icon(
+                  grade.isExtension ? Icons.auto_stories_outlined : Icons.school_outlined,
+                  size: 19,
+                  color: AppColors.seal,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      grade.title,
+                      style: serif(16, weight: FontWeight.w600, spacing: 2),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _summary,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.inkSoft,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: AppColors.inkFaint,
+              ),
             ],
           ),
-          if (row < 2) const SizedBox(height: 8),
-        ],
-        const SizedBox(height: 8),
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: _GradeTile(
-                grade: GradeLevel.extension,
-                selected: selected == GradeLevel.extension,
-                onTap: () => onChanged(GradeLevel.extension),
-              ),
-            ),
-          ],
         ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _summary,
-            style: const TextStyle(
-              fontSize: 11,
-              color: AppColors.inkFaint,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  /// 让「学龄 = 题池范围」在界面上可见：选三年级时会说明还带多少低年级题。
+  /// 让「学龄 = 题池范围」在界面上可见：推算出几年级，就说明带着多少低年级题。
   String get _summary {
-    final count = topic.countForGrade(selected);
+    if (!profile.hasBirth) return '未设置出生年月 · 点击去设置页补填';
+    final count = topic.countForGrade(grade);
     if (count == 0) {
-      return selected.isExtension
+      return grade.isExtension
           ? '拓展内容待补充 · 可出 0 ${topic.unit}'
-          : '${selected.title}内容待补充 · 可出 0 ${topic.unit} · 每题 1 分';
+          : '${grade.title}内容待补充 · 可出 0 ${topic.unit}';
     }
-    if (selected.isExtension) {
-      final prefix = _countOf(0) > 0 ? '教材未收的课外名篇' : '拓展内容待补充';
-      return '$prefix · 可出 $count ${topic.unit} · 每题 1 分';
+    if (grade.isExtension) {
+      return '按出生年月推算 · 教材未收的课外名篇 · 可出 $count ${topic.unit}';
     }
-    final own = _countOf(selected.grade);
-    final base = own > 0
-        ? '本年级可出 $own ${topic.unit}'
-        : '${selected.title}内容待补充';
+    final own = topic.entries.where((e) => e.grade == grade.grade).length;
     final review = count - own;
-    if (review <= 0) return '$base · 每题 1 分';
-    if (own == 0) return '$base · 先练已收录的 $review ${topic.unit} · 每题 1 分';
-    return '$base · 另含低年级 $review ${topic.unit} · 每题 1 分';
+    final pool = own > 0
+        ? (review > 0 ? '本年级 $own · 另含低年级 $review ${topic.unit}' : '本年级可出 $own ${topic.unit}')
+        : '${grade.title}内容待补充，先练已收录的 $review ${topic.unit}';
+    return '按出生年月推算 · $pool';
   }
-
-  int _countOf(int grade) =>
-      topic.entries.where((e) => e.grade == grade).length;
 }
 
 /// 只有单一年级内容的科目（数学）用这一段替代学龄选择器。
@@ -579,44 +659,6 @@ class _TopicIntro extends StatelessWidget {
             style: const TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _GradeTile extends StatelessWidget {
-  const _GradeTile({
-    required this.grade,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final GradeLevel grade;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.seal : AppColors.card,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AppColors.seal : AppColors.line),
-        ),
-        child: Text(
-          grade.title,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            color: selected ? Colors.white : AppColors.inkSoft,
-            letterSpacing: 2,
-          ),
-        ),
       ),
     );
   }

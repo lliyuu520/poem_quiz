@@ -1,5 +1,6 @@
 import '../models/poem.dart';
 import '../models/question.dart';
+import '../theme/app_theme.dart';
 import 'math.dart';
 import 'pinyin.dart';
 import 'poems.dart';
@@ -24,6 +25,8 @@ const Topic kPoetryTopic = Topic(
   },
   tagline: '一句一题，闲时温故',
   seal: '诗\nquiz',
+  accent: AppColors.seal,
+  accentSoft: AppColors.sealSoft,
 );
 
 String _dynastyOf(Poem p) => p.dynasty;
@@ -51,6 +54,8 @@ const Topic kPinyinTopic = Topic(
   tagline: '看字读音，看音认字',
   intro: '看字词选读音、看读音选字词。拼音只在一年级系统学习，所以不分学龄档。',
   seal: '音\nquiz',
+  accent: AppColors.pinyin,
+  accentSoft: AppColors.pinyinSoft,
   summaryFromId: _pinyinSummaryFromId,
   detailOf: _pinyinDetail,
 );
@@ -91,6 +96,8 @@ final Topic kMathTopic = Topic(
   tagline: '懂算理，会口算',
   intro: '按学龄练口算：一年级加减与整十数，二年级表内乘除。高年级会带着复习低年级。',
   seal: '算\nquiz',
+  accent: AppColors.math,
+  accentSoft: AppColors.mathSoft,
   marks: _mathMarks,
   summaryFromId: _mathSummaryFromId,
   detailOf: _mathDetail,
@@ -133,6 +140,8 @@ const Topic kSudokuTopic = Topic(
   groupLabel: '难度',
   searchHint: '',
   seal: '数\n独',
+  accent: AppColors.sudoku,
+  accentSoft: AppColors.sudokuSoft,
   intro: '九宫格每行、每列、每宫 1~9 各一次。填错会标红，可以撤销重来。',
 );
 
