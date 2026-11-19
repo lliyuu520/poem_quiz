@@ -91,7 +91,11 @@ class ResultPage extends StatelessWidget {
                   InkCard(
                     child: Column(
                       children: <Widget>[
-                        _Row(label: '学龄', value: session.grade.title),
+                        // 不分学龄的科目（拼音）显示科目名，不显示学龄。
+                        _Row(
+                          label: session.grade == null ? '科目' : '学龄',
+                          value: session.grade?.title ?? session.topic.name,
+                        ),
                         const SizedBox(height: 12),
                         _Row(label: '答对', value: '${session.correctCount} 题'),
                         const SizedBox(height: 12),
@@ -121,7 +125,7 @@ class ResultPage extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 10),
                         child: InkCard(
                           padding: const EdgeInsets.all(14),
-                          child: _WrongPoemTile(poemId: id),
+                          child: _WrongPoemTile(id: id, session: session),
                         ),
                       ),
                   ],
@@ -144,17 +148,22 @@ class ResultPage extends StatelessWidget {
 }
 
 class _WrongPoemTile extends StatelessWidget {
-  const _WrongPoemTile({required this.poemId});
+  const _WrongPoemTile({required this.id, required this.session});
 
-  final String poemId;
+  final String id;
+  final QuizSession session;
 
   @override
   Widget build(BuildContext context) {
-    // 结算页只需要摘要信息，从 id 反解比传整个对象更省事。
-    final parts = poemId.split('|');
-    final source = parts.length >= 3
-        ? '${parts[0]} · ${parts[1]}《${parts[2]}》'
-        : poemId;
+    // 本局题目里能查到就用科目的摘要格式（诗词「唐 · 李白《静夜思》」、拼音「重 · zhòng」），
+    // 查不到才回落到从 id 反解——拼音的 id 不含《》语义，不能直接拼。
+    final entry = session.questions
+        .map((q) => q.poem)
+        .where((p) => p.id == id)
+        .firstOrNull;
+    final source = entry != null
+        ? session.topic.displaySummaryOf(entry)
+        : _sourceFromId(id);
 
     return Row(
       children: <Widget>[
@@ -168,6 +177,14 @@ class _WrongPoemTile extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// 兜底：题目已不在本局列表里时，按「朝代|作者|标题」尽力还原。
+  String _sourceFromId(String raw) {
+    final parts = raw.split('|');
+    return parts.length >= 3
+        ? '${parts[0]} · ${parts[1]}《${parts[2]}》'
+        : raw;
   }
 }
 

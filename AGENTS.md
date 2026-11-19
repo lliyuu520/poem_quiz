@@ -11,7 +11,7 @@
 ## 常用命令
 
 ```bash
-flutter test                          # 42 个用例，改引擎/学龄/布局必跑
+flutter test                          # 57 个用例，改引擎/学龄/题型/布局必跑
 flutter analyze                       # analysis_options 已 exclude build/ android/
 flutter run                           # 调试
 flutter build apk --release           # → build/app/outputs/flutter-apk/app-release.apk（约 17MB）
@@ -26,7 +26,8 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | 路径 | 内容 |
 |---|---|
 | `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 搜索提示 + 存储键前缀 |
-| `lib/data/topics.dart` | `kTopics`（当前只有诗词）、`kDefaultTopic`；新增科目在这里加一条 |
+| `lib/data/topics.dart` | `kTopics`（诗词、拼音）、`kDefaultTopic`；新增科目在这里加一条 |
+| `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：27 条，声母/韵母/整体认读/多音字/轻声 |
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：109 首，唐 65 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位：一年级~九年级 + 拓展，**只收窄题池范围，不过滤题型** |
 | `lib/data/quiz_engine.dart` | 出题：四类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
@@ -38,15 +39,19 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/theme/app_theme.dart`、`lib/widgets/common.dart` | 宣纸 + 墨 + 朱印视觉体系 |
 | `test/quiz_engine_test.dart` | 题库完整性、出题正确性、计分、学龄题池与加权、生涯模式 |
 | `test/layout_test.dart` | 三种窗口宽度下的渲染与横屏分栏（布局改动必跑） |
+| `test/pinyin_test.dart` | 拼音题库、科目属性、两种拼音题型 |
 | `tool/` | 一次性辅助脚本（图标生成、adb 驱动答题），不参与构建 |
 
-## 多科目架构（拼音/成语/算术待接入）
+## 多科目架构（成语/算术待接入）
 
 同一 app 内切换科目，进度与错题本**按科目隔离**。
 
 - 页面一律从 `Topic` 取数，**不再直接引用 `kPoems`**。`kPoems` 只应出现在 `topics.dart` 的科目定义里。
 - 科目切换入口在**设置页**（首页右上角齿轮）。设置页切换后 `popUntil` 回首页，因为当前页的 store 已属于旧科目。
-- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`unit`/`searchHint` 等文案。
+- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`unit`/`searchHint` 等文案。
+- **题型随科目走，不随玩法走**：`Topic.kinds` 决定本科目能出哪些题型，`buildSession` 不传 `kinds` 时自动取科目题型，不会跨科目混题。玩法只决定题数与是否用错题本/生涯。
+- **`graded`**：诗词按学龄分档；拼音 `graded: false`（只在一年级系统学习，给高年级出拼音题没意义），首页隐藏学龄选择，`buildSession` 的 `grade` 传 null。
+- **`nameOf` / `summaryOf`**：列表主标题与出处摘要由科目提供。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」。页面一律用 `topic.displayNameOf()` / `displaySummaryOf()`，不要自己拼书名号。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
 - `QuizEngine` 的 `poems` 是必填参数——故意不给默认值，避免新科目忘记传题库时静默出成诗词题。
 - `ProgressStore.load(topicId:)` 必须显式传科目 id。**没有旧存档迁移逻辑**（开发阶段，不兼容无前缀的历史键）。
@@ -65,7 +70,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - `grade`：1~9 对应一年级~九年级（成都现行统编版教材），**0 = 拓展**（教材未收的课外名篇与高中篇目），默认 0。漏标时宁可落进拓展档，也不混进低年级题池。
 - 题池**累加 + 加权**：选 N 年级时池为 1..N，本年级权重 1、低一档 1/3、再低 1/9，依次递减。衰减取 1/3 而非 1/2，是因为低年级条目本来就多（一年级 8 首对六年级累计 71 首），1/2 会让低年级题反超本年级。拓展档不参与年级累加。
 - 年级分布：一 8 / 二 11 / 三 13 / 四 12 / 五 15 / 六 12 / 七 8 / 八 7 / 九 5 / 拓展 18。单年级池小是正常的，一局题数自适应（`total` 取实际题数）。
-- 干扰项必须来自**别的诗**，且作者题排除同作者、标题题排除同名，否则选项里会出现重复正确答案。
+- 干扰项必须来自**别的条目**，且作者题排除同作者、标题题排除同名、拼音「选读音」排除同读音、「选字词」排除同字词，否则选项里会出现重复正确答案。拼音接入时漏掉这一条，诗词题库下会抽出两个「李白」。
 - 填空题：字池需能精确拼出答案（同一字出现几次就放几次），干扰字不得与答案字重复；`_plain()` 的正则负责去标点，长度计算、挖空、字池都依赖它——改正则要同时检查 `_minLineLength` 与 `blankLen` 分支。
 - 计分：**每题 1 分，只算对错**，年级不影响得分（2026-11-19 取消倍率与连击加成）。答错不倒扣、连击清零，连击仅用于展示。
 - 一局内每首诗只出一次题；`preferPoemIds`（错题优先）只影响前 3 题，其余打乱。

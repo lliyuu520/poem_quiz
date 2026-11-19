@@ -1,10 +1,12 @@
 import '../models/poem.dart';
+import '../models/question.dart';
 import 'grade.dart';
 
 /// 一个科目（题库）：诗词、拼音、成语、算术等各是一份 [Topic]。
 ///
-/// 科目决定三件事：
+/// 科目决定四件事：
 /// - 出题范围（[entries]）；
+/// - 能出哪些题型（[kinds]），诗词考接句/作者，拼音考读音；
 /// - 学习模式按什么维度分组浏览（[groupOf]，诗词是朝代，拼音是声母/韵母）；
 /// - 进度与错题本存在哪一份独立的存档里（[id] 作为存储键前缀）。
 ///
@@ -21,6 +23,10 @@ class Topic {
     required this.entries,
     required this.groupOf,
     required this.metaOf,
+    required this.kinds,
+    this.graded = true,
+    this.nameOf,
+    this.summaryOf,
   });
 
   /// 存储键命名空间，同时是科目的唯一标识。
@@ -45,6 +51,24 @@ class Topic {
   /// 条目副标题，展示在标题下方。
   final String Function(Poem entry) metaOf;
 
-  /// 该科目在某个学龄档位下可出的条目数。
-  int countForGrade(GradeLevel grade) => grade.countIn(entries);
+  /// 本科目能出的题型。玩法只决定「练哪几类」，不跨科目混用题型。
+  final Set<QuestionKind> kinds;
+
+  /// 是否按学龄分档。拼音只在一年级系统学习，给高年级出拼音题没有意义，
+  /// 所以拼音科目 [graded] 为 false，界面上不显示学龄选择。
+  final bool graded;
+
+  /// 条目在列表里的展示名。诗词是「《静夜思》」，拼音不需要书名号。
+  final String Function(Poem entry)? nameOf;
+
+  /// 结算页与学习页的一句话摘要，如诗词的「唐 · 李白《静夜思》」。
+  final String Function(Poem entry)? summaryOf;
+
+  String displayNameOf(Poem entry) => nameOf?.call(entry) ?? '《${entry.title}》';
+
+  String displaySummaryOf(Poem entry) => summaryOf?.call(entry) ?? entry.source;
+
+  /// 该科目在某个学龄档位下可出的条目数。不分档的科目返回全部。
+  int countForGrade(GradeLevel grade) =>
+      graded ? grade.countIn(entries) : entries.length;
 }

@@ -5,12 +5,14 @@ import 'package:flutter/foundation.dart';
 import '../models/question.dart';
 import 'grade.dart';
 import 'quiz_engine.dart';
+import 'topic.dart';
 
 /// 一局游戏的运行状态：题目、当前进度、连击、计分。
 class QuizSession extends ChangeNotifier {
   QuizSession({
     required this.questions,
     required this.total,
+    required this.topic,
     required this.grade,
     required this.careerMode,
   });
@@ -20,7 +22,11 @@ class QuizSession extends ChangeNotifier {
   /// 本局实际题数（题库不足时会少于目标题数）。
   final int total;
 
-  final GradeLevel grade;
+  /// 本科目。题型与文案格式都从它取，结算页也用它显示科目名。
+  final Topic topic;
+
+  /// 学龄档位。不分档的科目（拼音）为 null。
+  final GradeLevel? grade;
 
   /// 生涯模式：答对的诗会被记为已掌握，之后不再出题。
   final bool careerMode;
@@ -79,10 +85,14 @@ class QuizSession extends ChangeNotifier {
 }
 
 /// 生成一局题目。
+///
+/// [kinds] 为空时用科目自己的题型（[Topic.kinds]），不跨科目混题。
+/// [grade] 为 null 表示该科目不分学龄，题池取全部条目。
 QuizSession buildSession({
   required QuizEngine engine,
+  required Topic topic,
   required int count,
-  required GradeLevel grade,
+  GradeLevel? grade,
   Set<QuestionKind>? kinds,
   List<String> preferPoemIds = const <String>[],
   Set<String> excludePoemIds = const <String>{},
@@ -92,11 +102,11 @@ QuizSession buildSession({
   final rnd = random ?? Random();
   var questions = engine.generate(
     count: count,
-    kinds: kinds,
+    kinds: kinds ?? topic.kinds,
     preferPoemIds: preferPoemIds,
     excludePoemIds: excludePoemIds,
-    optionCount: grade.optionCount,
-    gradeWeights: grade.weights,
+    optionCount: grade?.optionCount ?? 4,
+    gradeWeights: _weightsFor(topic, grade),
   );
 
   // 错题优先只在头几题生效，其余打散，避免整局都是同一首诗。
@@ -110,7 +120,16 @@ QuizSession buildSession({
     questions: questions,
     // 题库不足时按实际题数结算，否则进度会显示成「8 / 10」就结束。
     total: questions.length,
+    topic: topic,
     grade: grade,
     careerMode: careerMode,
   );
+}
+
+/// 不分学龄的科目对所有条目给同一权重，等价于全库参与。
+Map<int, double> _weightsFor(Topic topic, GradeLevel? grade) {
+  if (grade != null) return grade.weights;
+  return <int, double>{
+    for (final e in topic.entries) e.grade: 1,
+  };
 }

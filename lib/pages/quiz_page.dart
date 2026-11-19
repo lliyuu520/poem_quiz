@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/quiz_session.dart';
+import '../data/topic.dart';
 import '../models/question.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
@@ -171,6 +172,7 @@ class _QuizPageState extends State<QuizPage> {
                             question: _question,
                             correct: _verdict!,
                             combo: widget.session.combo,
+                            topic: widget.session.topic,
                           ),
                         ],
                       ],
@@ -211,6 +213,7 @@ class _QuizPageState extends State<QuizPage> {
                 question: _question,
                 correct: _verdict!,
                 combo: widget.session.combo,
+                topic: widget.session.topic,
               ),
               const SizedBox(height: 16),
               _nextButton(),
@@ -722,11 +725,16 @@ class _Feedback extends StatelessWidget {
     required this.question,
     required this.correct,
     required this.combo,
+    required this.topic,
   });
 
   final Question question;
   final bool correct;
   final int combo;
+
+  /// 科目决定「出处摘要 + 正文」怎么排版：诗词是「唐 · 李白《静夜思》」+ 全文，
+  /// 拼音是「重 · zhòng」+ 组词示例（拼音条目的 lines 存的是组词示例）。
+  final Topic topic;
 
   @override
   Widget build(BuildContext context) {
@@ -764,7 +772,7 @@ class _Feedback extends StatelessWidget {
           Divider(color: color.withValues(alpha: 0.2), height: 1),
           const SizedBox(height: 10),
           Text(
-            question.poem.source,
+            topic.displaySummaryOf(question.poem),
             style: TextStyle(
               fontSize: 12,
               color: color.withValues(alpha: 0.85),

@@ -5,6 +5,7 @@ import 'package:poem_quiz/data/grade.dart';
 import 'package:poem_quiz/data/poems.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
+import 'package:poem_quiz/data/topics.dart';
 import 'package:poem_quiz/models/question.dart';
 
 /// 用固定种子创建引擎，指向内置诗词题库。
@@ -165,7 +166,7 @@ void main() {
   group('对局计分', () {
     test('连击递增，答错清零', () {
       final engine = engineWithSeed(29);
-      final s = buildSession(engine: engine, count: 10, grade: GradeLevel.g5);
+      final s = buildSession(engine: engine, topic: kPoetryTopic, count: 10, grade: GradeLevel.g5);
 
       s.submit(correct: true);
       expect(s.combo, 1);
@@ -179,7 +180,7 @@ void main() {
 
     test('答完最后一题后 finished 为真', () {
       final engine = engineWithSeed(31);
-      final s = buildSession(engine: engine, count: 3, grade: GradeLevel.g5);
+      final s = buildSession(engine: engine, topic: kPoetryTopic, count: 3, grade: GradeLevel.g5);
       for (var i = 0; i < 3; i++) {
         expect(s.finished, isFalse, reason: '第 $i 题不该结束');
         s.submit(correct: true);
@@ -219,7 +220,7 @@ void main() {
     test('得分只算对错，与学龄无关', () {
       int scoreFor(GradeLevel g) {
         final engine = engineWithSeed(41);
-        final s = buildSession(engine: engine, count: 3, grade: g);
+        final s = buildSession(engine: engine, topic: kPoetryTopic, count: 3, grade: g);
         for (var i = 0; i < 3; i++) {
           s.submit(correct: true);
           if (!s.finished) s.advance();
@@ -302,10 +303,23 @@ void main() {
       }
     });
 
-    test('学龄不再限制题型', () {
-      // 学龄只决定题池范围，题型由玩法决定。
-      final all = QuestionKind.values.toSet();
-      expect(all.length, 4, reason: '题型应保持四类，学龄不参与过滤');
+    test('学龄不限制题型', () {
+      // 学龄只决定题池范围；题型由科目决定，诗词科目下四类题型都可出。
+      expect(kPoetryTopic.kinds.length, 4, reason: '诗词科目应有四类题型');
+      final engine = engineWithSeed(83);
+      final seen = <QuestionKind>{};
+      for (var round = 0; round < 20; round++) {
+        seen.addAll(
+          engine
+              .generate(
+                count: 20,
+                kinds: kPoetryTopic.kinds,
+                gradeWeights: GradeLevel.g9.weights,
+              )
+              .map((q) => q.kind),
+        );
+      }
+      expect(seen, kPoetryTopic.kinds, reason: '诗词题型没有全部出现过');
     });
   });
 
@@ -334,6 +348,7 @@ void main() {
       final engine = engineWithSeed(53);
       final s = buildSession(
         engine: engine,
+        topic: kPoetryTopic,
         count: 3,
         grade: GradeLevel.g5,
         careerMode: true,

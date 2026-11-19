@@ -96,6 +96,7 @@ class _WrongBookPageState extends State<WrongBookPage> {
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _PoemTile(
                             poem: poems[i],
+                            name: widget.topic.displayNameOf(poems[i]),
                             meta: widget.topic.metaOf(poems[i]),
                             onRemove: () => store.removeWrong(poems[i].id),
                           ),
@@ -138,11 +139,15 @@ class _WrongBookPageState extends State<WrongBookPage> {
 class _PoemTile extends StatefulWidget {
   const _PoemTile({
     required this.poem,
+    required this.name,
     required this.meta,
     required this.onRemove,
   });
 
   final Poem poem;
+
+  /// 列表主标题，由科目决定。
+  final String name;
 
   /// 副标题，由科目决定。
   final String meta;
@@ -176,7 +181,7 @@ class _PoemTileState extends State<_PoemTile> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          '《${poem.title}》',
+                          widget.name,
                           style: serif(17, weight: FontWeight.w600, spacing: 1),
                         ),
                         const SizedBox(height: 4),

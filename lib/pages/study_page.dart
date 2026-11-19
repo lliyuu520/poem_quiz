@@ -186,6 +186,7 @@ class _StudyPageState extends State<StudyPage> {
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _StudyTile(
                             poem: poems[i],
+                            name: widget.topic.displayNameOf(poems[i]),
                             meta: widget.topic.metaOf(poems[i]),
                             mastered: mastered.contains(poems[i].id),
                             onToggleMastered: () => widget.store.markMastered(
@@ -248,12 +249,16 @@ class _GroupChip extends StatelessWidget {
 class _StudyTile extends StatefulWidget {
   const _StudyTile({
     required this.poem,
+    required this.name,
     required this.meta,
     required this.mastered,
     required this.onToggleMastered,
   });
 
   final Poem poem;
+
+  /// 列表主标题，由科目决定（诗词带书名号，拼音直接显示字词）。
+  final String name;
 
   /// 副标题，由科目决定（诗词是「朝代 · 作者」）。
   final String meta;
@@ -294,7 +299,7 @@ class _StudyTileState extends State<_StudyTile> {
                           children: <Widget>[
                             Flexible(
                               child: Text(
-                                '《${poem.title}》',
+                                widget.name,
                                 style: serif(
                                   17,
                                   weight: FontWeight.w600,

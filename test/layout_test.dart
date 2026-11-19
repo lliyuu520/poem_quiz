@@ -77,12 +77,39 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets('拼音首页不显示学龄，显示内容说明', (tester) async {
+      final store = await ProgressStore.load(topicId: kPinyinTopic.id);
+      await pumpAt(
+        tester,
+        phone,
+        () => HomePage(
+          store: store,
+          topic: kPinyinTopic,
+          onSwitchTopic: (_) async {},
+        ),
+      );
+      expect(find.text('学龄'), findsNothing, reason: '拼音不分学龄，不应出现学龄选择');
+      expect(find.text('三年级'), findsNothing);
+      expect(find.text('内容'), findsOneWidget);
+      // 页脚也有「共 N 条」，这里断言的是内容说明卡里的那一条。
+      expect(
+        find.text('共 ${kPinyinTopic.entries.length} 条 · 每题 1 分'),
+        findsOneWidget,
+      );
+      // 三种玩法与开始按钮都在。
+      for (final mode in GameMode.values) {
+        expect(find.text(mode.title), findsOneWidget);
+      }
+      expect(find.text('开始答题'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('答题页', () {
     Future<QuizSession> makeSession() async {
       final engine = QuizEngine(poems: kPoetryTopic.entries);
-      return buildSession(engine: engine, count: 5, grade: GradeLevel.g3);
+      return buildSession(engine: engine, topic: kPoetryTopic, count: 5, grade: GradeLevel.g3);
     }
 
     for (final (name, size) in <(String, Size)>[
@@ -103,6 +130,27 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets('拼音答题页渲染无溢出，题干是字词或读音', (tester) async {
+      final engine = QuizEngine(poems: kPinyinTopic.entries);
+      final session = buildSession(
+        engine: engine,
+        topic: kPinyinTopic,
+        count: 5,
+      );
+      await pumpAt(
+        tester,
+        phone,
+        () => QuizPage(session: session, onFinish: (_) async {}),
+      );
+      expect(find.textContaining('1 / '), findsOneWidget);
+      // 题干必须是某个拼音题型的提示语，不能是诗词的「接下句」等。
+      final prompts = <String>['接下句', '识诗人', '辨出处', '补诗句'];
+      for (final p in prompts) {
+        expect(find.text(p), findsNothing, reason: '拼音科目出了诗词题型：$p');
+      }
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('平板横屏走双栏：题目栏收窄让出作答位', (tester) async {
       final session = await makeSession();

@@ -7,7 +7,6 @@ import '../data/progress_store.dart';
 import '../data/quiz_engine.dart';
 import '../data/quiz_session.dart';
 import '../data/topic.dart';
-import '../models/question.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
@@ -52,12 +51,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _start() async {
     // 记下学龄，下次打开沿用。写盘不阻塞开局。
-    unawaited(_store.setLastGrade(_grade));
+    if (widget.topic.graded) unawaited(_store.setLastGrade(_grade));
     final session = buildSession(
       engine: _engine,
+      topic: widget.topic,
       count: _mode.count,
-      grade: _grade,
-      kinds: _mode.kinds,
+      grade: widget.topic.graded ? _grade : null,
       preferPoemIds: _mode.useWrongBook
           ? _store.wrongPoemIds
           : const <String>[],
@@ -131,18 +130,26 @@ class _HomePageState extends State<HomePage> {
                   _TitleBlock(store: _store, onSettings: _openSettings),
                   const SizedBox(height: 26),
 
-                  const RuleDivider(label: '学龄'),
-                  const SizedBox(height: 12),
-                  _GradePicker(
-                    selected: _grade,
-                    onChanged: (g) {
-                      setState(() => _grade = g);
-                      _store.setLastGrade(g);
-                    },
-                    topic: widget.topic,
-                  ),
+                  // 拼音不分学龄：只在一年级系统学习，给高年级出拼音题没意义。
+                  if (widget.topic.graded) ...<Widget>[
+                    const RuleDivider(label: '学龄'),
+                    const SizedBox(height: 12),
+                    _GradePicker(
+                      selected: _grade,
+                      onChanged: (g) {
+                        setState(() => _grade = g);
+                        _store.setLastGrade(g);
+                      },
+                      topic: widget.topic,
+                    ),
+                    const SizedBox(height: 22),
+                  ] else ...<Widget>[
+                    const RuleDivider(label: '内容'),
+                    const SizedBox(height: 12),
+                    _PinyinIntro(topic: widget.topic),
+                    const SizedBox(height: 22),
+                  ],
 
-                  const SizedBox(height: 22),
                   const RuleDivider(label: '玩法'),
                   const SizedBox(height: 12),
                   for (final mode in GameMode.values) ...<Widget>[
@@ -193,24 +200,12 @@ enum GameMode {
     subtitle: '四种题型随机出',
     icon: Icons.bolt_outlined,
     count: 10,
-    kinds: <QuestionKind>{
-      QuestionKind.nextLine,
-      QuestionKind.author,
-      QuestionKind.title,
-      QuestionKind.blank,
-    },
   ),
   review(
     title: '错题重练',
     subtitle: '从错题本里挑题，答对即移出',
     icon: Icons.history_edu_outlined,
     count: 10,
-    kinds: <QuestionKind>{
-      QuestionKind.nextLine,
-      QuestionKind.author,
-      QuestionKind.title,
-      QuestionKind.blank,
-    },
     useWrongBook: true,
   ),
   career(
@@ -218,12 +213,6 @@ enum GameMode {
     subtitle: '答对的诗不再出现，逐步通关全库',
     icon: Icons.military_tech_outlined,
     count: 15,
-    kinds: <QuestionKind>{
-      QuestionKind.nextLine,
-      QuestionKind.author,
-      QuestionKind.title,
-      QuestionKind.blank,
-    },
     isCareer: true,
   );
 
@@ -232,7 +221,6 @@ enum GameMode {
     required this.subtitle,
     required this.icon,
     required this.count,
-    required this.kinds,
     this.useWrongBook = false,
     this.isCareer = false,
   });
@@ -241,7 +229,6 @@ enum GameMode {
   final String subtitle;
   final IconData icon;
   final int count;
-  final Set<QuestionKind> kinds;
   final bool useWrongBook;
   final bool isCareer;
 }
@@ -453,6 +440,34 @@ class _GradePicker extends StatelessWidget {
 
   int _countOf(int grade) =>
       topic.entries.where((e) => e.grade == grade).length;
+}
+
+/// 不分学龄的科目（拼音）用这一段替代学龄选择器。
+class _PinyinIntro extends StatelessWidget {
+  const _PinyinIntro({required this.topic});
+
+  final Topic topic;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '共 ${topic.entries.length} ${topic.unit} · 每题 1 分',
+            style: serif(13, weight: FontWeight.w600, spacing: 1),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '看字词选读音、看读音选字词。拼音只在一年级系统学习，所以不分学龄档。',
+            style: const TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _GradeTile extends StatelessWidget {

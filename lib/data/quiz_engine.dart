@@ -108,7 +108,59 @@ class QuizEngine {
         return _title(poem, optionCount);
       case QuestionKind.blank:
         return _blank(poem);
+      case QuestionKind.pinyinOf:
+        return _pinyinOf(poem, optionCount);
+      case QuestionKind.wordOf:
+        return _wordOf(poem, optionCount);
     }
+  }
+
+  /// 给汉字，选出正确读音。
+  Question? _pinyinOf(Poem entry, int optionCount) {
+    final need = optionCount - 1;
+    // 干扰项不能与本条同音，也不能是同一条目，否则选项里会出现重复答案。
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => p.id == entry.id || p.author == entry.author,
+      pool: (p) => <String>[p.author],
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.author, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.pinyinOf,
+      poem: entry,
+      prompt: '这个字词怎么读？',
+      focus: entry.title,
+      key: '${entry.id}|pinyin',
+      options: options,
+      answerIndex: options.indexOf(entry.author),
+    );
+  }
+
+  /// 给读音，选出对应的汉字词。
+  Question? _wordOf(Poem entry, int optionCount) {
+    final need = optionCount - 1;
+    // 同理：同名字词不能当干扰项，否则选项里会有两个一样的词。
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => p.id == entry.id || p.title == entry.title,
+      pool: (p) => <String>[p.title],
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.title, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.wordOf,
+      poem: entry,
+      prompt: '这个读音对应哪个字词？',
+      focus: entry.author,
+      key: '${entry.id}|word',
+      options: options,
+      answerIndex: options.indexOf(entry.title),
+    );
   }
 
   /// 给出第 i 句，要求选出第 i+1 句。
