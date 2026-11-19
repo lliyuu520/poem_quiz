@@ -1,9 +1,19 @@
 import 'poem.dart';
 
-/// 题型。前四种针对诗句，后两种针对拼音读音。
+/// 题型。前四种针对诗句，中间两种针对拼音读音，最后三种针对算式。
 ///
 /// 一个科目只会用到其中一部分（见 `Topic.kinds`），引擎按题型分派。
-enum QuestionKind { nextLine, author, title, blank, pinyinOf, wordOf }
+enum QuestionKind {
+  nextLine,
+  author,
+  title,
+  blank,
+  pinyinOf,
+  wordOf,
+  mathResult,
+  mathBlank,
+  mathCompare,
+}
 
 extension QuestionKindLabel on QuestionKind {
   String get label => switch (this) {
@@ -13,12 +23,21 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.blank => '补诗句',
         QuestionKind.pinyinOf => '选读音',
         QuestionKind.wordOf => '选字词',
+        QuestionKind.mathResult => '算得数',
+        QuestionKind.mathBlank => '填数',
+        QuestionKind.mathCompare => '比大小',
       };
 }
 
 /// 是否为拼音类题型（答案是拼音串而非汉字）。
 bool isPinyinKind(QuestionKind kind) =>
     kind == QuestionKind.pinyinOf || kind == QuestionKind.wordOf;
+
+/// 是否为算式类题型（题目围绕口算展开）。
+bool isMathKind(QuestionKind kind) =>
+    kind == QuestionKind.mathResult ||
+    kind == QuestionKind.mathBlank ||
+    kind == QuestionKind.mathCompare;
 
 /// 一道题。选择题与填空题共用同一结构，填空题不使用 [options]。
 class Question {
@@ -34,6 +53,7 @@ class Question {
     this.blankAfter = '',
     this.answerChars = const [],
     this.charPool = const [],
+    this.note = '',
   });
 
   final QuestionKind kind;
@@ -59,7 +79,13 @@ class Question {
   /// 填空题：候选字池，已打乱，包含正确答案与干扰字。
   final List<String> charPool;
 
+  /// 判题后的知识点补充，如算式题的解题思路。为空时不显示。
+  final String note;
+
   bool get isBlank => kind == QuestionKind.blank;
+
+  /// 算式题同样用 [focus] 展示题干、[options] 展示候选。
+  bool get isMath => isMathKind(kind);
 
   /// 拼音题同样用 [focus] 展示题干、[options] 展示候选，只是文字是拼音。
   bool get isPinyin => isPinyinKind(kind);

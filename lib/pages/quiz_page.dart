@@ -780,7 +780,8 @@ class _Feedback extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            question.poem.fullText,
+            // 算式题的正文就是算式本身，重复展示没有意义，改显示解题思路。
+            question.note.isNotEmpty ? question.note : question.poem.fullText,
             style: serif(15, color: AppColors.ink, height: 1.7, spacing: 1.5),
           ),
         ],

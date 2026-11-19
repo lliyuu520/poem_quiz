@@ -56,7 +56,7 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '诗词问答',
+      title: '学而时习',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       // key 让切换科目时 HomePage 整棵重建，不会残留上一个科目的选中态。

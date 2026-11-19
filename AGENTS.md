@@ -11,7 +11,7 @@
 ## 常用命令
 
 ```bash
-flutter test                          # 59 个用例，改引擎/学龄/题型/布局必跑
+flutter test                          # 82 个用例，改引擎/学龄/题型/布局必跑
 flutter analyze                       # analysis_options 已 exclude build/ android/
 flutter run                           # 调试
 flutter build apk --release           # → build/app/outputs/flutter-apk/app-release.apk（约 17MB）
@@ -26,33 +26,37 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | 路径 | 内容 |
 |---|---|
 | `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 搜索提示 + 存储键前缀 |
-| `lib/data/topics.dart` | `kTopics`（诗词、拼音）、`kDefaultTopic`；新增科目在这里加一条 |
+| `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学）、`kDefaultTopic`；新增科目在这里加一条 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：321 条，按年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
+| `lib/data/math.dart` | 数学题库 `kMath`：196 条一年级口算，规则生成；`MathExpr` 解析算式 |
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：109 首，唐 65 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位：一年级~九年级 + 拓展，**只收窄题池范围，不过滤题型** |
-| `lib/data/quiz_engine.dart` | 出题：四类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/quiz_engine.dart` | 出题：九类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、连击、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>` |
-| `lib/models/` | `Poem` / `Question` 数据结构 |
+| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 九类题型（诗词 4 / 拼音 2 / 数学 3） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/theme/app_theme.dart`、`lib/widgets/common.dart` | 宣纸 + 墨 + 朱印视觉体系 |
 | `test/quiz_engine_test.dart` | 题库完整性、出题正确性、计分、学龄题池与加权、生涯模式 |
 | `test/layout_test.dart` | 三种窗口宽度下的渲染与横屏分栏（布局改动必跑） |
 | `test/pinyin_test.dart` | 拼音题库完整性、声调标注、分年级题池、两种拼音题型 |
+| `test/math_test.dart` | 数学题库、算式解析、三种算式题型、评语与摘要格式 |
 | `tool/` | 一次性辅助脚本（图标生成、拼音题库生成、adb 驱动答题），不参与构建 |
 
-## 多科目架构（成语/算术待接入）
+## 多科目架构（成语待接入）
 
 同一 app 内切换科目，进度与错题本**按科目隔离**。
 
 - 页面一律从 `Topic` 取数，**不再直接引用 `kPoems`**。`kPoems` 只应出现在 `topics.dart` 的科目定义里。
 - 科目切换入口在**设置页**（首页右上角齿轮）。设置页切换后 `popUntil` 回首页，因为当前页的 store 已属于旧科目。
-- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`unit`/`searchHint` 等文案。
+- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`tagline`/`intro`/`seal`（首页文案）、`unit`/`searchHint` 等文案。
 - **题型随科目走，不随玩法走**：`Topic.kinds` 决定本科目能出哪些题型，`buildSession` 不传 `kinds` 时自动取科目题型，不会跨科目混题。玩法只决定题数与是否用错题本/生涯。
 - **学龄分档**：诗词与拼音都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
-- **`nameOf` / `summaryOf`**：列表主标题与出处摘要由科目提供。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」。页面一律用 `topic.displayNameOf()` / `displaySummaryOf()`，不要自己拼书名号。
+- **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库全标 `grade: 1`，所以自动为 false，首页隐藏学龄选择、`buildSession` 用题库里唯一的年级。补上二年级数学题后无需改代码，学龄选择会自动出现。
+- **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
+- **`detailOf` 不能省**：`Poem.fullText` 是 `lines.join()`，对拼音（逐字组词）和数学（算式 + 思路）会挤成一行，所以这两种科目的展开正文各自 `join('\n')`。
 - `QuizEngine` 的 `poems` 是必填参数——故意不给默认值，避免新科目忘记传题库时静默出成诗词题。
 - `ProgressStore.load(topicId:)` 必须显式传科目 id。**没有旧存档迁移逻辑**（开发阶段，不兼容无前缀的历史键）。
 
@@ -79,6 +83,8 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 ## 关键不变量
 
+- **算式题（数学科目）**：`Poem.title` 是「3 + 4」、`author` 是得数，由 `MathExpr.of()` 解析；解析不出的条目出不了算式题（返回 null 而不是崩）。干扰项按数值接近程度取（7 的邻居比 90 更有迷惑性）。
+- **`_pickFromOthers` 先去重再截窗口**：算式题里同一得数被几十条共用（整十数只有 10 种得数），若先按距离截窗口再去重，会凑不齐选项而整类题退化成另一种问法。`test/math_test.dart` 里有对应用例。
 - 题库或出题逻辑改动后，`flutter test` 必须全绿——测试断言了「每档都能出满实际题池容量」与「每个年级都有篇目」，把某年级的篇目清空或收紧干扰项条件会导致失败。
 - 诗词原文与作者、标题需准确；这是内容产品，错字比 UI 瑕疵严重。
 - 新增诗词顺延 `// ── 唐 · 李白 ──` 这样的分组注释，保持文件可按朝代作者浏览。

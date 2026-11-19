@@ -49,14 +49,28 @@ class _HomePageState extends State<HomePage> {
 
   ProgressStore get _store => widget.store;
 
+  /// 本局使用的学龄档位。
+  ///
+  /// 跨年级的科目用用户选的那档；只有一年级内容的科目（数学）题库全标 grade 1，
+  /// 若沿用存档里的三年级会算出空题池，所以强制取题库里唯一的那个年级。
+  GradeLevel get _activeGrade {
+    if (widget.topic.graded) return _grade;
+    final only = widget.topic.entries.first.grade;
+    return GradeLevel.values.firstWhere(
+      (g) => g.grade == only,
+      orElse: () => GradeLevel.g1,
+    );
+  }
+
   Future<void> _start() async {
+    final grade = _activeGrade;
     // 记下学龄，下次打开沿用。写盘不阻塞开局。
-    unawaited(_store.setLastGrade(_grade));
+    if (widget.topic.graded) unawaited(_store.setLastGrade(grade));
     final session = buildSession(
       engine: _engine,
       topic: widget.topic,
       count: _mode.count,
-      grade: _grade,
+      grade: grade,
       preferPoemIds: _mode.useWrongBook
           ? _store.wrongPoemIds
           : const <String>[],
@@ -127,27 +141,36 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  _TitleBlock(store: _store, onSettings: _openSettings),
+                  _TitleBlock(store: _store, topic: widget.topic, onSettings: _openSettings),
                   const SizedBox(height: 26),
 
-                  // 拼音不分学龄：只在一年级系统学习，给高年级出拼音题没意义。
-                  const RuleDivider(label: '学龄'),
-                  const SizedBox(height: 12),
-                  _GradePicker(
-                    selected: _grade,
-                    onChanged: (g) {
-                      setState(() => _grade = g);
-                      _store.setLastGrade(g);
-                    },
-                    topic: widget.topic,
-                  ),
-                  const SizedBox(height: 22),
+                  // 跨多个年级才值得选学龄；只有一年级内容的科目（数学）
+                  // 选了也没区别，改展示内容说明。
+                  if (widget.topic.graded) ...<Widget>[
+                    const RuleDivider(label: '学龄'),
+                    const SizedBox(height: 12),
+                    _GradePicker(
+                      selected: _grade,
+                      onChanged: (g) {
+                        setState(() => _grade = g);
+                        _store.setLastGrade(g);
+                      },
+                      topic: widget.topic,
+                    ),
+                    const SizedBox(height: 22),
+                  ] else ...<Widget>[
+                    const RuleDivider(label: '内容'),
+                    const SizedBox(height: 12),
+                    _TopicIntro(topic: widget.topic),
+                    const SizedBox(height: 22),
+                  ],
 
                   const RuleDivider(label: '玩法'),
                   const SizedBox(height: 12),
                   for (final mode in GameMode.values) ...<Widget>[
                     _ModeCard(
                       mode: mode,
+                      topic: widget.topic,
                       selected: mode == _mode,
                       onTap: () => setState(() => _mode = mode),
                     ),
@@ -187,10 +210,12 @@ class _HomePageState extends State<HomePage> {
 }
 
 /// 玩法配置。放在这里而不是散落在 UI 里，方便后续调参。
+///
+/// 副标题里的 `{name}` 按当前科目替换——诗词说「答对的诗」，数学说「答对的数学」。
 enum GameMode {
   quick(
     title: '快问快答',
-    subtitle: '四种题型随机出',
+    subtitle: '各题型随机出',
     icon: Icons.bolt_outlined,
     count: 10,
   ),
@@ -203,7 +228,7 @@ enum GameMode {
   ),
   career(
     title: '生涯模式',
-    subtitle: '答对的诗不再出现，逐步通关全库',
+    subtitle: '答对的{name}不再出现，逐步通关全库',
     icon: Icons.military_tech_outlined,
     count: 15,
     isCareer: true,
@@ -224,12 +249,21 @@ enum GameMode {
   final int count;
   final bool useWrongBook;
   final bool isCareer;
+
+  /// 按科目替换占位符。用科目名而不是 unit：数学的 unit 是「题」，
+  /// 「答对的题不再出现」太泛，不如「答对的数学」明确。
+  String subtitleFor(Topic topic) => subtitle.replaceAll('{name}', topic.name);
 }
 
 class _TitleBlock extends StatelessWidget {
-  const _TitleBlock({required this.store, required this.onSettings});
+  const _TitleBlock({
+    required this.store,
+    required this.topic,
+    required this.onSettings,
+  });
 
   final ProgressStore store;
+  final Topic topic;
   final VoidCallback onSettings;
 
   @override
@@ -245,12 +279,12 @@ class _TitleBlock extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    '诗词问答',
+                    topic.quizTitle,
                     style: serif(32, weight: FontWeight.w700, spacing: 6),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '一句一题，闲时温故',
+                    topic.tagline,
                     style: const TextStyle(
                       fontSize: 13,
                       color: AppColors.inkSoft,
@@ -277,7 +311,7 @@ class _TitleBlock extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
-                '诗\nquiz',
+                topic.seal,
                 textAlign: TextAlign.center,
                 style: serif(
                   13,
@@ -435,6 +469,33 @@ class _GradePicker extends StatelessWidget {
       topic.entries.where((e) => e.grade == grade).length;
 }
 
+/// 只有单一年级内容的科目（数学）用这一段替代学龄选择器。
+class _TopicIntro extends StatelessWidget {
+  const _TopicIntro({required this.topic});
+
+  final Topic topic;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '共 ${topic.entries.length} ${topic.unit} · 每题 1 分',
+            style: serif(13, weight: FontWeight.w600, spacing: 1),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            topic.intro,
+            style: const TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _GradeTile extends StatelessWidget {
   const _GradeTile({
@@ -477,11 +538,13 @@ class _GradeTile extends StatelessWidget {
 class _ModeCard extends StatelessWidget {
   const _ModeCard({
     required this.mode,
+    required this.topic,
     required this.selected,
     required this.onTap,
   });
 
   final GameMode mode;
+  final Topic topic;
   final bool selected;
   final VoidCallback onTap;
 
@@ -522,7 +585,7 @@ class _ModeCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      mode.subtitle,
+                      mode.subtitleFor(topic),
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.inkSoft,

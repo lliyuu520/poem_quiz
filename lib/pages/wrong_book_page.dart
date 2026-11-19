@@ -95,9 +95,9 @@ class _WrongBookPageState extends State<WrongBookPage> {
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _PoemTile(
-                            poem: poems[i],
                             name: widget.topic.displayNameOf(poems[i]),
                             meta: widget.topic.metaOf(poems[i]),
+                            detail: widget.topic.displayDetailOf(poems[i]),
                             onRemove: () => store.removeWrong(poems[i].id),
                           ),
                         ),
@@ -138,19 +138,20 @@ class _WrongBookPageState extends State<WrongBookPage> {
 
 class _PoemTile extends StatefulWidget {
   const _PoemTile({
-    required this.poem,
     required this.name,
     required this.meta,
+    required this.detail,
     required this.onRemove,
   });
-
-  final Poem poem;
 
   /// 列表主标题，由科目决定。
   final String name;
 
   /// 副标题，由科目决定。
   final String meta;
+
+  /// 展开后的正文，由科目决定。
+  final String detail;
   final VoidCallback onRemove;
 
   @override
@@ -162,8 +163,6 @@ class _PoemTileState extends State<_PoemTile> {
 
   @override
   Widget build(BuildContext context) {
-    final poem = widget.poem;
-
     return InkCard(
       padding: EdgeInsets.zero,
       child: Column(
@@ -219,7 +218,7 @@ class _PoemTileState extends State<_PoemTile> {
                 children: <Widget>[
                   const Divider(color: AppColors.line, height: 16),
                   Text(
-                    poem.fullText,
+                    widget.detail,
                     style: serif(16, height: 1.8, spacing: 2),
                   ),
                 ],

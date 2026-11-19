@@ -2,17 +2,17 @@ import '../models/poem.dart';
 import '../models/question.dart';
 import 'grade.dart';
 
-/// 一个科目（题库）：诗词、拼音、成语、算术等各是一份 [Topic]。
+/// 一个科目（题库）：诗词、拼音、数学、成语等各是一份 [Topic]。
 ///
 /// 科目决定四件事：
 /// - 出题范围（[entries]）；
-/// - 能出哪些题型（[kinds]），诗词考接句/作者，拼音考读音；
+/// - 能出哪些题型（[kinds]），诗词考接句/作者，拼音考读音，数学考口算；
 /// - 学习模式按什么维度分组浏览（[groupOf]，诗词是朝代，拼音是声母/韵母）；
 /// - 进度与错题本存在哪一份独立的存档里（[id] 作为存储键前缀）。
 ///
 /// 条目本体暂时复用 [Poem]：它的 title/author 在这里分别当作
 /// 「条目名」和「副信息」（如拼音的「重 · zhòng」），dynasty 当作分组值。
-/// 真正接入拼音时若字段不够用，再单独建条目类型，不提前抽象。
+/// 真正接入新科目时若字段不够用，再单独建条目类型，不提前抽象。
 class Topic {
   const Topic({
     required this.id,
@@ -24,8 +24,14 @@ class Topic {
     required this.groupOf,
     required this.metaOf,
     required this.kinds,
+    required this.tagline,
+    required this.seal,
+    this.intro = '',
     this.nameOf,
     this.summaryOf,
+    this.marks,
+    this.summaryFromId,
+    this.detailOf,
   });
 
   /// 存储键命名空间，同时是科目的唯一标识。
@@ -44,7 +50,7 @@ class Topic {
 
   final List<Poem> entries;
 
-  /// 条目所属分组。诗词取朝代，拼音可取声母，算术可取运算类型。
+  /// 条目所属分组。诗词取朝代，拼音取声母，算术取运算类型。
   final String Function(Poem entry) groupOf;
 
   /// 条目副标题，展示在标题下方。
@@ -53,16 +59,83 @@ class Topic {
   /// 本科目能出的题型。玩法只决定「练哪几类」，不跨科目混用题型。
   final Set<QuestionKind> kinds;
 
+  /// 首页标题下的一句副标题，如「一句一题，闲时温故」。
+  final String tagline;
+
+  /// 不分学龄的科目在首页「内容」区展示的说明。分学龄的科目用不到。
+  final String intro;
+
+  /// 首页右上角朱印里的字，两行，如「诗\nquiz」。
+  final String seal;
+
   /// 条目在列表里的展示名。诗词是「《静夜思》」，拼音不需要书名号。
   final String Function(Poem entry)? nameOf;
 
   /// 结算页与学习页的一句话摘要，如诗词的「唐 · 李白《静夜思》」。
   final String Function(Poem entry)? summaryOf;
 
+  /// 条目展开后的正文（学习页、错题本用）。
+  /// 诗词是全文，拼音是组词示例，数学是带思路的算式。
+  final String Function(Poem entry)? detailOf;
+
+  /// 结算页五档评语（全对 / 80% / 60% / 40% / 其余）。
+  /// 不传时用诗词那套，因为宣纸墨色的文案对哪一科都不违和。
+  final List<ResultMark>? marks;
+
+  /// 从存档里的 id 反解一句话摘要，用于错题清单里查不到条目时的兜底。
+  ///
+  /// id 恒为「分组|副信息|条目名」三段，但各科目的摘要格式不同：
+  /// 诗词是「唐 · 李白《静夜思》」，拼音是「重 · zhòng」，数学是「3 + 4 = 7」。
+  /// 不传时按诗词格式拼，因为书名号是默认展示名的一部分。
+  final String Function(List<String> parts)? summaryFromId;
+
+  /// 首页大标题，如「诗词问答」。
+  String get quizTitle => '$name问答';
+
+  /// 本科目跨了几个年级。只有一年级内容的科目（数学）返回 1，
+  /// 首页据此隐藏学龄选择——选二年级只会出 0 题。
+  int get gradeSpan => entries.map((e) => e.grade).toSet().length;
+
+  /// 是否需要选学龄。跨两个年级以上才值得让用户选；
+  /// 单一年级时题库本身就是唯一题池，选了也没有区别。
+  bool get graded => gradeSpan > 1;
+
   String displayNameOf(Poem entry) => nameOf?.call(entry) ?? '《${entry.title}》';
 
   String displaySummaryOf(Poem entry) => summaryOf?.call(entry) ?? entry.source;
 
-  /// 该科目在某个学龄档位下可出的条目数。
-  int countForGrade(GradeLevel grade) => grade.countIn(entries);
+  String displayDetailOf(Poem entry) => detailOf?.call(entry) ?? entry.fullText;
+
+  /// 从存档 id 反解摘要。三段以上才按格式拼，否则原样返回。
+  String summaryOfId(String id) {
+    final parts = id.split('|');
+    if (parts.length < 3) return id;
+    final custom = summaryFromId;
+    if (custom != null) return custom(parts);
+    return '${parts[0]} · ${parts[1]}《${parts[2]}》';
+  }
+
+  /// 按正确率取评语。
+  ResultMark markFor(double accuracy) {
+    final table = marks ?? kDefaultMarks;
+    for (var i = 0; i < table.length - 1; i++) {
+      if (accuracy >= 1.0 - i * 0.2) return table[i];
+    }
+    return table.last;
+  }
+
+  /// 该科目在某个学龄档位下可出的条目数。不分档的科目返回全部。
+  int countForGrade(GradeLevel grade) =>
+      graded ? grade.countIn(entries) : entries.length;
 }
+
+/// 结算页的一档评语。
+typedef ResultMark = ({String title, String remark});
+
+const List<ResultMark> kDefaultMarks = <ResultMark>[
+  (title: '腹有诗书', remark: '全对。这一局无可挑剔。'),
+  (title: '出口成章', remark: '功底扎实，再练几轮就稳了。'),
+  (title: '渐入佳境', remark: '大部分都记得住，错题再看看。'),
+  (title: '尚需温习', remark: '名句还需要多念几遍。'),
+  (title: '从头再来', remark: '别急，诗词本就是慢功夫。'),
+];

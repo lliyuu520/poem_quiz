@@ -16,14 +16,8 @@ class ResultPage extends StatelessWidget {
     final answered = session.questions.length;
     final accuracy = answered == 0 ? 0.0 : session.correctCount / answered;
 
-    // 按正确率给一句评语，比单纯报数字更有反馈感。
-    final (title, remark) = switch (accuracy) {
-      >= 1.0 => ('腹有诗书', '全对。这一局无可挑剔。'),
-      >= 0.8 => ('出口成章', '功底扎实，再练几轮就稳了。'),
-      >= 0.6 => ('渐入佳境', '大部分都记得住，错题再看看。'),
-      >= 0.4 => ('尚需温习', '名句还需要多念几遍。'),
-      _ => ('从头再来', '别急，诗词本就是慢功夫。'),
-    };
+    // 按正确率给一句评语，比单纯报数字更有反馈感。文案由科目提供（见 Topic.marks）。
+    final mark = session.topic.markFor(accuracy);
 
     return Scaffold(
       body: PaperBackground(
@@ -50,14 +44,14 @@ class ResultPage extends StatelessWidget {
                   const SizedBox(height: 8),
                   Center(
                     child: Text(
-                      title,
+                      mark.title,
                       style: serif(30, weight: FontWeight.w700, spacing: 6),
                     ),
                   ),
                   const SizedBox(height: 6),
                   Center(
                     child: Text(
-                      remark,
+                      mark.remark,
                       style: const TextStyle(
                         fontSize: 13,
                         color: AppColors.inkSoft,
@@ -105,7 +99,8 @@ class ResultPage extends StatelessWidget {
                             label: '生涯推进',
                             value: session.clearedPoemIds.isEmpty
                                 ? '本局无新增'
-                                : '新增掌握 ${session.clearedPoemIds.length} 首',
+                                : '新增掌握 ${session.clearedPoemIds.length} '
+                                    '${session.topic.unit}',
                           ),
                         ],
                       ],
@@ -151,15 +146,15 @@ class _WrongPoemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 本局题目里能查到就用科目的摘要格式（诗词「唐 · 李白《静夜思》」、拼音「重 · zhòng」），
-    // 查不到才回落到从 id 反解——拼音的 id 不含《》语义，不能直接拼。
+    // 本局题目里能查到就用科目的摘要格式（诗词「唐 · 李白《静夜思》」、拼音「重 · zhòng」、
+    // 数学「3 + 4 = 7」），查不到才回落到从 id 反解。
     final entry = session.questions
         .map((q) => q.poem)
         .where((p) => p.id == id)
         .firstOrNull;
     final source = entry != null
         ? session.topic.displaySummaryOf(entry)
-        : _sourceFromId(id);
+        : session.topic.summaryOfId(id);
 
     return Row(
       children: <Widget>[
@@ -173,14 +168,6 @@ class _WrongPoemTile extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  /// 兜底：题目已不在本局列表里时，按「朝代|作者|标题」尽力还原。
-  String _sourceFromId(String raw) {
-    final parts = raw.split('|');
-    return parts.length >= 3
-        ? '${parts[0]} · ${parts[1]}《${parts[2]}》'
-        : raw;
   }
 }
 

@@ -48,6 +48,8 @@ class _StudyPageState extends State<StudyPage> {
         return false;
       }
       if (q.isEmpty) return true;
+      // fullText 是 lines 拼接，三种科目都覆盖得到：诗词是全文，
+      // 拼音是逐字组词，数学是「3 + 4 = 7（思路）」。
       return p.title.contains(q) ||
           p.author.contains(q) ||
           p.fullText.contains(q);
@@ -185,9 +187,9 @@ class _StudyPageState extends State<StudyPage> {
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _StudyTile(
-                            poem: poems[i],
                             name: widget.topic.displayNameOf(poems[i]),
                             meta: widget.topic.metaOf(poems[i]),
+                            detail: widget.topic.displayDetailOf(poems[i]),
                             mastered: mastered.contains(poems[i].id),
                             onToggleMastered: () => widget.store.markMastered(
                               poems[i].id,
@@ -248,20 +250,21 @@ class _GroupChip extends StatelessWidget {
 /// 单条条目：点击展开全文，右侧可标记已掌握。
 class _StudyTile extends StatefulWidget {
   const _StudyTile({
-    required this.poem,
     required this.name,
     required this.meta,
+    required this.detail,
     required this.mastered,
     required this.onToggleMastered,
   });
-
-  final Poem poem;
 
   /// 列表主标题，由科目决定（诗词带书名号，拼音直接显示字词）。
   final String name;
 
   /// 副标题，由科目决定（诗词是「朝代 · 作者」）。
   final String meta;
+
+  /// 展开后的正文，由科目决定（诗词全文、拼音组词示例、数学算式与思路）。
+  final String detail;
   final bool mastered;
   final VoidCallback onToggleMastered;
 
@@ -274,8 +277,6 @@ class _StudyTileState extends State<_StudyTile> {
 
   @override
   Widget build(BuildContext context) {
-    final poem = widget.poem;
-
     return InkCard(
       padding: EdgeInsets.zero,
       borderColor: widget.mastered
@@ -358,7 +359,7 @@ class _StudyTileState extends State<_StudyTile> {
                 children: <Widget>[
                   const Divider(color: AppColors.line, height: 16),
                   Text(
-                    poem.fullText,
+                    widget.detail,
                     style: serif(16, height: 1.8, spacing: 2),
                   ),
                 ],

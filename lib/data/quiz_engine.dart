@@ -2,6 +2,7 @@ import 'dart:math';
 
 import '../models/poem.dart';
 import '../models/question.dart';
+import 'math.dart';
 
 /// 出题引擎：从题库生成一轮题目。
 ///
@@ -112,6 +113,12 @@ class QuizEngine {
         return _pinyinOf(poem, optionCount);
       case QuestionKind.wordOf:
         return _wordOf(poem, optionCount);
+      case QuestionKind.mathResult:
+        return _mathResult(poem, optionCount);
+      case QuestionKind.mathBlank:
+        return _mathBlank(poem, optionCount);
+      case QuestionKind.mathCompare:
+        return _mathCompare(poem, optionCount);
     }
   }
 
@@ -160,6 +167,123 @@ class QuizEngine {
       key: '${entry.id}|word',
       options: options,
       answerIndex: options.indexOf(entry.title),
+    );
+  }
+
+  /// 算式题：选出得数。
+  Question? _mathResult(Poem entry, int optionCount) {
+    final e = MathExpr.of(entry);
+    if (e == null) return null;
+    final need = optionCount - 1;
+
+    // 干扰项是别的算式得数，按与正确答案的接近程度取（7 的邻居比 90 更有迷惑性）；
+    // 文本相同的得数必须排除，否则选项里会出现两个正确答案。
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      pool: (p) => <String>[p.author],
+      numericHint: e.result,
+      excludeText: '${e.result}',
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>['${e.result}', ...distractors]..shuffle(_random);
+    return _mathQuestion(
+      kind: QuestionKind.mathResult,
+      entry: entry,
+      prompt: e.isAdd ? '把两个数合起来，得数是多少？' : '从被减数里去掉减数，还剩多少？',
+      focus: entry.title,
+      options: options,
+      note: MathExpr.hintOf(entry),
+    );
+  }
+
+  /// 算式题：挖掉一个运算数，选出填进去的数。
+  ///
+  /// 只有一个未知数，方程的解唯一，所以干扰项只要排除相同数值就保证答案唯一。
+  Question? _mathBlank(Poem entry, int optionCount) {
+    final e = MathExpr.of(entry);
+    if (e == null) return null;
+    final need = optionCount - 1;
+
+    // 挖位：两个运算数都可能缺，先随机挑一个；挑中的位置若凑不齐干扰项
+    // （题库太小时才会发生），再退到另一个位置。
+    final slots = <int>[0, 1]..shuffle(_random);
+    for (final slot in slots) {
+      final answer = slot == 0 ? e.left : e.right;
+      final distractors = _pickFromOthers(
+        exclude: entry,
+        count: need,
+        pool: (p) => <String>[p.author],
+        numericHint: answer,
+        excludeText: '$answer',
+      );
+      if (distractors.length < need) continue;
+
+      final options = <String>['$answer', ...distractors]..shuffle(_random);
+      final focus = slot == 0
+          ? '□ ${e.op} ${e.right} = ${e.result}'
+          : '${e.left} ${e.op} □ = ${e.result}';
+      return _mathQuestion(
+        kind: QuestionKind.mathBlank,
+        entry: entry,
+        prompt: '算式里缺了一个数，填哪个？',
+        focus: focus,
+        options: options,
+        answerIndex: options.indexOf('$answer'),
+        note: MathExpr.hintOf(entry),
+        key: '${entry.id}|mathBlank|$slot',
+      );
+    }
+    return null;
+  }
+
+  /// 算式题：算出结果后与右边的数比大小。
+  ///
+  /// 右边的数取「得数 ±1 或得数本身」，三种答案才会都出现；
+  /// 若固定写成「算式 □ 得数」，答案恒为「=」，孩子闭眼选等号就行。
+  Question? _mathCompare(Poem entry, int optionCount) {
+    final e = MathExpr.of(entry);
+    if (e == null) return null;
+
+    const signs = <String>['>', '=', '<'];
+    final delta = <int>[-1, 0, 1][_random.nextInt(3)];
+    final target = e.result + delta;
+    if (target < 0) return null;
+
+    final answer = e.result > target ? 0 : (e.result == target ? 1 : 2);
+    return _mathQuestion(
+      kind: QuestionKind.mathCompare,
+      entry: entry,
+      prompt: '先算出结果，再和右边的数比一比',
+      focus: '${entry.title} □ $target',
+      options: signs,
+      answerIndex: answer,
+      note: MathExpr.hintOf(entry),
+      key: '${entry.id}|mathCompare|$target',
+    );
+  }
+
+  /// 算式题统一收口：拼标题、判答案下标，并带上解题思路。
+  Question _mathQuestion({
+    required QuestionKind kind,
+    required Poem entry,
+    required String prompt,
+    required String focus,
+    required List<String> options,
+    required String note,
+    int? answerIndex,
+    String? key,
+  }) {
+    return Question(
+      kind: kind,
+      poem: entry,
+      prompt: prompt,
+      focus: focus,
+      key: key ?? '${entry.id}|${kind.name}',
+      options: options,
+      answerIndex: answerIndex ?? options.indexOf(entry.author),
+      note: note,
     );
   }
 
@@ -321,12 +445,18 @@ class QuizEngine {
   ///
   /// [excludePoem] 决定哪些诗不参与（默认排除当前这首）。作者题必须排除同作者的诗，
   /// 标题题必须排除同名的诗，否则干扰项会和正确答案重复。
+  ///
+  /// [numericHint] 不为空时把候选当数字，按与它的接近程度排序，让干扰项贴着正确答案
+  /// （如 7 的邻居 5、6、8），孩子不会被一眼排除的离谱数字带偏。
+  /// [excludeText] 是必须排除的文本，用于挡住「和正确答案字面相同」的干扰项。
   List<String> _pickFromOthers({
     required Poem exclude,
     required int count,
     required Iterable<String> Function(Poem) pool,
     int? lengthHint,
     bool Function(Poem)? excludePoem,
+    int? numericHint,
+    String? excludeText,
   }) {
     final skip = excludePoem ?? (p) => p.id == exclude.id;
 
@@ -335,21 +465,31 @@ class QuizEngine {
       if (skip(p)) continue;
       for (final s in pool(p)) {
         final trimmed = s.trim();
-        if (trimmed.isEmpty) continue;
-        candidates.add(_Candidate(trimmed, lengthHint == null ? 0 : (trimmed.length - lengthHint).abs()));
+        if (trimmed.isEmpty || trimmed == excludeText) continue;
+        final int distance;
+        if (numericHint != null) {
+          final n = int.tryParse(trimmed);
+          if (n == null) continue;
+          distance = (n - numericHint).abs();
+        } else {
+          distance = lengthHint == null ? 0 : (trimmed.length - lengthHint).abs();
+        }
+        candidates.add(_Candidate(trimmed, distance));
       }
     }
 
-    // 长度最接近的若干条里随机取，避免每次都是同几个干扰项。
+    // 先按距离排序、再去重、最后截窗口。顺序不能反：算式题里同一个得数
+    // 会被几十条算式共用（整十数只有 10 种得数），先截窗口会让去重后只剩一两条。
     candidates.sort((a, b) => a.distance.compareTo(b.distance));
-    final window = candidates.take(min(candidates.length, count * 4)).toList()..shuffle(_random);
-    final picked = <String>[];
+    final distinct = <String>[];
     final seen = <String>{};
-    for (final c in window) {
-      if (picked.length >= count) break;
-      if (seen.add(c.text)) picked.add(c.text);
+    for (final c in candidates) {
+      if (seen.add(c.text)) distinct.add(c.text);
     }
-    return picked;
+
+    // 距离最近的若干条里随机取，避免每次都是同几个干扰项。
+    final window = distinct.take(min(distinct.length, count * 4)).toList()..shuffle(_random);
+    return window.take(count).toList();
   }
 
   /// 去掉标点与，只留文字，用于计算长度、挖空与字池。

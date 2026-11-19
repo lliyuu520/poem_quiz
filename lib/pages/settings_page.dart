@@ -134,7 +134,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           alignment: Alignment.centerLeft,
                           child: Text(
                             kTopics.length == 1
-                                ? '拼音、成语等科目接入后会出现在这里，进度与错题本各自独立。'
+                                ? '成语等科目接入后会出现在这里，进度与错题本各自独立。'
                                 : '各科目的进度与错题本互相独立。',
                             style: const TextStyle(
                               fontSize: 11,
