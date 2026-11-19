@@ -117,9 +117,28 @@ String _mathMeta(Poem p) => '得数 ${p.author}';
 String _mathName(Poem p) => p.title;
 String _mathSummary(Poem p) => '${p.title} = ${p.author}';
 
+/// 数独科目：棋盘玩法，没有题库。
+///
+/// 与其它科目不同，它不走 [QuizEngine]：`entries` 为空，`kinds` 为空，
+/// 盘面由 `Sudoku.open(difficulty)` 按难度档现生成。首页据此把学龄选择器
+/// 换成五档难度关卡（一星~五星，逐级解锁），并隐藏玩法、学习模式与错题本。
+const Topic kSudokuTopic = Topic(
+  id: 'sudoku',
+  name: '数独',
+  entries: <Poem>[],
+  mode: TopicMode.sudoku,
+  headline: '数独',
+  tagline: '一格一格推，填满就赢',
+  unit: '局',
+  groupLabel: '难度',
+  searchHint: '',
+  seal: '数\n独',
+  intro: '九宫格每行、每列、每宫 1~9 各一次。填错会标红，可以撤销重来。',
+);
+
 /// 预留科目：成语。接入时把 [Topic.entries] 换成自己的题库，
 /// 并把 [Topic.id] 用作存储键前缀，进度自然与诗词隔离。
-final List<Topic> kTopics = <Topic>[kPoetryTopic, kPinyinTopic, kMathTopic];
+final List<Topic> kTopics = <Topic>[kPoetryTopic, kPinyinTopic, kMathTopic, kSudokuTopic];
 
 /// 启动时的默认科目。
 Topic get kDefaultTopic => kTopics.first;

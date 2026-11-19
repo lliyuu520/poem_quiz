@@ -2,6 +2,12 @@ import '../models/poem.dart';
 import '../models/question.dart';
 import 'grade.dart';
 
+/// 科目的玩法形态。
+///
+/// 问答类科目由 [QuizEngine] 从 [Topic.entries] 出题；数独是棋盘游戏，
+/// 没有题库也没有题型，盘面由 `Sudoku.open()` 按档位现生成。
+enum TopicMode { quiz, sudoku }
+
 /// 一个科目（题库）：诗词、拼音、数学、成语等各是一份 [Topic]。
 ///
 /// 科目决定四件事：
@@ -17,16 +23,18 @@ class Topic {
   const Topic({
     required this.id,
     required this.name,
-    required this.unit,
-    required this.groupLabel,
-    required this.searchHint,
     required this.entries,
-    required this.groupOf,
-    required this.metaOf,
-    required this.kinds,
     required this.tagline,
     required this.seal,
+    this.kinds = const <QuestionKind>{},
+    this.unit = '题',
+    this.groupLabel = '',
+    this.searchHint = '',
+    this.groupOf = _noGroup,
+    this.metaOf = _noMeta,
     this.intro = '',
+    this.mode = TopicMode.quiz,
+    this.headline,
     this.nameOf,
     this.summaryOf,
     this.marks,
@@ -49,6 +57,12 @@ class Topic {
   final String searchHint;
 
   final List<Poem> entries;
+
+  /// 玩法形态。问答科目走题库出题，数独走棋盘。
+  final TopicMode mode;
+
+  /// 首页大标题的覆盖值。不传时按「<科目名>问答」拼（数独不叫「问答」）。
+  final String? headline;
 
   /// 条目所属分组。诗词取朝代，拼音取声母，算术取运算类型。
   final String Function(Poem entry) groupOf;
@@ -89,8 +103,11 @@ class Topic {
   /// 不传时按诗词格式拼，因为书名号是默认展示名的一部分。
   final String Function(List<String> parts)? summaryFromId;
 
-  /// 首页大标题，如「诗词问答」。
-  String get quizTitle => '$name问答';
+  /// 首页大标题，如「诗词问答」。数独这类科目用 [headline] 覆盖。
+  String get quizTitle => headline ?? '$name问答';
+
+  /// 是否走棋盘玩法（数独）。这类科目没有题库、题型、学习模式与错题本。
+  bool get isBoardGame => mode == TopicMode.sudoku;
 
   /// 本科目跨了几个年级。只有一年级内容的科目（数学）返回 1，
   /// 首页据此隐藏学龄选择——选二年级只会出 0 题。
@@ -98,7 +115,10 @@ class Topic {
 
   /// 是否需要选学龄。跨两个年级以上才值得让用户选；
   /// 单一年级时题库本身就是唯一题池，选了也没有区别。
-  bool get graded => gradeSpan > 1;
+  ///
+  /// 没有题库的科目（数独，盘面由 `Sudoku.open()` 按档位现生成）视为分级：
+  /// 学龄选择就是它的难度选择器，选哪个档决定开哪一级的盘面。
+  bool get graded => entries.isEmpty || gradeSpan > 1;
 
   String displayNameOf(Poem entry) => nameOf?.call(entry) ?? '《${entry.title}》';
 
@@ -124,9 +144,12 @@ class Topic {
     return table.last;
   }
 
-  /// 该科目在某个学龄档位下可出的条目数。不分档的科目返回全部。
-  int countForGrade(GradeLevel grade) =>
-      graded ? grade.countIn(entries) : entries.length;
+  /// 该科目在某个学龄档位下可出的条目数。不分档的科目返回全部；
+  /// 没有题库的科目（数独）返回 0，它按档位现生成盘面，不用条目数计数。
+  int countForGrade(GradeLevel grade) {
+    if (entries.isEmpty) return 0;
+    return graded ? grade.countIn(entries) : entries.length;
+  }
 }
 
 /// 结算页的一档评语。
@@ -139,3 +162,8 @@ const List<ResultMark> kDefaultMarks = <ResultMark>[
   (title: '尚需温习', remark: '名句还需要多念几遍。'),
   (title: '从头再来', remark: '别急，诗词本就是慢功夫。'),
 ];
+
+/// 没有题库的科目（数独）用不到分组与副标题，给个空实现占位，
+/// 免得调用方为「这个字段不存在」再写一层判断。
+String _noGroup(Poem entry) => '';
+String _noMeta(Poem entry) => '';

@@ -6,6 +6,7 @@ import '../data/grade.dart';
 import '../data/progress_store.dart';
 import '../data/quiz_engine.dart';
 import '../data/quiz_session.dart';
+import '../data/sudoku.dart';
 import '../data/topic.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
@@ -13,6 +14,7 @@ import '../widgets/common.dart';
 import 'quiz_page.dart';
 import 'settings_page.dart';
 import 'study_page.dart';
+import 'sudoku_page.dart';
 import 'wrong_book_page.dart';
 
 /// 首页：选学龄、选玩法，开始一局。
@@ -41,10 +43,28 @@ class _HomePageState extends State<HomePage> {
   GradeLevel _grade = GradeLevel.g3;
   GameMode _mode = GameMode.quick;
 
+  /// 数独当前选中的难度档。开局时沿用上次通关的最高档。
+  SudokuDifficulty _difficulty = SudokuDifficulty.one;
+
   @override
   void initState() {
     super.initState();
     _grade = widget.store.lastGrade;
+    _difficulty = _highestUnlocked;
+  }
+
+  /// 已解锁的最高档。开局默认落在这里，孩子不用每次往上翻。
+  SudokuDifficulty get _highestUnlocked {
+    var best = SudokuDifficulty.one;
+    for (final level in SudokuDifficulty.values) {
+      final prev = level.previous;
+      if (prev == null || widget.store.clearedOf(prev.name) >= level.unlockAfter) {
+        best = level;
+      } else {
+        break;
+      }
+    }
+    return best;
   }
 
   ProgressStore get _store => widget.store;
@@ -63,6 +83,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _start() async {
+    // 数独没有题库也不走答题页，直接开盘。
+    if (widget.topic.isBoardGame) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SudokuPage(store: _store, difficulty: _difficulty),
+        ),
+      );
+      if (mounted) setState(() {}); // 通关后解锁状态与进度条要刷新
+      return;
+    }
+
     final grade = _activeGrade;
     // 记下学龄，下次打开沿用。写盘不阻塞开局。
     if (widget.topic.graded) unawaited(_store.setLastGrade(grade));
@@ -144,9 +175,19 @@ class _HomePageState extends State<HomePage> {
                   _TitleBlock(store: _store, topic: widget.topic, onSettings: _openSettings),
                   const SizedBox(height: 26),
 
-                  // 跨多个年级才值得选学龄；只有一年级内容的科目（数学）
-                  // 选了也没区别，改展示内容说明。
-                  if (widget.topic.graded) ...<Widget>[
+                  // 数独不走题库也不分学龄：整块难度关卡列表，逐级解锁。
+                  if (widget.topic.isBoardGame) ...<Widget>[
+                    const RuleDivider(label: '关卡'),
+                    const SizedBox(height: 12),
+                    _SudokuStages(
+                      store: _store,
+                      selected: _difficulty,
+                      onSelect: (d) => setState(() => _difficulty = d),
+                    ),
+                    const SizedBox(height: 22),
+                  ] else if (widget.topic.graded) ...<Widget>[
+                    // 跨多个年级才值得选学龄；只有一年级内容的科目（数学）
+                    // 选了也没区别，改展示内容说明。
                     const RuleDivider(label: '学龄'),
                     const SizedBox(height: 12),
                     _GradePicker(
@@ -165,33 +206,43 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 22),
                   ],
 
-                  const RuleDivider(label: '玩法'),
-                  const SizedBox(height: 12),
-                  for (final mode in GameMode.values) ...<Widget>[
-                    _ModeCard(
-                      mode: mode,
-                      topic: widget.topic,
-                      selected: mode == _mode,
-                      onTap: () => setState(() => _mode = mode),
-                    ),
+                  // 数独是一整块盘面，没有「玩几题」的差别，玩法区整块隐藏。
+                  if (!widget.topic.isBoardGame) ...<Widget>[
+                    const RuleDivider(label: '玩法'),
+                    const SizedBox(height: 12),
+                    for (final mode in GameMode.values) ...<Widget>[
+                      _ModeCard(
+                        mode: mode,
+                        topic: widget.topic,
+                        selected: mode == _mode,
+                        onTap: () => setState(() => _mode = mode),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     const SizedBox(height: 10),
                   ],
 
-                  const SizedBox(height: 10),
                   PrimaryButton(
-                    label: _mode.isCareer ? '开始生涯' : '开始答题',
+                    label: widget.topic.isBoardGame
+                        ? '开始${_difficulty.title}'
+                        : (_mode.isCareer ? '开始生涯' : '开始答题'),
                     icon: Icons.play_arrow_rounded,
                     onPressed: _start,
                   ),
 
-                  const SizedBox(height: 18),
-                  _SecondaryEntries(store: _store, topic: widget.topic),
+                  // 学习模式与错题本都建立在题库之上，数独没有这两样。
+                  if (!widget.topic.isBoardGame) ...<Widget>[
+                    const SizedBox(height: 18),
+                    _SecondaryEntries(store: _store, topic: widget.topic),
+                  ],
 
                   const SizedBox(height: 20),
                   Center(
                     child: Text(
-                      '共 ${widget.topic.entries.length} ${widget.topic.unit} · '
-                      '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
+                      widget.topic.isBoardGame
+                          ? '离线可玩 · 共 ${SudokuDifficulty.values.length} 档'
+                          : '共 ${widget.topic.entries.length} ${widget.topic.unit} · '
+                              '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.inkFaint,
@@ -266,6 +317,20 @@ class _TitleBlock extends StatelessWidget {
   final Topic topic;
   final VoidCallback onSettings;
 
+  /// 已解锁的档数，数独统计里用。
+  String get _unlockedCount {
+    var n = 0;
+    for (final level in SudokuDifficulty.values) {
+      final prev = level.previous;
+      if (prev == null || store.clearedOf(prev.name) >= level.unlockAfter) {
+        n++;
+      } else {
+        break;
+      }
+    }
+    return '$n / ${SudokuDifficulty.values.length}';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -328,18 +393,30 @@ class _TitleBlock extends StatelessWidget {
           const SizedBox(height: 18),
           InkCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: <Widget>[
-                _MiniStat(label: '最高分', value: '${store.bestScore}'),
-                _MiniDivider(),
-                _MiniStat(
-                  label: '总正确率',
-                  value: '${(store.accuracy * 100).round()}%',
-                ),
-                _MiniDivider(),
-                _MiniStat(label: '错题本', value: '${store.wrongPoemIds.length}'),
-              ],
-            ),
+            child: topic.isBoardGame
+                // 数独记的是各档完成局数，没有错题本与正确率。
+                ? Row(
+                    children: <Widget>[
+                      _MiniStat(
+                        label: '已完成',
+                        value: '${SudokuDifficulty.values.fold<int>(0, (sum, d) => sum + store.clearedOf(d.name))} 局',
+                      ),
+                      _MiniDivider(),
+                      _MiniStat(label: '已解锁', value: _unlockedCount),
+                    ],
+                  )
+                : Row(
+                    children: <Widget>[
+                      _MiniStat(label: '最高分', value: '${store.bestScore}'),
+                      _MiniDivider(),
+                      _MiniStat(
+                        label: '总正确率',
+                        value: '${(store.accuracy * 100).round()}%',
+                      ),
+                      _MiniDivider(),
+                      _MiniStat(label: '错题本', value: '${store.wrongPoemIds.length}'),
+                    ],
+                  ),
           ),
         ],
       ],
@@ -528,6 +605,140 @@ class _GradeTile extends StatelessWidget {
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
             color: selected ? Colors.white : AppColors.inkSoft,
             letterSpacing: 2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 数独关卡列表：五档难度竖排，锁着的档位显示还差几局。
+///
+/// 逐级解锁的规则放在 [SudokuDifficulty.unlockedBy]，这里只负责展示与选择。
+class _SudokuStages extends StatelessWidget {
+  const _SudokuStages({
+    required this.store,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final ProgressStore store;
+  final SudokuDifficulty selected;
+  final ValueChanged<SudokuDifficulty> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        for (final level in SudokuDifficulty.values) ...<Widget>[
+          _StageCard(
+            level: level,
+            store: store,
+            selected: level == selected,
+            onTap: () => onSelect(level),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _StageCard extends StatelessWidget {
+  const _StageCard({
+    required this.level,
+    required this.store,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final SudokuDifficulty level;
+  final ProgressStore store;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final previous = level.previous;
+    final prevCleared = previous == null ? 0 : store.clearedOf(previous.name);
+    final unlocked = level.unlockedBy(prevCleared);
+    final cleared = store.clearedOf(level.name);
+    final best = store.bestSecondsOf(level.name);
+
+    final subtitle = unlocked
+        ? (cleared == 0
+            ? level.remark
+            : '已完成 $cleared 局${best == null ? '' : ' · 最快 ${best ~/ 60 > 0 ? '${best ~/ 60} 分 ' : ''}${best % 60} 秒'}')
+        : '完成${previous!.title} $prevCleared/${level.unlockAfter} 局解锁';
+
+    return Opacity(
+      opacity: unlocked ? 1 : 0.55,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: unlocked ? onTap : null,
+          borderRadius: BorderRadius.circular(12),
+          child: InkCard(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            borderColor: selected ? AppColors.gold : null,
+            child: Row(
+              children: <Widget>[
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: unlocked ? AppColors.sealSoft : AppColors.paperDeep,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: unlocked
+                      ? Text(
+                          '${level.index + 1}',
+                          style: serif(
+                            16,
+                            color: AppColors.seal,
+                            weight: FontWeight.w700,
+                            spacing: 0,
+                          ),
+                        )
+                      : const Icon(Icons.lock_outline, size: 17, color: AppColors.inkFaint),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        level.title,
+                        style: serif(15, weight: FontWeight.w600, spacing: 2),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.inkSoft,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (unlocked)
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: selected ? AppColors.seal : AppColors.line,
+                        width: selected ? 5 : 1.4,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

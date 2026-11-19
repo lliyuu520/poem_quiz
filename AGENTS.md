@@ -11,7 +11,7 @@
 ## 常用命令
 
 ```bash
-flutter test                          # 85 个用例，改引擎/学龄/题型/布局必跑
+flutter test                          # 113 个用例，改引擎/学龄/题型/布局必跑
 flutter analyze                       # analysis_options 已 exclude build/ android/
 flutter run                           # 调试
 flutter build apk --release           # → build/app/outputs/flutter-apk/app-release.apk（约 17MB）
@@ -26,22 +26,24 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | 路径 | 内容 |
 |---|---|
 | `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 搜索提示 + 存储键前缀 |
-| `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学）、`kDefaultTopic`；新增科目在这里加一条 |
+| `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学、数独）、`kDefaultTopic`；新增科目在这里加一条 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，按年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：196 条一年级口算，规则生成；`MathExpr` 解析算式 |
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：109 首，唐 65 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位：一年级~九年级 + 拓展，**只收窄题池范围，不过滤题型** |
 | `lib/data/quiz_engine.dart` | 出题：九类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解） |
 | `lib/data/quiz_session.dart` | 一局状态：进度、连击、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>` |
 | `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 九类题型（诗词 4 / 拼音 2 / 数学 3） |
-| `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置，页面内私有 Widget 就地定义 |
+| `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/theme/app_theme.dart`、`lib/widgets/common.dart` | 宣纸 + 墨 + 朱印视觉体系 |
 | `test/quiz_engine_test.dart` | 题库完整性、出题正确性、计分、学龄题池与加权、生涯模式 |
 | `test/layout_test.dart` | 三种窗口宽度下的渲染与横屏分栏（布局改动必跑） |
 | `test/pinyin_test.dart` | 拼音题库完整性、声调标注、分年级题池、两种拼音题型 |
 | `test/math_test.dart` | 数学题库、算式解析、三种算式题型、评语与摘要格式 |
+| `test/sudoku_test.dart` | 数独终盘合法性、题面唯一解、档位映射、首页与盘面渲染 |
 | `tool/` | 一次性辅助脚本（图标生成、拼音题库生成、adb 驱动答题），不参与构建 |
 
 ## 多科目架构（成语待接入）
@@ -56,6 +58,9 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库全标 `grade: 1`，所以自动为 false，首页隐藏学龄选择、`buildSession` 用题库里唯一的年级。补上二年级数学题后无需改代码，学龄选择会自动出现。
 - **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
+- **棋盘玩法科目（数独）**：`Topic.mode = TopicMode.sudoku`，`entries` 与 `kinds` 为空。盘面由 `Sudoku.open(difficulty)` 按难度档现生成，不走 `QuizEngine`。这类科目 `graded` 恒为 true（空题库推导），首页把学龄选择器换成**难度关卡列表**（一星~五星），并隐藏玩法卡、学习模式与错题本——它们都建立在题库之上。新增棋盘类玩法时复用 `TopicMode` 与首页的 `isBoardGame` 分支，不要再往题库抽象里塞。
+- **数独与年级无关，靠逐级解锁推进**：`SudokuDifficulty` 五档，一星恒开，其余档要上一档完成 `unlockAfter` 局才开（3/3/4/4）。完成数存 `ProgressStore.stageCleared`（键是枚举名 `one`~`five`），走 `recordSudokuClear()`，**不写最高分/正确率**——数独没有对错率，混进问答科目的统计会互相干扰。解锁门槛与判据都在 `SudokuDifficulty.unlockedBy()` 里，首页与页面都只调它，不要在 UI 里重算。
+- **数独盘面必须唯一解**：`lib/data/sudoku.dart` 挖空时每挖一格都跑一次回溯计数（上限 2），不唯一就补回去。`test/sudoku_test.dart` 会独立重算解数校验。改挖空策略后必须重跑该用例，否则多解盘面上「填满即算对」会把另一种正确填法判成冲突。
 - **`detailOf` 不能省**：`Poem.fullText` 是 `lines.join()`，对拼音（逐字组词）和数学（算式 + 思路）会挤成一行，所以这两种科目的展开正文各自 `join('\n')`。
 - `QuizEngine` 的 `poems` 是必填参数——故意不给默认值，避免新科目忘记传题库时静默出成诗词题。
 - `ProgressStore.load(topicId:)` 必须显式传科目 id。**没有旧存档迁移逻辑**（开发阶段，不兼容无前缀的历史键）。

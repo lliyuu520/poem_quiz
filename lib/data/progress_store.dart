@@ -22,6 +22,8 @@ class ProgressStore extends ChangeNotifier {
   static const _kWrong = 'wrong_poems';
   static const _kMastered = 'career_mastered';
   static const _kLastGrade = 'last_grade';
+  static const _kStages = 'stage_cleared';
+  static const _kStageBest = 'stage_best_seconds';
 
   final SharedPreferences _prefs;
 
@@ -42,6 +44,15 @@ class ProgressStore extends ChangeNotifier {
 
   /// 上次选择的学龄档位，下次打开沿用。默认三年级。
   GradeLevel lastGrade = GradeLevel.g3;
+
+  /// 数独各难度档的完成局数，键是档位名（`one`~`five`）。
+  ///
+  /// 只有棋盘玩法科目用得到：问答科目的「掌握」按条目 id 记，数独没有条目，
+  /// 记的是「这一档通关了几局」，用来逐级解锁下一档。
+  final Map<String, int> stageCleared = <String, int>{};
+
+  /// 数独各档的最快用时（秒）。
+  final Map<String, int> stageBestSeconds = <String, int>{};
 
   /// 加载指定科目的存档。
   static Future<ProgressStore> load({required String topicId}) async {
@@ -80,6 +91,30 @@ class ProgressStore extends ChangeNotifier {
     }
 
     lastGrade = gradeFromValue(_prefs.getInt(_key(_kLastGrade)) ?? GradeLevel.g3.grade);
+
+    final stages = _prefs.getString(_key(_kStages));
+    if (stages != null) {
+      try {
+        final map = jsonDecode(stages) as Map<String, dynamic>;
+        stageCleared
+          ..clear()
+          ..addAll(map.map((k, v) => MapEntry(k, v as int)));
+      } on FormatException {
+        stageCleared.clear();
+      }
+    }
+
+    final bests = _prefs.getString(_key(_kStageBest));
+    if (bests != null) {
+      try {
+        final map = jsonDecode(bests) as Map<String, dynamic>;
+        stageBestSeconds
+          ..clear()
+          ..addAll(map.map((k, v) => MapEntry(k, v as int)));
+      } on FormatException {
+        stageBestSeconds.clear();
+      }
+    }
   }
 
   /// 记住学龄档位，下次进入首页时沿用。
@@ -139,6 +174,30 @@ class ProgressStore extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  /// 记录数独一档完成一局，并返回解锁信息。
+  ///
+  /// 只记「这一档完成了几局」和最快用时，不碰最高分/正确率——
+  /// 数独没有对错率，混进问答科目的统计会互相干扰。
+  Future<void> recordSudokuClear({
+    required String stage,
+    required int seconds,
+  }) async {
+    stageCleared[stage] = (stageCleared[stage] ?? 0) + 1;
+    final best = stageBestSeconds[stage];
+    if (best == null || seconds < best) stageBestSeconds[stage] = seconds;
+    sessions += 1;
+    await _prefs.setString(_key(_kStages), jsonEncode(stageCleared));
+    await _prefs.setString(_key(_kStageBest), jsonEncode(stageBestSeconds));
+    await _prefs.setInt(_key(_kSessions), sessions);
+    notifyListeners();
+  }
+
+  /// 某档已完成局数。
+  int clearedOf(String stage) => stageCleared[stage] ?? 0;
+
+  /// 某档最快用时；没通关过返回 null。
+  int? bestSecondsOf(String stage) => stageBestSeconds[stage];
 
   /// 把某个条目直接记为已掌握（学习模式里手动标记）。
   Future<void> markMastered(String poemId, {bool mastered = true}) async {
