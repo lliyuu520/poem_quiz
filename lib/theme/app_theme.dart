@@ -26,10 +26,29 @@ const List<String> kSerifFallback = <String>[
   'serif',
 ];
 
-TextStyle serif(double size, {Color? color, FontWeight weight = FontWeight.w500, double height = 1.5, double spacing = 2}) {
+/// 内容主字体：内置霞鹜文楷（教育体）。
+///
+/// 拉丁部分是拼音教学用的单层 ɑ/ɡ 字形——系统衬线的拉丁 a/g 是双层
+/// 书写体样式，和教材拼音不一致，孩子对照课本会困惑。子集 0.19MB。
+const String kContentFont = 'WenKai';
+
+/// 跨科目的正文样式。
+///
+/// [content] 为真时用文楷（拼音、数学等内容文本），否则维持系统衬线
+/// （界面标题、按钮等中文文案在系统衬线下更贴近原视觉）。
+TextStyle serif(
+  double size, {
+  Color? color,
+  FontWeight weight = FontWeight.w500,
+  double height = 1.5,
+  double spacing = 2,
+  bool content = false,
+}) {
   return TextStyle(
-    fontFamily: 'serif',
-    fontFamilyFallback: kSerifFallback,
+    fontFamily: content ? kContentFont : 'serif',
+    fontFamilyFallback: content
+        ? kSerifFallback
+        : <String>[kContentFont, ...kSerifFallback],
     fontSize: size,
     height: height,
     letterSpacing: spacing,

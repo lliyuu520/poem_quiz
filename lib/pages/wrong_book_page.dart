@@ -96,6 +96,7 @@ class _WrongBookPageState extends State<WrongBookPage> {
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _PoemTile(
                             name: widget.topic.displayNameOf(poems[i]),
+                            pinyin: widget.topic.id == 'pinyin',
                             meta: widget.topic.metaOf(poems[i]),
                             detail: widget.topic.displayDetailOf(poems[i]),
                             onRemove: () => store.removeWrong(poems[i].id),
@@ -139,6 +140,7 @@ class _WrongBookPageState extends State<WrongBookPage> {
 class _PoemTile extends StatefulWidget {
   const _PoemTile({
     required this.name,
+    required this.pinyin,
     required this.meta,
     required this.detail,
     required this.onRemove,
@@ -146,6 +148,9 @@ class _PoemTile extends StatefulWidget {
 
   /// 列表主标题，由科目决定。
   final String name;
+
+  /// 拼音科目用文楷渲染副标题与正文（教学体 a/g）。
+  final bool pinyin;
 
   /// 副标题，由科目决定。
   final String meta;
@@ -186,10 +191,10 @@ class _PoemTileState extends State<_PoemTile> {
                         const SizedBox(height: 4),
                         Text(
                           widget.meta,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.inkSoft,
-                          ),
+                          style: widget.pinyin
+                              ? serif(12, color: AppColors.inkSoft, content: true)
+                              : const TextStyle(
+                                  fontSize: 12, color: AppColors.inkSoft),
                         ),
                       ],
                     ),
@@ -219,7 +224,7 @@ class _PoemTileState extends State<_PoemTile> {
                   const Divider(color: AppColors.line, height: 16),
                   Text(
                     widget.detail,
-                    style: serif(16, height: 1.8, spacing: 2),
+                    style: serif(16, height: 1.8, spacing: 2, content: widget.pinyin),
                   ),
                 ],
               ),

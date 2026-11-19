@@ -395,7 +395,8 @@ class _QuestionCard extends StatelessWidget {
             Text(
               question.focus,
               textAlign: TextAlign.center,
-              style: serif(24, height: 1.6, spacing: 3),
+              // 拼音的题干是拉丁字母，用文楷保证 a/g 是教学体单层字形。
+              style: serif(24, height: 1.6, spacing: 3, content: question.isPinyin),
             ),
         ],
       ),
@@ -502,6 +503,7 @@ class _OptionList extends StatelessWidget {
               label: String.fromCharCode(0x41 + i),
               text: question.options[i],
               state: _stateFor(i),
+              pinyin: question.isPinyin,
               onTap: verdict == null ? () => onTap(i) : null,
             ),
           ),
@@ -527,12 +529,16 @@ class _OptionTile extends StatelessWidget {
     required this.text,
     required this.state,
     required this.onTap,
+    this.pinyin = false,
   });
 
   final String label;
   final String text;
   final _TileState state;
   final VoidCallback? onTap;
+
+  /// 拼音选项用文楷（教学体 a/g）；诗词选项维持衬线。
+  final bool pinyin;
 
   @override
   Widget build(BuildContext context) {
@@ -586,7 +592,7 @@ class _OptionTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   text,
-                  style: serif(17, color: fg, height: 1.45, spacing: 1.5),
+                  style: serif(17, color: fg, height: 1.45, spacing: 1.5, content: pinyin),
                 ),
               ),
               if (state == _TileState.correct)
@@ -764,7 +770,7 @@ class _Feedback extends StatelessWidget {
               if (!correct)
                 Text(
                   question.answerText,
-                  style: serif(15, color: color, spacing: 1),
+                  style: serif(15, color: color, spacing: 1, content: question.isPinyin),
                 ),
             ],
           ),

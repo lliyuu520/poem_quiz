@@ -188,6 +188,7 @@ class _StudyPageState extends State<StudyPage> {
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _StudyTile(
                             name: widget.topic.displayNameOf(poems[i]),
+                            pinyin: widget.topic.id == 'pinyin',
                             meta: widget.topic.metaOf(poems[i]),
                             detail: widget.topic.displayDetailOf(poems[i]),
                             mastered: mastered.contains(poems[i].id),
@@ -226,7 +227,8 @@ class _GroupChip extends StatelessWidget {
         duration: const Duration(milliseconds: 140),
         // 触控目标不低于 48dp 高：原来的 6dp 内边距只做到 26~30dp，孩子容易点不中。
         constraints: const BoxConstraints(minHeight: 40),
-        alignment: Alignment.center,
+        // 不能设 alignment：它会让容器撑满 Wrap 给的最大宽度，
+        // 12 个分组 chip 就变成一列占满整行。
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? AppColors.seal : AppColors.card,
@@ -251,6 +253,7 @@ class _GroupChip extends StatelessWidget {
 class _StudyTile extends StatefulWidget {
   const _StudyTile({
     required this.name,
+    required this.pinyin,
     required this.meta,
     required this.detail,
     required this.mastered,
@@ -259,6 +262,9 @@ class _StudyTile extends StatefulWidget {
 
   /// 列表主标题，由科目决定（诗词带书名号，拼音直接显示字词）。
   final String name;
+
+  /// 拼音科目用文楷渲染副标题与正文（教学体 a/g）。
+  final bool pinyin;
 
   /// 副标题，由科目决定（诗词是「朝代 · 作者」）。
   final String meta;
@@ -322,10 +328,11 @@ class _StudyTileState extends State<_StudyTile> {
                         const SizedBox(height: 4),
                         Text(
                           widget.meta,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.inkSoft,
-                          ),
+                          style: widget.pinyin
+                              ? serif(12,
+                                  color: AppColors.inkSoft, content: true)
+                              : const TextStyle(
+                                  fontSize: 12, color: AppColors.inkSoft),
                         ),
                       ],
                     ),
@@ -360,7 +367,7 @@ class _StudyTileState extends State<_StudyTile> {
                   const Divider(color: AppColors.line, height: 16),
                   Text(
                     widget.detail,
-                    style: serif(16, height: 1.8, spacing: 2),
+                    style: serif(16, height: 1.8, spacing: 2, content: widget.pinyin),
                   ),
                 ],
               ),
