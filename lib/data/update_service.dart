@@ -14,7 +14,7 @@ class UpdateService {
 
   /// 版本清单地址。dist 仓库更新时同步改这个常量。
   static const String manifestUrl =
-      'https://jsd.cdn.zzko.cn/gh/lyu520/poem_quiz-dist@main/version.json';
+      'https://cdn.jsdelivr.net/gh/lliyuu520/poem_quiz-dist@main/version.json';
 
   final MethodChannel platform;
 
