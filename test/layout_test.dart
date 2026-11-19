@@ -101,7 +101,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('数学首页不显示学龄，标题与玩法文案随科目走', (tester) async {
+    testWidgets('数学首页按学龄分档，标题与玩法文案随科目走', (tester) async {
       final store = await ProgressStore.load(topicId: kMathTopic.id);
       await pumpAt(
         tester,
@@ -113,23 +113,19 @@ void main() {
         ),
       );
       expect(find.text('数学问答'), findsOneWidget);
-      expect(find.text('学龄'), findsNothing, reason: '数学只有一年级内容，不应出现学龄选择');
-      expect(find.text('内容'), findsOneWidget);
-      expect(
-        find.text('共 ${kMathTopic.entries.length} 题 · 每题 1 分'),
-        findsOneWidget,
-      );
-      // 生涯模式的副标题要换成「数学」，不能还是「答对的诗」。
+      expect(find.text('学龄'), findsOneWidget);
+      expect(find.text('内容'), findsNothing);
+      for (final g in GradeLevel.values) {
+        expect(find.text(g.title), findsOneWidget, reason: '${g.title} 未显示');
+      }
       expect(find.textContaining('答对的数学不再出现'), findsOneWidget);
       expect(find.textContaining('答对的诗'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('数学首页开局用一年级档，不沿用存档里的高年级', (tester) async {
-      // 存档里可能留着诗词选过的三年级。数学题库全是一年级，
-      // 若直接沿用会按三年级出题：选项变 4 个、结算页误报「学龄 三年级」。
+    testWidgets('数学首页沿用存档学龄并按该学龄出题', (tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{
-        '${kMathTopic.id}_last_grade': GradeLevel.g3.grade,
+        '${kMathTopic.id}_last_grade': GradeLevel.g2.grade,
       });
       final store = await ProgressStore.load(topicId: kMathTopic.id);
       await pumpAt(
@@ -146,8 +142,8 @@ void main() {
       await tester.pumpAndSettle();
 
       final page = tester.widget<QuizPage>(find.byType(QuizPage));
-      expect(page.session.grade, GradeLevel.g1,
-          reason: '数学只有一年级内容，开局应用一年级档');
+      expect(page.session.grade, GradeLevel.g2,
+          reason: '数学已分学龄，开局应沿用用户选择的学龄');
       expect(tester.takeException(), isNull);
     });
   });

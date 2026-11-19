@@ -1,9 +1,9 @@
 import '../models/poem.dart';
 
-/// 一年级数学题库：口算题。
+/// 数学题库：口算与算理练习，按学龄分档。
 ///
 /// 条目复用 [Poem] 的字段承载算式语义：
-/// - `title` → 算式，运算符两侧各留一个空格（如「3 + 4」），[MathExpr] 按它解析；
+/// - `title` → 算式，运算符两侧各留一个空格（如「3 + 4」「6 × 7」），[MathExpr] 按它解析；
 /// - `author` → 得数（如「7」）；
 /// - `dynasty` → 分组，学习页按它筛选；
 /// - `lines` → 带解题思路的完整算式，反馈卡与学习页展开时展示。
@@ -11,14 +11,16 @@ import '../models/poem.dart';
 /// 题库由规则生成且**顺序确定**：错题本与生涯进度都按 `id`（分组|得数|算式）存，
 /// 每次启动重建的结果必须完全一致，所以这里不能用 `Random`。
 ///
-/// 年级统一标 1。科目当前 `graded: false`——库里只有一年级的口算，
-/// 没有别的年级可选；将来补二年级题时再打开学龄开关。
+/// 条目按年级标注（[Poem.grade]）；题库跨多个年级时科目自动启用学龄选择，
+/// 题池按 [GradeLevel] 累加加权。
 final List<Poem> kMath = <Poem>[
   ..._addWithin10(),
   ..._subWithin10(),
   ..._carryAddWithin20(),
   ..._borrowSubWithin20(),
   ..._tensAddSub(),
+  ..._mulTable(),
+  ..._divTable(),
 ];
 
 const String _gAdd10 = '10以内加法';
@@ -26,8 +28,10 @@ const String _gSub10 = '10以内减法';
 const String _gCarry = '20以内进位加';
 const String _gBorrow = '20以内退位减';
 const String _gTens = '整十数加减';
+const String _gMul = '表内乘法';
+const String _gDiv = '表内除法';
 
-/// 「3 + 4」形式的算式拆解。格式知识只留在本文件，引擎按它出题。
+/// 「3 + 4」「6 × 7」形式的算式拆解。格式知识只留在本文件，引擎按它出题。
 class MathExpr {
   const MathExpr({
     required this.left,
@@ -38,12 +42,15 @@ class MathExpr {
 
   final int left;
 
-  /// 运算符，只有 `+` 与 `-` 两种。
+  /// 运算符：`+`、`-`、`×`、`÷`。
   final String op;
   final int right;
   final int result;
 
   bool get isAdd => op == '+';
+  bool get isSub => op == '-';
+  bool get isMul => op == '×';
+  bool get isDiv => op == '÷';
 
   /// 解析条目。不是本文件生成的条目（诗词、拼音）会返回 null，出题时跳过。
   static MathExpr? of(Poem entry) {
@@ -53,9 +60,19 @@ class MathExpr {
     final right = int.tryParse(parts[2]);
     final result = int.tryParse(entry.author);
     if (left == null || right == null || result == null) return null;
-    if (parts[1] != '+' && parts[1] != '-') return null;
+    const ops = <String>{'+', '-', '×', '÷'};
+    if (!ops.contains(parts[1])) return null;
     return MathExpr(left: left, op: parts[1], right: right, result: result);
   }
+
+  /// 按运算符计算得数，用于校验题库与判题。
+  int get computed => switch (op) {
+        '+' => left + right,
+        '-' => left - right,
+        '×' => left * right,
+        '÷' => left ~/ right,
+        _ => result,
+      };
 
   /// 解题思路：`lines` 里括号中的那段。判题后作为知识点提示展示。
   static String hintOf(Poem entry) {
@@ -67,11 +84,12 @@ class MathExpr {
   }
 }
 
-Poem _entry(String group, String expr, int result, String hint) => Poem(
+Poem _entry(String group, String expr, int result, String hint, {int grade = 1}) =>
+    Poem(
       title: expr,
       author: '$result',
       dynasty: group,
-      grade: 1,
+      grade: grade,
       lines: <String>['$expr = $result（$hint）'],
     );
 
@@ -131,5 +149,31 @@ List<Poem> _tensAddSub() => <Poem>[
             '${a * 10} - ${b * 10}',
             (a - b) * 10,
             '$a 个十去掉 $b 个十，剩 ${a - b} 个十',
+          ),
+    ];
+
+/// 表内乘法（二年级）：9 以内两个数相乘，建立“几个几”的乘法意义。
+List<Poem> _mulTable() => <Poem>[
+      for (var a = 1; a <= 9; a++)
+        for (var b = 1; b <= 9; b++)
+          _entry(
+            _gMul,
+            '$a × $b',
+            a * b,
+            '$a 个 $b 相加是 ${a * b}',
+            grade: 2,
+          ),
+    ];
+
+/// 表内除法（二年级）：由乘法口诀反推，理解乘除互逆关系。
+List<Poem> _divTable() => <Poem>[
+      for (var a = 1; a <= 9; a++)
+        for (var b = 1; b <= 9; b++)
+          _entry(
+            _gDiv,
+            '${a * b} ÷ $a',
+            b,
+            '想：$a 和几相乘得 ${a * b}？$a×$b=${a * b}，所以 ${a * b}÷$a=$b',
+            grade: 2,
           ),
     ];

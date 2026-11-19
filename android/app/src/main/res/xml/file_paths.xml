@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 检查更新：只暴露缓存目录里的 APK 给系统安装器。 -->
+<paths>
+    <cache-path
+        name="apk"
+        path="."/>
+</paths>

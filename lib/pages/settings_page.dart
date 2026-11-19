@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/progress_store.dart';
+import '../data/update_service.dart';
 import '../data/topic.dart';
 import '../data/topics.dart';
 import '../theme/app_theme.dart';
@@ -218,6 +219,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       onPressed: mastered == 0 ? null : _confirmResetCareer,
                     ),
                   ),
+                  const SizedBox(height: 24),
+                  const RuleDivider(label: '关于'),
+                  const SizedBox(height: 12),
+                  const _UpdateSection(),
                 ],
               ),
             ),
@@ -286,6 +291,143 @@ class _TopicTile extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「关于」区：显示当前版本 + 手动检查更新。
+///
+/// 只在点击时联网；下载完成后拉起系统安装器，由用户确认安装。
+class _UpdateSection extends StatefulWidget {
+  const _UpdateSection();
+
+  @override
+  State<_UpdateSection> createState() => _UpdateSectionState();
+}
+
+class _UpdateSectionState extends State<_UpdateSection> {
+  final UpdateService _service = UpdateService();
+
+  /// idle / checking / downloading / ready / failed
+  String _state = 'idle';
+  double _progress = 0;
+  String _message = '';
+  String _currentName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _service
+        .currentVersion()
+        .then((v) => mounted ? setState(() => _currentName = v.name) : null);
+  }
+
+  Future<void> _check() async {
+    setState(() {
+      _state = 'checking';
+      _message = '';
+    });
+    try {
+      final current = await _service.currentVersion();
+      final remote = await _service.fetchManifest();
+      if (!mounted) return;
+      if (remote.code <= current.code) {
+        setState(() {
+          _state = 'idle';
+          _message = '已是最新版本 ${current.name}';
+        });
+        return;
+      }
+      // 有新版本：直接开始下载（清单里有下载地址，无需二次确认）。
+      setState(() => _state = 'downloading');
+      final path = await _service.downloadApk(
+        remote,
+        onProgress: (p) => mounted ? setState(() => _progress = p) : null,
+      );
+      if (!mounted) return;
+      setState(() {
+        _state = 'ready';
+        _message = 'v${remote.name} 已就绪';
+      });
+      await _service.install(path);
+    } on UpdateException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _state = 'failed';
+        _message = e.message;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: InkCard(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    _currentName.isEmpty ? '诗词问答' : '诗词问答 v$_currentName',
+                    style: serif(14, weight: FontWeight.w600, spacing: 1),
+                  ),
+                ),
+                if (_state == 'checking' || _state == 'downloading')
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  TextButton(
+                    onPressed: _check,
+                    child: const Text('检查更新', style: TextStyle(fontSize: 13)),
+                  ),
+              ],
+            ),
+            if (_state == 'downloading') ...<Widget>[
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: _progress,
+                  minHeight: 4,
+                  backgroundColor: AppColors.line,
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppColors.seal),
+                ),
+              ),
+            ],
+            if (_message.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                _message,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _state == 'failed'
+                      ? AppColors.seal
+                      : AppColors.inkSoft,
+                  height: 1.5,
+                ),
+              ),
+            ],
+            const SizedBox(height: 6),
+            Text(
+              '新版本下载后由系统安装器完成安装，可能需要「安装未知应用」授权。'
+              '仅点击检查时联网。',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.inkFaint,
+                height: 1.5,
+              ),
+            ),
+          ],
         ),
       ),
     );

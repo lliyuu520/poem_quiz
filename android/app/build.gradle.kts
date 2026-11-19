@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// 正式签名：从 android/keystore.properties 读取（不入库）。
+// 文件不存在时回落 debug 签名，保证克隆仓库后无需密钥也能构建。
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseSigning = keystoreProps.isNotEmpty()
 
 android {
     namespace = "com.lyu.poem_quiz"
@@ -36,13 +46,33 @@ android {
         }
     }
 
-    buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
         }
     }
+
+    buildTypes {
+        release {
+            // 有 keystore.properties 用正式签名；否则维持 debug 签名。
+            // 覆盖安装要求签名一致：正式签名一旦启用，换 keystore 就得卸载重装（丢本地存档）。
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+        }
+    }
+}
+
+// 检查更新的 FileProvider 需要 androidx.core（Flutter 默认不带显式依赖）。
+dependencies {
+    implementation("androidx.core:core-ktx:1.13.1")
 }
 
 kotlin {

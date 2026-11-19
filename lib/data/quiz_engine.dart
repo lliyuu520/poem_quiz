@@ -188,10 +188,17 @@ class QuizEngine {
     if (distractors.length < need) return null;
 
     final options = <String>['${e.result}', ...distractors]..shuffle(_random);
+    final prompt = switch (e.op) {
+      '+' => '把两个数合起来，得数是多少？',
+      '-' => '从被减数里去掉减数，还剩多少？',
+      '×' => '算一算，积是多少？',
+      '÷' => '算一算，商是多少？',
+      _ => '算一算，得数是多少？',
+    };
     return _mathQuestion(
       kind: QuestionKind.mathResult,
       entry: entry,
-      prompt: e.isAdd ? '把两个数合起来，得数是多少？' : '从被减数里去掉减数，还剩多少？',
+      prompt: prompt,
       focus: entry.title,
       options: options,
       note: MathExpr.hintOf(entry),

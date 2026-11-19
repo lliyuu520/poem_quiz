@@ -67,11 +67,11 @@ String _pinyinMeta(Poem p) => p.author;
 String _pinyinName(Poem p) => p.title;
 String _pinyinSummary(Poem p) => '${p.title} · ${p.author}';
 
-/// 一年级数学科目。
+/// 数学科目：口算与算理练习，按学龄分档。
 ///
-/// 题库是规则生成的口算（[kMath]），**全部标 grade: 1**，所以 [Topic.graded]
-/// 自动为 false（首页不显示学龄选择）。以后补二、三年级的题时只需给条目标年级，
-/// 学龄选择会自动出现，不用改代码。
+/// 题库是规则生成的（[kMath]），按年级递进：一年级 20 以内与整十数口算，
+/// 二年级表内乘除等。题库跨多个年级时 [Topic.graded] 自动为 true，
+/// 首页显示学龄选择，题池按 [GradeLevel] 累加加权。
 final Topic kMathTopic = Topic(
   id: 'math',
   name: '数学',
@@ -88,8 +88,8 @@ final Topic kMathTopic = Topic(
   },
   nameOf: _mathName,
   summaryOf: _mathSummary,
-  tagline: '一天一算，口算不慌',
-  intro: '10 以内、20 以内、整十数五类口算。只有一年级内容，所以不分学龄档。',
+  tagline: '懂算理，会口算',
+  intro: '按学龄练口算：一年级加减与整十数，二年级表内乘除。高年级会带着复习低年级。',
   seal: '算\nquiz',
   marks: _mathMarks,
   summaryFromId: _mathSummaryFromId,

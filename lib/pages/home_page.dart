@@ -533,12 +533,22 @@ class _GradePicker extends StatelessWidget {
   /// 让「学龄 = 题池范围」在界面上可见：选三年级时会说明还带多少低年级题。
   String get _summary {
     final count = topic.countForGrade(selected);
-    if (selected.isExtension) {
-      return '教材未收的课外名篇 · 可出 $count ${topic.unit} · 每题 1 分';
+    if (count == 0) {
+      return selected.isExtension
+          ? '拓展内容待补充 · 可出 0 ${topic.unit}'
+          : '${selected.title}内容待补充 · 可出 0 ${topic.unit} · 每题 1 分';
     }
-    final review = count - _countOf(selected.grade);
-    final base = '本年级可出 ${_countOf(selected.grade)} ${topic.unit}';
+    if (selected.isExtension) {
+      final prefix = _countOf(0) > 0 ? '教材未收的课外名篇' : '拓展内容待补充';
+      return '$prefix · 可出 $count ${topic.unit} · 每题 1 分';
+    }
+    final own = _countOf(selected.grade);
+    final base = own > 0
+        ? '本年级可出 $own ${topic.unit}'
+        : '${selected.title}内容待补充';
+    final review = count - own;
     if (review <= 0) return '$base · 每题 1 分';
+    if (own == 0) return '$base · 先练已收录的 $review ${topic.unit} · 每题 1 分';
     return '$base · 另含低年级 $review ${topic.unit} · 每题 1 分';
   }
 
