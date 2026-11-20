@@ -513,9 +513,11 @@ class _UpdateSectionState extends State<_UpdateSection> {
       if (!mounted) return;
       setState(() {
         _state = 'ready';
-        _message = 'v${remote.name} 已就绪';
+        _message = 'v${remote.name} 下载完成，正在提交安装…';
       });
       await _service.install(path);
+      if (!mounted) return;
+      setState(() => _message = '请在系统弹窗中确认安装 v${remote.name}');
     } on UpdateException catch (e) {
       if (!mounted) return;
       setState(() {

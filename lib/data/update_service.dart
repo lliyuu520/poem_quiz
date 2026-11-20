@@ -89,9 +89,18 @@ class UpdateService {
     }
   }
 
-  /// 拉起系统安装器。需要「允许安装未知应用」授权（系统会引导）。
+  /// 提交安装到系统 PackageInstaller（随后由系统弹出确认页）。
+  ///
+  /// 把 MethodChannel 的 [PlatformException] 统一转成 [UpdateException]，
+  /// 否则设置页的 catch 接不住，会静默停在「已就绪」。
   Future<void> install(String apkPath) async {
-    await platform.invokeMethod('install', <String, String>{'path': apkPath});
+    try {
+      await platform.invokeMethod('install', <String, String>{'path': apkPath});
+    } on PlatformException catch (e) {
+      throw UpdateException(e.message ?? '拉起安装器失败');
+    } on MissingPluginException catch (e) {
+      throw UpdateException('当前版本不支持应用内更新：${e.message}');
+    }
   }
 
   Future<Directory> _cacheDir() async {
