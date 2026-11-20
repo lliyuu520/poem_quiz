@@ -1,6 +1,6 @@
 # AGENTS.md — poem_quiz（拾）
 
-古诗词 / 拼音 / 数学 / 成语 / 数独答题 App，英语接入中。Flutter 实现，纯离线（题库内置于代码，进度存本地），**只面向自己使用**，也给孩子玩。
+古诗词 / 拼音 / 数学 / 英语 / 成语 / 数独答题 App。Flutter 实现，纯离线（题库内置于代码，进度存本地），**只面向自己使用**，也给孩子玩。
 
 ## 定位与边界
 
@@ -27,7 +27,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | 路径 | 内容 |
 |---|---|
 | `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 题型集合 + 存储键前缀；`TopicMode`（quiz / sudoku） |
-| `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学、成语、数独）、`kDefaultTopic`；新增科目在这里加一条 |
+| `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学、英语、成语、数独）、`kDefaultTopic`；新增科目在这里加一条 |
 | `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：358 条规则生成（一年级 196 / 二年级 162）；`MathExpr` 解析算式 |
@@ -78,11 +78,21 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - `QuizEngine` 的 `poems` 是必填参数——故意不给默认值，避免新科目忘记传题库时静默出成诗词题。
 - `ProgressStore.load(topicId:)` 必须显式传科目 id。**没有旧存档迁移逻辑**（开发阶段，不兼容无前缀的历史键）。
 
-### 英语科目的接入状态
+### 英语科目
 
-- 英语正在另一处并行接入（题库、音频、插图、题型都已落文件，`Topic` 与 `QuizEngine` 分支可能尚未接完）。**本文件不描述它的完成度**——判断依据只有一条：`flutter analyze` 与 `flutter test` 是否干净。
-- 接入时的硬约束：`QuizEngine._tryMake` 的 switch 必须覆盖 `QuestionKind` 全部成员（含 5 个 `english*`），否则 switch 不穷尽会让**整个测试套件编译不过**，表现为「loading ...」后直接失败，而不是某条用例红。
-- **音频不在 APK 里**：英语全靠听，设备自带 TTS 在中文 ROM 上常缺英文音色或读错元音，所以音频用固定音色预生成、放 OSS（`EnglishAudio.baseUrl = https://oss.lliyuu520.cn/en-audio`），首次播放时下载到本地缓存。本地 `assets/audio/en/` 只是上传 OSS 前的源文件；`pubspec.yaml` 只声明 `assets/audio/`（Flutter 声明目录不递归），所以子目录里的音频**不会进包**——这是有意的，不要改成逐文件声明。
+- **以听为主**：听音选词（`englishListen`）与听句选义（`englishSentence`）的 `Question.focus` 为空串，答题页只渲染喇叭按钮，判题后才露出原文。改答题页时不要假设 `focus` 非空。
+- **音频不在 APK 里**：英语全靠听，设备自带 TTS 在中文 ROM 上常缺英文音色或读错元音（实测 Aria 孤立朗读 `cat` 时 /æ/ 偏离自身参照 56%，接近 /e/），所以音频用固定音色 `en-US-JennyNeural` 预生成、放 OSS（`EnglishAudio.baseUrl = https://oss.lliyuu520.cn/en-audio`），首次播放时按条目下载到本地缓存，之后离线。
+- `pubspec.yaml` **逐个声明**三个音效 wav，不写目录——目录写法会把 `assets/audio/en/` 一起收进包（Flutter 的目录声明是递归的，早期注释写的「不递归」是错的）。本地 `assets/audio/en/` 只是上传 OSS 前的源文件，不该进包。
+- 加了新词之后要跑：`python -I tool/gen_english.py --audio` → `python -I tool/verify_english_audio.py`（ASR 全量校验）→ 上传 OSS。校验不通过就别上传，一个错读音就是给孩子的错误输入。
+- `QuizEngine._tryMake` 的 switch 必须覆盖 `QuestionKind` 全部成员（含 5 个 `english*`），否则 switch 不穷尽会让**整个测试套件编译不过**，表现为「loading ...」后直接失败，而不是某条用例红。
+- **英语干扰项要排除字母条目**：字母也是纯小写英文，混进「听音选词」会变成「听 cat 选 H」。`_englishListen` 的 `excludePoem` 里已排除 `_isEnglishLetter`。
+- 拼单词（`englishSpell`）属于填空题：`Question.isBlank` 包含它，`_BlankPrompt` 对它走「单行紧贴显示」（`c□t`）而不是诗句的上下分行，否则看不出是个词。
+- **下载不能用 `HttpClient`**：两个已踩的坑——① 它的 `connectionFactory` 在 HTTPS 下会把 SNI 退化成 IP，CDN 直接回 400；② 默认路径在无 IPv6 出口的网络（模拟器、部分移动网络）会先试 AAAA 记录并长时间挂起。`_httpsGet()` 因此手写：IPv4 建 TCP + 域名做 SNI，再自己拼 HTTP。改这块时两者都要保住。
+- **不要给下载做 in-flight 去重**：`_inflight[key] ??= fetch().whenComplete(...)` 会让调用方的 `await` 在下载完成后仍不返回（表现为「下载成功但播放不触发」，trace 只到 done 就断）。连点重复下载的代价可接受。
+- **`SpeakButton` 用 `GestureDetector` 而不是只靠 `InkWell`**：它会被放进不在 Material 上下文里的父级（填空题干、列表项），InkWell 会静默失效。
+- **`AudioPlayer` 的每个调用都加超时**：`setReleaseMode` / `setSource` / `resume` 在设备上可能不回调，`await` 会挂住。用 `setSource` + `resume` 而不是 `play(DeviceFileSource)`，每步单独超时。
+- **诊断靠落文件，不靠 logcat**：release 与 debug 包的 `debugPrint` 都不进 logcat。`EnglishAudio.trace()` 写到 `files/en_audio_trace.log`，用 `adb shell run-as com.lyu.poem_quiz cat files/en_audio_trace.log` 读。
+- **模拟器验证要临时改 ABI**：`android/app/build.gradle.kts` 的 `abiFilters` 只有 `arm64-v8a`，`gradle.properties` 的 `disable-abi-filtering=true` 会覆盖它。在 x86_64 模拟器上验证要先临时改成 `listOf("arm64-v8a", "x86_64")` 且把 `disable-abi-filtering` 设为 false，验完**必须改回来**（否则 release 包会变 48MB）。
 
 ## 启动前状态
 

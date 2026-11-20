@@ -417,6 +417,13 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.nextLine: 0.6,
         QuestionKind.blank: 0.6,
         QuestionKind.idiomBlank: 0.6,
+        // 英语：轻松策略多出「听音选词 / 认词义 / 大小写」这类认读题，
+        // 少出拼写与听句（需要更强的主动提取）。
+        QuestionKind.englishListen: 2.2,
+        QuestionKind.englishMeaning: 2.2,
+        QuestionKind.englishCase: 2.2,
+        QuestionKind.englishSpell: 0.6,
+        QuestionKind.englishSentence: 0.8,
       };
     case ChallengeTier.challenge:
       return const <QuestionKind, double>{
@@ -430,6 +437,12 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.nextLine: 2.2,
         QuestionKind.blank: 2.2,
         QuestionKind.idiomBlank: 2.2,
+        // 英语：挑战策略反过来，多出拼写与听句。
+        QuestionKind.englishListen: 0.8,
+        QuestionKind.englishMeaning: 0.8,
+        QuestionKind.englishCase: 0.8,
+        QuestionKind.englishSpell: 2.2,
+        QuestionKind.englishSentence: 2.2,
       };
   }
 }

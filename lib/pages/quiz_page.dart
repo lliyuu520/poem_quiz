@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../data/english_audio.dart';
 import '../data/quiz_session.dart';
 import '../data/topic.dart';
 import '../models/question.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
+import '../widgets/english_speech.dart';
 import 'result_page.dart';
 
 /// 答题页：选择题与填空题共用。
@@ -151,6 +153,7 @@ class _QuizPageState extends State<QuizPage> {
                 question: _question,
                 picked: _pickedChars,
                 verdict: _verdict,
+                topic: widget.session.topic,
               ),
             ),
           ),
@@ -204,6 +207,7 @@ class _QuizPageState extends State<QuizPage> {
               question: _question,
               picked: _pickedChars,
               verdict: _verdict,
+              topic: widget.session.topic,
             ),
             const SizedBox(height: 20),
             _answerArea(),
@@ -359,11 +363,13 @@ class _QuestionCard extends StatelessWidget {
     required this.question,
     required this.picked,
     required this.verdict,
+    required this.topic,
   });
 
   final Question question;
   final List<int> picked;
   final bool? verdict;
+  final Topic topic;
 
   @override
   Widget build(BuildContext context) {
@@ -391,6 +397,8 @@ class _QuestionCard extends StatelessWidget {
           const SizedBox(height: 18),
           if (question.isBlank)
             _BlankPrompt(question: question, picked: picked, verdict: verdict)
+          else if (isEnglishKind(question.kind))
+            EnglishPrompt(question: question, topic: topic, verdict: verdict)
           else
             Text(
               question.focus,
@@ -420,30 +428,58 @@ class _BlankPrompt extends StatelessWidget {
   Widget build(BuildContext context) {
     final chosen = picked.map((i) => question.charPool[i]).toList();
     final showAnswer = verdict != null && verdict == false;
-    final textStyle = serif(22, height: 1.6, spacing: 3);
 
-    // 上句与下句分行：写字格单独一行，避免长句把格子挤到换行。
+    // 英语拼单词：挖空在单词中间，必须紧贴着显示成 `c□t`，
+    // 不能像诗句那样上下分行——分行后孩子看不出这是个词。
+    final isSpell = question.kind == QuestionKind.englishSpell;
+    final textStyle = isSpell
+        ? serif(34, height: 1.4, spacing: 3, content: true)
+        : serif(22, height: 1.6, spacing: 3);
+
+    final slots = <Widget>[
+      for (var i = 0; i < question.answerChars.length; i++)
+        _Slot(
+          // 答错时显示正确字，答对时显示玩家选的字。
+          char: showAnswer
+              ? question.answerChars[i]
+              : (i < chosen.length ? chosen[i] : null),
+          correct: showAnswer,
+        ),
+    ];
+
+    final line = Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: <Widget>[
+        if (question.blankBefore.isNotEmpty) Text(question.blankBefore, style: textStyle),
+        ...slots,
+        if (question.blankAfter.isNotEmpty) Text(question.blankAfter, style: textStyle),
+      ],
+    );
+
+    if (isSpell) {
+      // 拼写题配喇叭：先听清整词再拼，否则纯靠猜。
+      return Column(
+        children: <Widget>[
+          SpeakButton(
+            audioKey: EnglishAudioKeys.word(question.poem.title),
+            size: 56,
+            label: '点这里听整个词',
+          ),
+          const SizedBox(height: 20),
+          line,
+        ],
+      );
+    }
+
+    // 诗句与成语：上句与下句分行，写字格单独一行，避免长句把格子挤到换行。
     return Column(
       children: <Widget>[
         Text(question.blankBefore, style: textStyle),
         const SizedBox(height: 12),
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          runSpacing: 8,
-          children: <Widget>[
-            for (var i = 0; i < question.answerChars.length; i++)
-              _Slot(
-                // 答错时显示正确字，答对时显示玩家选的字。
-                char: showAnswer
-                    ? question.answerChars[i]
-                    : (i < chosen.length ? chosen[i] : null),
-                correct: showAnswer,
-              ),
-            Text(question.blankAfter, style: textStyle),
-          ],
-        ),
+        line,
       ],
     );
   }

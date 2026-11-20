@@ -2,6 +2,7 @@ import '../models/poem.dart';
 import '../models/question.dart';
 import '../theme/app_theme.dart';
 import 'chengyu.dart';
+import 'english.dart';
 import 'math.dart';
 import 'pinyin.dart';
 import 'poems.dart';
@@ -125,6 +126,62 @@ String _mathMeta(Poem p) => '得数 ${p.author}';
 String _mathName(Poem p) => p.title;
 String _mathSummary(Poem p) => '${p.title} = ${p.author}';
 
+/// 英语科目：字母与自然拼读 → 主题词 → 日常短句，按学龄分档。
+///
+/// **以听为主**：听音选词与听句选义这两类题的题干留空，屏幕上只给作答选项，
+/// 孩子必须先听音频。音频不是设备 TTS 现合成的，而是固定音色预生成后放 OSS、
+/// 首次播放时下载缓存（见 `EnglishAudio`）——英语全靠听，音质与读音正确性是
+/// 硬指标，不能赌设备上装了什么语音包。
+///
+/// 题库由 `tool/gen_english.py` 从 `tool/english_bank.json` 生成，不要手改。
+const Topic kEnglishTopic = Topic(
+  id: 'english',
+  name: '英语',
+  unit: '个',
+  groupLabel: '类别',
+  searchHint: '搜单词或中文',
+  entries: kEnglish,
+  groupOf: _englishGroupOf,
+  metaOf: _englishMeta,
+  kinds: <QuestionKind>{
+    QuestionKind.englishListen,
+    QuestionKind.englishMeaning,
+    QuestionKind.englishCase,
+    QuestionKind.englishSpell,
+    QuestionKind.englishSentence,
+  },
+  nameOf: _englishName,
+  summaryOf: _englishSummary,
+  tagline: '先听清，再认字',
+  intro: '字母与拼读、主题词、日常短句。点喇叭听标准读音，再选答案。',
+  seal: '英\nquiz',
+  accent: AppColors.english,
+  accentSoft: AppColors.englishSoft,
+  summaryFromId: _englishSummaryFromId,
+  detailOf: _englishDetail,
+  marks: _englishMarks,
+);
+
+String _englishGroupOf(Poem p) => p.dynasty;
+String _englishMeta(Poem p) => p.author;
+String _englishName(Poem p) => p.title;
+String _englishSummary(Poem p) => '${p.title} · ${p.author}';
+
+/// 字母条目是「A · a」，词条是「cat · 猫」，句子是「I like apples. · 我喜欢苹果。」
+String _englishSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
+
+/// 展开正文：例句英文一行、中文一行，比 `fullText` 挤成一行清楚。
+String _englishDetail(Poem p) => p.lines.join('\n');
+
+const List<ResultMark> _englishMarks = <ResultMark>[
+  (title: '耳聪目明', remark: '全对。听音和认词都稳了。'),
+  (title: '一学就会', remark: '只差一点，再听一遍就记住。'),
+  (title: '渐入佳境', remark: '大部分都听出来了，错的多听几遍。'),
+  (title: '尚需多听', remark: '英语先听清再认字，回去再听一轮。'),
+  (title: '从头再来', remark: '别急，一天几个词，慢慢就熟了。'),
+];
+
 /// 数独科目：棋盘玩法，没有题库。
 ///
 /// 与其它科目不同，它不走 [QuizEngine]：`entries` 为空，`kinds` 为空，
@@ -184,6 +241,7 @@ final List<Topic> kTopics = <Topic>[
   kPoetryTopic,
   kPinyinTopic,
   kMathTopic,
+  kEnglishTopic,
   kChengyuTopic,
   kSudokuTopic,
 ];

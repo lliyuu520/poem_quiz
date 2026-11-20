@@ -27,6 +27,10 @@ class AppColors {
   static const sudokuSoft = Color(0xFFE4E9F0);
   static const chengyu = Color(0xFF7A3E3E);
   static const chengyuSoft = Color(0xFFF0E4E2);
+
+  /// 英语：靛青偏蓝，与数独的靛蓝拉开，也不撞拼音的青。
+  static const english = Color(0xFF2E5C8A);
+  static const englishSoft = Color(0xFFE2EAF3);
 }
 
 /// 诗词正文用的衬线字体。Android 上会落到 Noto Serif CJK。

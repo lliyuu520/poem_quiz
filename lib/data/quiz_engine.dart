@@ -153,6 +153,16 @@ class QuizEngine {
         return _mathCompare(poem, optionCount);
       case QuestionKind.idiomBlank:
         return _idiomBlank(poem);
+      case QuestionKind.englishListen:
+        return _englishListen(poem, optionCount, bias);
+      case QuestionKind.englishMeaning:
+        return _englishMeaning(poem, optionCount, bias);
+      case QuestionKind.englishCase:
+        return _englishCase(poem, optionCount, bias);
+      case QuestionKind.englishSpell:
+        return _englishSpell(poem);
+      case QuestionKind.englishSentence:
+        return _englishSentence(poem, optionCount, bias);
     }
   }
 
@@ -546,6 +556,197 @@ class QuizEngine {
     return candidates[_random.nextInt(candidates.length)];
   }
 
+  // ── 英语题型 ─────────────────────────────────────────
+  //
+  // 英语与其他科目最大的不同是「输入通道以听为主」：题目本身可以是纯音频，
+  // 屏幕只给作答选项。所以这几类题的 [Question.focus] 允许为空，
+  // 答题页据此渲染成「只显示喇叭按钮」。
+
+  /// 听音选词：播放单词音频，从四个英文词里选出听到的那个。
+  ///
+  /// 干扰项优先取**同主题**的词（都是动物/颜色），比跨主题的更容易混。
+  Question? _englishListen(Poem entry, int optionCount, _Bias bias) {
+    if (!_isEnglishWord(entry)) return null;
+    final need = optionCount - 1;
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      // 必须排除单字母条目：字母也是纯小写英文，混进来就成了「听 cat 选 H」。
+      excludePoem: (p) =>
+          p.id == entry.id || p.title == entry.title || _isEnglishLetter(p),
+      pool: (p) => <String>[p.title],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+      fillGroupFirst: true,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.title, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.englishListen,
+      poem: entry,
+      prompt: '听一听，是哪个词？',
+      // 题干留空：先听后选，屏幕上不出现答案。
+      focus: '',
+      key: '${entry.id}|enListen',
+      options: options,
+      answerIndex: options.indexOf(entry.title),
+    );
+  }
+
+  /// 认词义：给英文词，选出中文意思。
+  Question? _englishMeaning(Poem entry, int optionCount, _Bias bias) {
+    if (!_isEnglishWord(entry)) return null;
+    final need = optionCount - 1;
+    // 中文释义可能重复（family 的释义就是「家人」，和 mom/dad 的组名同字），
+    // 必须排除相同释义，否则选项里会出现两个正确答案。
+    // 也要排除字母条目：它的 author 是单个小写字母，混进来会变成「b」这种选项。
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) =>
+          p.id == entry.id || p.author == entry.author || _isEnglishLetter(p),
+      pool: (p) => <String>[p.author],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.author, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.englishMeaning,
+      poem: entry,
+      prompt: '这个单词是什么意思？',
+      focus: entry.title,
+      key: '${entry.id}|enMeaning',
+      options: options,
+      answerIndex: options.indexOf(entry.author),
+    );
+  }
+
+  /// 大小写配对：给大写字母，选出对应小写。
+  Question? _englishCase(Poem entry, int optionCount, _Bias bias) {
+    if (!_isEnglishLetter(entry)) return null;
+    final need = optionCount - 1;
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => p.id == entry.id || p.author == entry.author,
+      pool: (p) => _isEnglishLetter(p) ? <String>[p.author] : const <String>[],
+      bias: bias,
+      // 元音字母优先配元音字母，混在一起更像真的在认大小写。
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.author, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.englishCase,
+      poem: entry,
+      prompt: '这个大写字母的小写是哪个？',
+      focus: entry.title,
+      key: '${entry.id}|enCase',
+      options: options,
+      answerIndex: options.indexOf(entry.author),
+    );
+  }
+
+  /// 拼单词：挖掉单词里的一个字母，从字母池里选。
+  ///
+  /// 挖空位置避开首字母——首字母是孩子最先记住的，挖它等于送分；
+  /// 也避开连续重复字母（如 `bee` 的 ee），否则两个 e 都能填，答案不唯一。
+  Question? _englishSpell(Poem entry) {
+    if (!_isEnglishWord(entry)) return null;
+    final letters = entry.title.split('');
+    if (letters.length < 3) return null;
+
+    final candidates = <int>[
+      for (var i = 1; i < letters.length; i++)
+        // 与相邻字母不同的位置才挖，保证答案唯一。
+        if (letters[i] != letters[i - 1] &&
+            (i + 1 >= letters.length || letters[i] != letters[i + 1]))
+          i,
+    ];
+    if (candidates.isEmpty) return null;
+    final idx = candidates[_random.nextInt(candidates.length)];
+    final answer = letters[idx];
+
+    final before = letters.sublist(0, idx).join();
+    final after = letters.sublist(idx + 1).join();
+
+    // 字池：答案 + 本词其它字母 + 常见字母干扰，全部去重。
+    final pool = <String>[answer];
+    final seen = <String>{answer};
+    for (final c in letters) {
+      if (pool.length >= 5) break;
+      if (seen.add(c)) pool.add(c);
+    }
+    // 干扰字母从别的词里取，且不能是答案，否则会出现两个正确选项。
+    final others = poems
+        .where((p) => p.id != entry.id && _isEnglishWord(p))
+        .expand((p) => p.title.split(''))
+        .where((c) => !seen.contains(c))
+        .toList()
+      ..shuffle(_random);
+    for (final c in others) {
+      if (pool.length >= 5) break;
+      if (seen.add(c)) pool.add(c);
+    }
+    pool.shuffle(_random);
+
+    return Question(
+      kind: QuestionKind.englishSpell,
+      poem: entry,
+      prompt: '补上缺的字母',
+      focus: '$before${'□'}$after',
+      key: '${entry.id}|enSpell|$idx',
+      blankBefore: before,
+      blankAfter: after,
+      answerChars: <String>[answer],
+      charPool: pool,
+    );
+  }
+
+  /// 听句选义：播放句子音频，选出对应的中文意思。
+  Question? _englishSentence(Poem entry, int optionCount, _Bias bias) {
+    if (!_isEnglishSentence(entry)) return null;
+    final need = optionCount - 1;
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) =>
+          p.id == entry.id || p.author == entry.author || !_isEnglishSentence(p),
+      pool: (p) => _isEnglishSentence(p) ? <String>[p.author] : const <String>[],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.author, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.englishSentence,
+      poem: entry,
+      prompt: '听一听，这句话是什么意思？',
+      // 同上：先听后选，题干不露英文原句。
+      focus: '',
+      key: '${entry.id}|enSentence',
+      options: options,
+      answerIndex: options.indexOf(entry.author),
+    );
+  }
+
+  /// 英语字母条目：`author` 是单个小写字母。
+  static bool _isEnglishLetter(Poem p) =>
+      p.author.length == 1 && RegExp(r'^[a-z]$').hasMatch(p.author);
+
+  /// 英语单词条目：`title` 是纯小写英文词（不是句子）。
+  static bool _isEnglishWord(Poem p) =>
+      RegExp(r'^[a-z]+$').hasMatch(p.title) && p.author.isNotEmpty;
+
+  /// 英语句子条目：`title` 含空格或标点，是一整句。
+  static bool _isEnglishSentence(Poem p) =>
+      p.title.contains(' ') && RegExp(r'^[A-Za-z].*[.?!]$').hasMatch(p.title);
+
   /// 从其他诗里收集干扰项。
   ///
   /// [excludePoem] 决定哪些诗不参与（默认排除当前这首）。作者题必须排除同作者的诗，
@@ -567,6 +768,7 @@ class QuizEngine {
     String? excludeText,
     _Bias bias = const _Bias(),
     bool Function(Poem)? preferGroup,
+    bool fillGroupFirst = false,
   }) {
     final skip = excludePoem ?? (p) => p.id == exclude.id;
 
@@ -602,6 +804,28 @@ class QuizEngine {
     final seen = <String>{};
     for (final c in candidates) {
       if (seen.add(c.text)) distinct.add(c.text);
+    }
+
+    // 英语听音题要求干扰项尽量全取同主题（同是动物/颜色才容易混）。
+    // 排序 + 截窗口做不到这点：窗口里同组只占前几条，shuffle 后就被稀释了
+    // （实测同主题占比只有 44%，而按主题词数其实 100% 可行）。
+    // 所以这里改成「先取满同组，再补其它」。
+    if (bias.sameGroup && fillGroupFirst) {
+      // 不能复用上面的 `seen`：它已被去重循环填满，再 add 全部返回 false，
+      // 会让干扰项一个都取不到。用独立集合重新去重。
+      final same = <String>[];
+      final other = <String>[];
+      final taken = <String>{};
+      for (final c in candidates) {
+        if (taken.add(c.text)) {
+          (c.sameGroup ? same : other).add(c.text);
+        }
+      }
+      // candidates 已按距离排过序，两组各自保持这个顺序再打乱。
+      return (<String>[...same]..shuffle(_random))
+          .followedBy(<String>[...other]..shuffle(_random))
+          .take(count)
+          .toList();
     }
 
     // 轻松策略取较远的一端（更容易一眼排除），否则取距离最近的一端再随机。

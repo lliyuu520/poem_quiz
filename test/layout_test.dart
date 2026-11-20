@@ -219,6 +219,35 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    // 英语题型的题干可能是「只有喇叭」，且带插画；这类布局与其它科目差别最大，
+    // 三种窗口都要过一遍。
+    for (final (name, size) in <(String, Size)>[
+      ('手机', phone),
+      ('平板竖屏', tabletPortrait),
+      ('平板横屏', tabletLandscape),
+    ]) {
+      testWidgets('英语答题页 $name 渲染无溢出', (tester) async {
+        final engine = QuizEngine(poems: kEnglishTopic.entries);
+        final session = buildSession(
+          engine: engine,
+          topic: kEnglishTopic,
+          count: 5,
+          grade: GradeLevel.g1,
+        );
+        await pumpAt(
+          tester,
+          size,
+          () => QuizPage(session: session, onFinish: (_) async {}),
+        );
+        expect(find.textContaining('1 / '), findsOneWidget);
+        // 不能出诗词或拼音题型。
+        for (final p in <String>['接下句', '识诗人', '辨出处', '补诗句', '选读音', '选字词']) {
+          expect(find.text(p), findsNothing, reason: '英语科目出了别的科目题型：$p');
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     for (final (name, size) in <(String, Size)>[
       ('手机', phone),
       ('平板横屏', tabletLandscape),

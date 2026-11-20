@@ -6,6 +6,7 @@ import '../models/poem.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
+import '../widgets/english_speech.dart';
 
 /// 学习模式：浏览本科目全部条目，按科目定义的分组筛选，可标记已掌握。
 class StudyPage extends StatefulWidget {
@@ -188,6 +189,7 @@ class _StudyPageState extends State<StudyPage> {
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _StudyTile(
                             name: widget.topic.displayNameOf(poems[i]),
+                            group: widget.topic.groupOf(poems[i]),
                             pinyin: widget.topic.id == 'pinyin',
                             meta: widget.topic.metaOf(poems[i]),
                             detail: widget.topic.displayDetailOf(poems[i]),
@@ -258,6 +260,7 @@ class _StudyTile extends StatefulWidget {
     required this.detail,
     required this.mastered,
     required this.onToggleMastered,
+    this.group = '',
   });
 
   /// 列表主标题，由科目决定（诗词带书名号，拼音直接显示字词）。
@@ -273,6 +276,9 @@ class _StudyTile extends StatefulWidget {
   final String detail;
   final bool mastered;
   final VoidCallback onToggleMastered;
+
+  /// 条目分组。英语用它区分字母与其它条目，决定喇叭读字母名还是读词。
+  final String group;
 
   @override
   State<_StudyTile> createState() => _StudyTileState();
@@ -337,6 +343,8 @@ class _StudyTileState extends State<_StudyTile> {
                       ],
                     ),
                   ),
+                  if (EntrySpeakButton.audioKeyForEntry(widget.name, widget.group) != null)
+                    EntrySpeakButton(title: widget.name, group: widget.group),
                   IconButton(
                     onPressed: widget.onToggleMastered,
                     icon: Icon(

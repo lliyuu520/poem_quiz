@@ -1,6 +1,7 @@
 import 'poem.dart';
 
-/// 题型。前四种针对诗句，中间两种针对拼音读音，后三种针对算式，成语选字针对成语。
+/// 题型。前四种针对诗句，中间两种针对拼音读音，后三种针对算式，
+/// 成语选字针对成语，最后五种针对英语（以听为主）。
 ///
 /// 一个科目只会用到其中一部分（见 `Topic.kinds`），引擎按题型分派。
 enum QuestionKind {
@@ -14,6 +15,11 @@ enum QuestionKind {
   mathBlank,
   mathCompare,
   idiomBlank,
+  englishListen,
+  englishMeaning,
+  englishCase,
+  englishSpell,
+  englishSentence,
 }
 
 extension QuestionKindLabel on QuestionKind {
@@ -28,12 +34,25 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.mathBlank => '填数',
         QuestionKind.mathCompare => '比大小',
         QuestionKind.idiomBlank => '选字',
+        QuestionKind.englishListen => '听音选词',
+        QuestionKind.englishMeaning => '认词义',
+        QuestionKind.englishCase => '大小写',
+        QuestionKind.englishSpell => '拼单词',
+        QuestionKind.englishSentence => '听句选义',
       };
 }
 
 /// 是否为拼音类题型（答案是拼音串而非汉字）。
 bool isPinyinKind(QuestionKind kind) =>
     kind == QuestionKind.pinyinOf || kind == QuestionKind.wordOf;
+
+/// 是否为英语题型（拉丁字母内容，朗读是主要输入通道）。
+bool isEnglishKind(QuestionKind kind) =>
+    kind == QuestionKind.englishListen ||
+    kind == QuestionKind.englishMeaning ||
+    kind == QuestionKind.englishCase ||
+    kind == QuestionKind.englishSpell ||
+    kind == QuestionKind.englishSentence;
 
 /// 是否为算式类题型（题目围绕口算展开）。
 bool isMathKind(QuestionKind kind) =>
@@ -84,8 +103,11 @@ class Question {
   /// 判题后的知识点补充，如算式题的解题思路。为空时不显示。
   final String note;
 
+  /// 是否为填空题（从候选字池里点选补齐）。拼单词与补诗句、补成语同属一类。
   bool get isBlank =>
-      kind == QuestionKind.blank || kind == QuestionKind.idiomBlank;
+      kind == QuestionKind.blank ||
+      kind == QuestionKind.idiomBlank ||
+      kind == QuestionKind.englishSpell;
 
   /// 算式题同样用 [focus] 展示题干、[options] 展示候选。
   bool get isMath => isMathKind(kind);

@@ -1,7 +1,7 @@
 name: poem_quiz
 description: "拾 —— 古诗词与识字答题本，离线自用。"
 publish_to: 'none'
-version: 0.2.4+6
+version: 0.3.0+7
 
 environment:
   sdk: ^3.13.4
@@ -10,6 +10,7 @@ dependencies:
   audioplayers: ^6.8.1
   flutter:
     sdk: flutter
+  path_provider: ^2.1.6
   shared_preferences: ^2.5.6
 
 dev_dependencies:
@@ -20,7 +21,12 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/audio/
+    # 只打音效。英语朗读音频（assets/audio/en/，约 930KB）刻意不打包：
+    # 它走 OSS 按需下载（见 lib/data/english_audio.dart），打进 APK 会让
+    # 每次加词都得重新发版。这里逐个列出 wav，避免目录写法把子目录一起收进去。
+    - assets/audio/correct.wav
+    - assets/audio/wrong.wav
+    - assets/audio/combo.wav
   fonts:
     - family: WenKai
       fonts:

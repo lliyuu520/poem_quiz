@@ -6,6 +6,7 @@ import '../models/poem.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
+import '../widgets/english_speech.dart';
 
 /// 错题本：列出本科目答错过的条目，可展开看全文、手动移除。
 class WrongBookPage extends StatefulWidget {
@@ -96,6 +97,7 @@ class _WrongBookPageState extends State<WrongBookPage> {
                               const SizedBox(height: 10),
                           itemBuilder: (context, i) => _PoemTile(
                             name: widget.topic.displayNameOf(poems[i]),
+                            group: widget.topic.groupOf(poems[i]),
                             pinyin: widget.topic.id == 'pinyin',
                             meta: widget.topic.metaOf(poems[i]),
                             detail: widget.topic.displayDetailOf(poems[i]),
@@ -144,6 +146,7 @@ class _PoemTile extends StatefulWidget {
     required this.meta,
     required this.detail,
     required this.onRemove,
+    this.group = '',
   });
 
   /// 列表主标题，由科目决定。
@@ -158,6 +161,9 @@ class _PoemTile extends StatefulWidget {
   /// 展开后的正文，由科目决定。
   final String detail;
   final VoidCallback onRemove;
+
+  /// 条目分组。英语用它决定喇叭读字母名还是读词。
+  final String group;
 
   @override
   State<_PoemTile> createState() => _PoemTileState();
@@ -199,6 +205,8 @@ class _PoemTileState extends State<_PoemTile> {
                       ],
                     ),
                   ),
+                  if (EntrySpeakButton.audioKeyForEntry(widget.name, widget.group) != null)
+                    EntrySpeakButton(title: widget.name, group: widget.group),
                   IconButton(
                     onPressed: widget.onRemove,
                     icon: const Icon(Icons.check_circle_outline, size: 18),

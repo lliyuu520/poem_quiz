@@ -13,10 +13,14 @@ class UpdateService {
   UpdateService({this.platform = const MethodChannel('poem_quiz/installer')});
 
   /// 版本清单地址。按顺序尝试：OSS CDN 优先，jsDelivr 兜底。
-  /// dist 仓库或 OSS 更新时同步改这里的内容源。
+  ///
+  /// **jsDelivr 的 URL 必须带版本号**（`version-N.json`）。它对同名文件
+  /// 的缓存极其顽固，实测 `version.json` 长期返回两三个版本之前的旧清单，
+  /// 发版后刷新 CDN 也不生效。用新文件名可以绕过。
+  /// 每次发版：在 dist 仓库新增 `version-<code>.json`，并同步改这里。
   static const List<String> manifestUrls = <String>[
     'https://oss.lliyuu520.cn/apk/version.json',
-    'https://cdn.jsdelivr.net/gh/lliyuu520/poem_quiz-dist@main/version.json',
+    'https://cdn.jsdelivr.net/gh/lliyuu520/poem_quiz-dist@main/version-7.json',
   ];
 
   final MethodChannel platform;
