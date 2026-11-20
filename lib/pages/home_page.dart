@@ -166,7 +166,6 @@ class _HomePageState extends State<HomePage> {
             score: s.score,
             answered: s.index + 1,
             correct: s.correctCount,
-            maxCombo: s.maxCombo,
             wrongIds: s.wrongPoemIds,
             clearedIds: s.clearedPoemIds,
             careerMode: s.careerMode,

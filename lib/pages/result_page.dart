@@ -5,7 +5,7 @@ import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
 
-/// 结算页：分数、正确率、连击、错题清单。
+/// 结算页：分数、正确率、错题清单。
 class ResultPage extends StatelessWidget {
   const ResultPage({super.key, required this.session});
 
@@ -71,12 +71,12 @@ class ResultPage extends StatelessWidget {
                           highlight: true,
                         ),
                         _Divider(),
+                        _Stat(label: '答错', value: '${answered - session.correctCount}'),
+                        _Divider(),
                         _Stat(
                           label: '正确率',
                           value: '${(accuracy * 100).round()}%',
                         ),
-                        _Divider(),
-                        _Stat(label: '最高连击', value: '${session.maxCombo}'),
                       ],
                     ),
                   ),

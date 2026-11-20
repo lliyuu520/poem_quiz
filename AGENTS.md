@@ -39,7 +39,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
 | `lib/data/quiz_engine.dart` | 出题：15 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
-| `lib/data/quiz_session.dart` | 一局状态：进度、连击、计分 |
+| `lib/data/quiz_session.dart` | 一局状态：进度、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>` |
 | `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
 | `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 15 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 1 / 英语 5） |
@@ -115,7 +115,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - 拼音题库**字词与读音都必须唯一**：同音字（如「木/目」都是 mù）会让「选字词」题出现两个正确选项，测试会拦。
 - 干扰项必须来自**别的条目**，且作者题排除同作者、标题题排除同名、拼音「选读音」排除同读音、「选字词」排除同字词，否则选项里会出现重复正确答案。拼音接入时漏掉这一条，诗词题库下会抽出两个「李白」。
 - 填空题：字池需能精确拼出答案（同一字出现几次就放几次），干扰字不得与答案字重复；`_plain()` 的正则负责去标点，长度计算、挖空、字池都依赖它——改正则要同时检查 `_minLineLength` 与 `blankLen` 分支。
-- 计分：**每题 1 分，只算对错**，年级与难度策略不影响得分（2026-11-19 取消倍率与连击加成）。答错不倒扣、连击清零，连击仅用于展示。
+- 计分：**每题 1 分，只算对错**，年级与难度策略不影响得分（2026-11-19 取消倍率与连击加成）。答错不倒扣。**不做连击**（2026-11-20 移除局内连击条、反馈文案、结算「最高连击」与 `best_combo` 存档键），不要加回。
 - 一局内每条目只出一次题；`preferPoemIds`（错题优先）只影响前 3 题，其余打乱。
 
 ## 关键不变量

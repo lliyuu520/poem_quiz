@@ -15,7 +15,6 @@ class ProgressStore extends ChangeNotifier {
   }
 
   static const _kBestScore = 'best_score';
-  static const _kBestCombo = 'best_combo';
   static const _kAnswered = 'total_answered';
   static const _kCorrect = 'total_correct';
   static const _kSessions = 'sessions';
@@ -32,7 +31,6 @@ class ProgressStore extends ChangeNotifier {
   final String topicId;
 
   int bestScore = 0;
-  int bestCombo = 0;
   int totalAnswered = 0;
   int totalCorrect = 0;
   int sessions = 0;
@@ -69,7 +67,6 @@ class ProgressStore extends ChangeNotifier {
 
   void _load() {
     bestScore = _prefs.getInt(_key(_kBestScore)) ?? 0;
-    bestCombo = _prefs.getInt(_key(_kBestCombo)) ?? 0;
     totalAnswered = _prefs.getInt(_key(_kAnswered)) ?? 0;
     totalCorrect = _prefs.getInt(_key(_kCorrect)) ?? 0;
     sessions = _prefs.getInt(_key(_kSessions)) ?? 0;
@@ -161,7 +158,6 @@ class ProgressStore extends ChangeNotifier {
     required int score,
     required int answered,
     required int correct,
-    required int maxCombo,
     required List<String> wrongIds,
     required List<String> clearedIds,
     bool careerMode = false,
@@ -170,7 +166,6 @@ class ProgressStore extends ChangeNotifier {
     totalAnswered += answered;
     totalCorrect += correct;
     if (score > bestScore) bestScore = score;
-    if (maxCombo > bestCombo) bestCombo = maxCombo;
 
     // 新错题放最前；本轮答对的从错题本移除。
     final next = <String>[
@@ -186,7 +181,6 @@ class ProgressStore extends ChangeNotifier {
     }
 
     await _prefs.setInt(_key(_kBestScore), bestScore);
-    await _prefs.setInt(_key(_kBestCombo), bestCombo);
     await _prefs.setInt(_key(_kAnswered), totalAnswered);
     await _prefs.setInt(_key(_kCorrect), totalCorrect);
     await _prefs.setInt(_key(_kSessions), sessions);

@@ -8,7 +8,7 @@ import 'practice_scope.dart';
 import 'quiz_engine.dart';
 import 'topic.dart';
 
-/// 一局游戏的运行状态：题目、当前进度、连击、计分。
+/// 一局游戏的运行状态：题目、当前进度、计分。
 class QuizSession extends ChangeNotifier {
   QuizSession({
     required this.questions,
@@ -34,8 +34,6 @@ class QuizSession extends ChangeNotifier {
 
   int index = 0;
   int correctCount = 0;
-  int combo = 0;
-  int maxCombo = 0;
   int score = 0;
 
   /// 已答错的诗词 id，用于写入错题本。
@@ -59,12 +57,9 @@ class QuizSession extends ChangeNotifier {
 
     if (correct) {
       correctCount++;
-      combo++;
-      if (combo > maxCombo) maxCombo = combo;
       score += _gain;
       if (!clearedPoemIds.contains(current.poem.id)) clearedPoemIds.add(current.poem.id);
     } else {
-      combo = 0;
       if (!wrongPoemIds.contains(current.poem.id)) wrongPoemIds.add(current.poem.id);
     }
 

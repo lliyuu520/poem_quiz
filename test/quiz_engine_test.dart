@@ -164,17 +164,18 @@ void main() {
   });
 
   group('对局计分', () {
-    test('连击递增，答错清零', () {
+    test('答对加分，答错记入错题本', () {
       final engine = engineWithSeed(29);
       final s = buildSession(engine: engine, topic: kPoetryTopic, count: 10, grade: GradeLevel.g5);
 
       s.submit(correct: true);
-      expect(s.combo, 1);
-      s.submit(correct: true);
-      expect(s.combo, 2);
+      expect(s.score, 1);
+      expect(s.correctCount, 1);
+      expect(s.clearedPoemIds, isNotEmpty);
+
       s.submit(correct: false);
-      expect(s.combo, 0);
-      expect(s.maxCombo, 2);
+      expect(s.score, 1, reason: '答错不应加分');
+      expect(s.correctCount, 1);
       expect(s.wrongPoemIds, isNotEmpty);
     });
 

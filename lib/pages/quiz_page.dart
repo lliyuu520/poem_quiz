@@ -174,7 +174,6 @@ class _QuizPageState extends State<QuizPage> {
                           _Feedback(
                             question: _question,
                             correct: _verdict!,
-                            combo: widget.session.combo,
                             topic: widget.session.topic,
                           ),
                         ],
@@ -216,7 +215,6 @@ class _QuizPageState extends State<QuizPage> {
               _Feedback(
                 question: _question,
                 correct: _verdict!,
-                combo: widget.session.combo,
                 topic: widget.session.topic,
               ),
               const SizedBox(height: 16),
@@ -314,23 +312,6 @@ class _Header extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              if (session.combo >= 2)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: Row(
-                    children: <Widget>[
-                      const Icon(Icons.bolt, size: 16, color: AppColors.gold),
-                      Text(
-                        '${session.combo} 连',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.gold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               Text(
                 '${session.score}',
                 style: serif(
@@ -772,13 +753,11 @@ class _Feedback extends StatelessWidget {
   const _Feedback({
     required this.question,
     required this.correct,
-    required this.combo,
     required this.topic,
   });
 
   final Question question;
   final bool correct;
-  final int combo;
 
   /// 科目决定「出处摘要 + 正文」怎么排版：诗词是「唐 · 李白《静夜思》」+ 全文，
   /// 拼音是「重 · zhòng」+ 组词示例（拼音条目的 lines 存的是组词示例）。
@@ -801,7 +780,7 @@ class _Feedback extends StatelessWidget {
               Icon(icon, size: 18, color: color),
               const SizedBox(width: 8),
               Text(
-                correct ? (combo >= 3 ? '答对了 · $combo 连击' : '答对了') : '答错了',
+                correct ? '答对了' : '答错了',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
