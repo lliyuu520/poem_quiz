@@ -1,4 +1,4 @@
-# poem_quiz
+# 拾（poem_quiz）
 
 古诗词/拼音/数学答题 App。Flutter 实现，题库内置，进度存本地。
 自用：APK 手动安装；检查更新走 dist 仓库。

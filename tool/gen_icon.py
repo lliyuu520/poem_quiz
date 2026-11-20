@@ -1,19 +1,29 @@
-"""生成 app 图标：朱红方印 + 米白「日知」二字。
+"""生成 app 图标：朱红方印 + 米白「拾」字。
 
-「日知」取《论语》「日知其所亡」，两字竖排于方印内。
-图标沿用 app 内的配色（宣纸 #F8F2E6 / 朱印 #A63A2E），
-字体缺失时退化为几何笔画兜底。
+「拾」单字方印：双关拾取 / 十题一局。印章沿用宣纸 #F8F2E6 / 朱印 #A63A2E。
+同时生成：
+- 旧式 mipmap-*/ic_launcher.png（完整印章）
+- 自适应图标前景 mipmap-*/ic_launcher_foreground.png（仅印面字，透明底）
+- 自适应图标背景 drawable/ic_launcher_background.xml 与前景矢量兜底
+- mipmap-anydpi-v26/ic_launcher.xml、ic_launcher_round.xml
 """
+
+from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFont
 
 SEAL = (166, 58, 46, 255)
 SEAL_DARK = (138, 45, 35, 255)
 PAPER = (248, 242, 230, 255)
+TRANSPARENT = (0, 0, 0, 0)
 
-SIZES = {
+CHAR = "拾"
+
+LEGACY_SIZES = {
     "mipmap-mdpi": 48,
     "mipmap-hdpi": 72,
     "mipmap-xhdpi": 96,
@@ -21,15 +31,26 @@ SIZES = {
     "mipmap-xxxhdpi": 192,
 }
 
+# 108dp adaptive canvas
+FOREGROUND_SIZES = {
+    "mipmap-mdpi": 108,
+    "mipmap-hdpi": 162,
+    "mipmap-xhdpi": 216,
+    "mipmap-xxhdpi": 324,
+    "mipmap-xxxhdpi": 432,
+}
+
 FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\STZHONGS.TTF",  # 华文中宋，印章感较好
     r"C:\Windows\Fonts\simhei.ttf",
     r"C:\Windows\Fonts\msyhbd.ttc",
     r"C:\Windows\Fonts\simsun.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
 ]
 
 
-def load_font(size):
+def load_font(size: int):
     for path in FONT_CANDIDATES:
         if os.path.exists(path):
             try:
@@ -39,69 +60,56 @@ def load_font(size):
     return None
 
 
-def draw_ri(draw, box, fill):
-    """字体不可用时的兜底：「日」字——外框 + 中间一横。"""
+def _measure(draw: ImageDraw.ImageDraw, text: str, font):
+    b = draw.textbbox((0, 0), text, font=font)
+    return b[2] - b[0], b[3] - b[1], b
+
+
+def _draw_centered_text(draw: ImageDraw.ImageDraw, box, text: str, fill, font, scale: float = 1.0):
+    """在 box 内居中绘制单字。scale<1 时按视觉略缩以留呼吸。"""
     x0, y0, x1, y1 = box
-    w = x1 - x0
-    h = y1 - y0
-    t = max(2, int(w * 0.13))
-    draw.rectangle([x0, y0, x1, y0 + t], fill=fill)
-    draw.rectangle([x0, y1 - t, x1, y1], fill=fill)
-    draw.rectangle([x0, y0, x0 + t, y1], fill=fill)
-    draw.rectangle([x1 - t, y0, x1, y1], fill=fill)
-    mid = y0 + int((h - t) / 2)
-    draw.rectangle([x0 + t, mid, x1 - t, mid + t], fill=fill)
+    bw, bh = x1 - x0, y1 - y0
+    if font is None:
+        # 兜底：简单方块占位
+        pad = int(min(bw, bh) * 0.22)
+        draw.rectangle([x0 + pad, y0 + pad, x1 - pad, y1 - pad], outline=fill, width=max(2, int(min(bw, bh) * 0.1)))
+        return
+    # 迭代找合适字号，让字形落在 box 的 scale 比例内
+    target = min(bw, bh) * scale
+    # 从较大字号开始试
+    base = int(target * 1.25)
+    best_font = font
+    for sz in range(base, max(8, base // 3), -2):
+        try:
+            f = ImageFont.truetype(font.path, sz) if hasattr(font, "path") else font.font_variant(size=sz)
+        except Exception:
+            try:
+                f = ImageFont.truetype(getattr(font, "path", ""), sz)
+            except Exception:
+                f = best_font
+                break
+        tw, th, b = _measure(draw, text, f)
+        if max(tw, th) <= target:
+            best_font = f
+            break
+        best_font = f
+    tw, th, b = _measure(draw, text, best_font)
+    cx = (x0 + x1) / 2
+    cy = (y0 + y1) / 2
+    x = cx - (b[0] + tw / 2)
+    y = cy - (b[1] + th / 2)
+    draw.text((x, y), text, font=best_font, fill=fill)
 
 
-def draw_zhi(draw, box, fill):
-    """字体不可用时的兜底：「知」字的简化笔画。"""
-    x0, y0, x1, y1 = box
-    w = x1 - x0
-    h = y1 - y0
-    t = max(2, int(w * 0.12))
-    # 右侧「口」
-    rx0 = x0 + int(w * 0.46)
-    ry0 = y0 + int(h * 0.30)
-    draw.rectangle([rx0, ry0, x1, ry0 + t], fill=fill)
-    draw.rectangle([rx0, y1 - t, x1, y1], fill=fill)
-    draw.rectangle([rx0, ry0, rx0 + t, y1], fill=fill)
-    draw.rectangle([x1 - t, ry0, x1, y1], fill=fill)
-    # 左侧「矢」简化：短横、撇、横
-    draw.rectangle([x0, y0 + int(h * 0.08), x0 + int(w * 0.48), y0 + int(h * 0.08) + t], fill=fill)
-    draw.line(
-        [(x0 + int(w * 0.22), y0 + int(h * 0.10)), (x0 + int(w * 0.04), y1 - int(h * 0.08))],
-        fill=fill,
-        width=t,
-    )
-    draw.line(
-        [(x0 + int(w * 0.14), y0 + int(h * 0.52)), (rx0 + int(t * 0.2), y0 + int(h * 0.52))],
-        fill=fill,
-        width=t,
-    )
-
-
-def draw_fallback(draw, box, fill):
-    """在给定区域内竖排绘制「日」「知」的几何兜底。"""
-    x0, y0, x1, y1 = box
-    h = y1 - y0
-    gap = int(h * 0.06)
-    cell_h = (h - gap) // 2
-    top = (x0, y0, x1, y0 + cell_h)
-    bottom = (x0, y0 + cell_h + gap, x1, y0 + cell_h + gap + cell_h)
-    draw_ri(draw, top, fill)
-    draw_zhi(draw, bottom, fill)
-
-
-def render(size):
-    # 4x 超采样后缩小，边缘更干净
+def render_legacy(size: int) -> Image.Image:
+    """旧式完整印章图标（圆角方印 + 内描边 + 单字）。"""
     s = size * 4
-    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
+    img = Image.new("RGBA", (s, s), TRANSPARENT)
     draw = ImageDraw.Draw(img)
 
     margin = int(s * 0.06)
     radius = int(s * 0.18)
 
-    # 印章主体：深色描边 + 朱红填充
     draw.rounded_rectangle(
         [margin, margin, s - margin, s - margin],
         radius=radius,
@@ -110,7 +118,6 @@ def render(size):
         width=max(2, int(s * 0.02)),
     )
 
-    # 内框细线，模拟印章边框
     inner = margin + int(s * 0.045)
     draw.rounded_rectangle(
         [inner, inner, s - inner, s - inner],
@@ -119,41 +126,77 @@ def render(size):
         width=max(1, int(s * 0.008)),
     )
 
-    chars = ["日", "知"]
-    font = load_font(int(s * 0.33))
-    text_left = inner + int(s * 0.10)
-    text_right = s - inner - int(s * 0.10)
-    text_top = inner + int(s * 0.08)
-    text_bottom = s - inner - int(s * 0.08)
-
-    if font is not None:
-        bboxes = [draw.textbbox((0, 0), c, font=font) for c in chars]
-        heights = [b[3] - b[1] for b in bboxes]
-        widths = [b[2] - b[0] for b in bboxes]
-        gap = int(s * 0.01)
-        total_h = sum(heights) + gap
-        available_h = text_bottom - text_top
-        y = text_top + max(0, (available_h - total_h) // 2)
-        for c, b, tw, th in zip(chars, bboxes, widths, heights):
-            x = (s - tw) / 2 - b[0]
-            draw.text((x, y - b[1]), c, font=font, fill=PAPER)
-            y += th + gap
-    else:
-        draw_fallback(draw, (text_left, text_top, text_right, text_bottom), PAPER)
+    font = load_font(int(s * 0.46))
+    # 保持与字体 path 兼容：load_font 返回 truetype 带 path
+    pad = int(s * 0.17)
+    _draw_centered_text(draw, (inner + pad, inner + pad, s - inner - pad, s - inner - pad), CHAR, PAPER, font, scale=0.98)
 
     return img.resize((size, size), Image.LANCZOS)
 
 
+def render_foreground(size: int) -> Image.Image:
+    """自适应图标前景：透明底 + 米白单字，居中落在安全区内。108dp 画布。
+
+    关键：字形 bbox 的半对角线必须落在 66dp 安全圆内，否则圆形蒙版会切角。
+    安全圆半径 33dp => 内接正方形半边 33/√2 ≈ 23.33dp (画布的 21.6%)。
+    """
+    s = size * 4
+    img = Image.new("RGBA", (s, s), TRANSPARENT)
+    draw = ImageDraw.Draw(img)
+    safe_r = s * (33 / 108)
+    inscribed = safe_r / 1.4142
+    cx = cy = s / 2
+    box = (cx - inscribed, cy - inscribed, cx + inscribed, cy + inscribed)
+    font = load_font(int(s * 0.26))
+    _draw_centered_text(draw, box, CHAR, PAPER, font, scale=0.98)
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def write_xml(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
 def main():
-    res_root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-        os.path.dirname(__file__), "..", "android", "app", "src", "main", "res"
+    res_root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent / "android" / "app" / "src" / "main" / "res"
+
+    # Legacy icons
+    for folder, size in LEGACY_SIZES.items():
+        out_dir = res_root / folder
+        out_dir.mkdir(parents=True, exist_ok=True)
+        render_legacy(size).save(out_dir / "ic_launcher.png")
+        # 圆形变体：同图即可（大多数 launcher 接受）
+        render_legacy(size).save(out_dir / "ic_launcher_round.png")
+        print(f"{folder}/ic_launcher.png + ic_launcher_round.png ({size}x{size})")
+
+    # Adaptive foregrounds
+    for folder, size in FOREGROUND_SIZES.items():
+        out_dir = res_root / folder
+        out_dir.mkdir(parents=True, exist_ok=True)
+        render_foreground(size).save(out_dir / "ic_launcher_foreground.png")
+        print(f"{folder}/ic_launcher_foreground.png ({size}x{size})")
+
+    # Background drawable (solid seal color)
+    write_xml(
+        res_root / "drawable" / "ic_launcher_background.xml",
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">\n'
+        '    <solid android:color="#A63A2E"/>\n'
+        '</shape>\n',
     )
-    for folder, size in SIZES.items():
-        out_dir = os.path.join(res_root, folder)
-        os.makedirs(out_dir, exist_ok=True)
-        img = render(size)
-        img.save(os.path.join(out_dir, "ic_launcher.png"))
-        print(f"{folder}/ic_launcher.png ({size}x{size})")
+    print("drawable/ic_launcher_background.xml")
+
+    adaptive = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+        '    <background android:drawable="@drawable/ic_launcher_background"/>\n'
+        '    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n'
+        '    <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>\n'
+        '</adaptive-icon>\n'
+    )
+    write_xml(res_root / "mipmap-anydpi-v26" / "ic_launcher.xml", adaptive)
+    write_xml(res_root / "mipmap-anydpi-v26" / "ic_launcher_round.xml", adaptive)
+    print("mipmap-anydpi-v26/ic_launcher.xml + ic_launcher_round.xml")
 
 
 if __name__ == "__main__":

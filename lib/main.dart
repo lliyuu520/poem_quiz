@@ -79,7 +79,7 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '日知',
+      title: '拾',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       // 不用 ValueKey 强制整树重建：HomePage 在 didUpdateWidget 里自行同步

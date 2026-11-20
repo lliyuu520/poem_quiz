@@ -540,7 +540,7 @@ class _UpdateSectionState extends State<_UpdateSection> {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    _currentName.isEmpty ? '日知' : '日知 v$_currentName',
+                    _currentName.isEmpty ? '拾' : '拾 v$_currentName',
                     style: serif(14, weight: FontWeight.w600, spacing: 1),
                   ),
                 ),
