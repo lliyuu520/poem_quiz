@@ -1,22 +1,23 @@
-# AGENTS.md — poem_quiz
+# AGENTS.md — poem_quiz（拾）
 
-古诗词答题 App。Flutter 实现，纯离线（题库内置于代码，进度存本地），**只面向自己使用**。
+古诗词 / 拼音 / 数学 / 成语 / 数独答题 App，英语接入中。Flutter 实现，纯离线（题库内置于代码，进度存本地），**只面向自己使用**，也给孩子玩。
 
 ## 定位与边界
 
 - 交付形态：**只有 Android APK**，自用。web 平台已于 2026-11-18 移除（`web/`、`build/web/`、`analysis_options` 的 exclude 一并清理）。
 - 不做微信小程序 / 小游戏：微信按注册形态判类目，个人主体没有能承载交互式答题的类目，小游戏需换 Cocos/Canvas 重写。不要再提议 Taro/uni-app/小游戏迁移，也不要重新加 web 平台。
-- 默认纯离线：题库内置、进度存本地、无账号体系。**唯一的联网点**是设置页「检查更新」（用户手动点击），不做后台轮询、不发统计数据。新增功能默认保持离线。
+- 默认纯离线：题库内置、进度存本地、无账号体系。**联网点只有两个**，都由用户主动触发：设置页「检查更新」（下载版本清单与新 APK），英语音频首次播放时按条目懒下载（之后离线）。不做后台轮询、不发统计数据。新增功能默认保持离线。
 
 ## 常用命令
 
 ```bash
-flutter test                          # 119 个用例，改引擎/学龄/题型/布局必跑
+flutter test                          # 全部用例，改引擎/学龄/范围/题型/布局必跑
 flutter analyze                       # analysis_options 已 exclude build/ android/
 flutter run                           # 调试
 flutter build apk --release           # → build/app/outputs/flutter-apk/app-release.apk（约 17MB）
 ```
 
+- **用例数不要写死在本文件里**：题库扩容时用例数会变，写死必然过期。判据是「全绿」。
 - **体积约束**：默认构建只打 `arm64-v8a`（`android/app/build.gradle.kts` 的 `abiFilters` + `android/gradle.properties` 的 `disable-abi-filtering=true`，两者缺一不可——Flutter 插件会在 `afterEvaluate` 里 `abiFilters.clear()` 覆盖你的配置）。三 ABI 全打是 48MB，不要回退。
 - 剩余体积地板：`libflutter.so` 11.2MB + `libapp.so` 3.9MB，引擎占比 70%，再优化只能靠升级 Flutter 版本。
 - 需要在 32 位老设备上跑时，改用 `--split-per-abi` 分包，不要改回默认全平台。
@@ -25,75 +26,93 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 | 路径 | 内容 |
 |---|---|
-| `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 搜索提示 + 存储键前缀 |
-| `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学、数独）、`kDefaultTopic`；新增科目在这里加一条 |
-| `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，按年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
-| `lib/data/math.dart` | 数学题库 `kMath`：196 条一年级口算，规则生成；`MathExpr` 解析算式 |
+| `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 题型集合 + 存储键前缀；`TopicMode`（quiz / sudoku） |
+| `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学、成语、数独）、`kDefaultTopic`；新增科目在这里加一条 |
+| `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
+| `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
+| `lib/data/math.dart` | 数学题库 `kMath`：358 条规则生成（一年级 196 / 二年级 162）；`MathExpr` 解析算式 |
+| `lib/data/chengyu.dart` | 成语题库 `kChengyu`：74 条，年级 1-6 分档，选字补全 |
+| `lib/data/english.dart` | 英语题库 `kEnglish`：82 条（字母 26 / 主题词 / 短句），年级 1-2（**由 `tool/gen_english.py` 生成，不要手改**） |
+| `lib/data/english_audio.dart` | 英语音频播放与缓存：**音频不在 APK 里**，按条目从 OSS 懒下载到本地 |
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：109 首，唐 65 / 宋 34 / 其余零散 |
-| `lib/data/grade.dart` | 学龄档位：一年级~九年级 + 拓展，**只收窄题池范围，不过滤题型**；`gradeForBirth()` 按出生年月推算档位 |
+| `lib/data/grade.dart` | 学龄档位 + `gradeForBirth()` 推算 + **题池加权** `cumulativeWeights()` / `rangeWeights()` / `fullCurriculumWeights()`；`ReviewMode`（off / standard 1/3 / reinforced 1/2） |
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
-| `lib/data/quiz_engine.dart` | 出题：九类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
-| `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解） |
+| `lib/data/quiz_engine.dart` | 出题：15 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、连击、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>` |
-| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 九类题型（诗词 4 / 拼音 2 / 数学 3） |
+| `lib/data/update_service.dart` | 检查更新：`manifestUrls` 按序尝试 OSS CDN → jsDelivr |
+| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 15 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 1 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
-| `lib/theme/app_theme.dart`、`lib/widgets/common.dart` | 宣纸 + 墨 + 朱印视觉体系 |
+| `lib/widgets/english_art.dart` | 英语内置矢量插图（`EnglishArt`），不引外部图片资源 |
+| `lib/theme/app_theme.dart`、`lib/widgets/common.dart` | 宣纸 + 墨 + 朱印视觉体系；`AppColors` 全部色值 |
 | `test/quiz_engine_test.dart` | 题库完整性、出题正确性、计分、学龄题池与加权、生涯模式 |
 | `test/grade_test.dart` | 出生年月 → 学龄档位推算规则（入学分界、学年跨年、拓展档兜底） |
+| `test/practice_scope_test.dart` | 范围/策略解析、题池权重、选项数与题型配比 |
+| `test/progress_store_test.dart` | 存档键隔离、范围与策略持久化、生涯与错题本 |
 | `test/layout_test.dart` | 三种窗口宽度下的渲染与横屏分栏（布局改动必跑） |
 | `test/pinyin_test.dart` | 拼音题库完整性、声调标注、分年级题池、两种拼音题型 |
 | `test/math_test.dart` | 数学题库、算式解析、三种算式题型、评语与摘要格式 |
 | `test/sudoku_test.dart` | 数独终盘合法性、题面唯一解、档位映射、首页与盘面渲染 |
-| `tool/` | 一次性辅助脚本（图标生成、拼音题库生成、adb 驱动答题），不参与构建 |
+| `tool/` | 一次性辅助脚本（图标、拼音题库、英语题库与音频校验、adb 驱动答题），不参与构建 |
 
-## 多科目架构（成语待接入）
+## 多科目架构
 
 同一 app 内切换科目，进度与错题本**按科目隔离**。
 
 - 页面一律从 `Topic` 取数，**不再直接引用 `kPoems`**。`kPoems` 只应出现在 `topics.dart` 的科目定义里。
-- 科目切换入口在**设置页**（首页右上角齿轮）。设置页切换后 `popUntil` 回首页，因为当前页的 store 已属于旧科目。
-- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`tagline`/`intro`/`seal`（首页文案）、`unit`/`searchHint` 等文案。
+- **科目切换入口是首页顶部的 `_TopicTabs`**（遍历 `kTopics` 横排），不是设置页。切换只换根壳里的 `_topic` / `_store` 指针——启动时所有科目的 `ProgressStore` 已一次读齐，切换路径上没有磁盘 IO。
+- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`tagline`/`intro`（首页文案）、`unit`/`searchHint` 等文案。`seal` 仍是必填构造参数（填个两行字应付即可），但**不要给 `accent`/`accentSoft`/`seal` 接 UI**——字段保留兼容，界面已统一朱红。
 - **题型随科目走，不随玩法走**：`Topic.kinds` 决定本科目能出哪些题型，`buildSession` 不传 `kinds` 时自动取科目题型，不会跨科目混题。玩法只决定题数与是否用错题本/生涯。
-- **学龄分档**：诗词与拼音都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
-- **学龄由出生年月推算，不是用户选择的**（2026-11-19 改）：`gradeForBirth(birthYear, birthMonth)` 按 9 月 1 日入学分界推出在读年级，九年级以上与未入学都落拓展档。出生年月存 `UserProfile`（裸键 `birth_year` / `birth_month`，全局一份，不属于任何科目），设置页修改；首页学龄区是**只读推算卡**（`_GradeCard`），点击进设置页，不再有 3×3 年级选择器，`ProgressStore` 也不再有 `lastGrade`。数学题库补二年级后（乘除条目已标 `grade: 2`）同样走推算档。
-- **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库现在含一、二年级条目（`graded` 自动为 true），但推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
-- **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」。
+- **学龄分档**：诗词、拼音、数学、成语都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
+- **学龄由出生年月推算，不是用户选择的**（2026-11-19 改）：`gradeForBirth(birthYear, birthMonth)` 按 9 月 1 日入学分界推出在读年级，九年级以上与未入学都落拓展档。出生年月存 `UserProfile`（裸键 `birth_year` / `birth_month`，全局一份，不属于任何科目），设置页修改。**首页没有 `_GradeCard` 了**——推算结果只作为练习范围的默认值。
+- **练习范围与难度策略是两个正交维度**（2026-11-20 改）：`PracticeScope` 决定「出哪些年级的条目」（跟随推荐 / 指定年级 / 年级区间 / 教材全覆盖 / 仅拓展 / 全库），`ChallengeTier` 决定「怎么考」（轻松 3 选项多认读 / 标准 / 挑战 4 选项多回忆）。两者按科目存在 `ProgressStore` 的 `practice_scope` / `challenge_tier` 键，由 `resolvePracticePlan()` 解析成 `PracticePlan`（`weights` + `optionCount` + `kindWeights` + 干扰项偏好），再喂给 `QuizEngine.generate`。**不要在 UI 里重算计划**，首页只调 `resolvePracticePlan()`。
+- **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库含一、二年级条目（`graded` 自动为 true），推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
+- **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」，成语是「一心一意」与「一心一意 · yì xīn yí yì」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
-- **棋盘玩法科目（数独）**：`Topic.mode = TopicMode.sudoku`，`entries` 与 `kinds` 为空。盘面由 `Sudoku.open(difficulty)` 按难度档现生成，不走 `QuizEngine`。这类科目 `graded` 恒为 true（空题库推导），首页把学龄选择器换成**难度关卡列表**（一星~五星），并隐藏玩法卡、学习模式与错题本——它们都建立在题库之上。新增棋盘类玩法时复用 `TopicMode` 与首页的 `isBoardGame` 分支，不要再往题库抽象里塞。
-- **数独与年级无关，靠逐级解锁推进**：`SudokuDifficulty` 五档，一星恒开，其余档要上一档完成 `unlockAfter` 局才开（3/3/4/4）。完成数存 `ProgressStore.stageCleared`（键是枚举名 `one`~`five`），走 `recordSudokuClear()`，**不写最高分/正确率**——数独没有对错率，混进问答科目的统计会互相干扰。解锁门槛与判据都在 `SudokuDifficulty.unlockedBy()` 里，首页与页面都只调它，不要在 UI 里重算。
+- **棋盘玩法科目（数独）**：`Topic.mode = TopicMode.sudoku`，`entries` 与 `kinds` 为空。盘面由 `Sudoku.open(difficulty)` 按难度档现生成，不走 `QuizEngine`。这类科目 `graded` 恒为 true（空题库推导），首页把练习范围卡换成**难度关卡列表**（一星~五星），并隐藏玩法卡、学习模式与错题本——它们都建立在题库之上。新增棋盘类玩法时复用 `TopicMode` 与首页的 `isBoardGame` 分支，不要再往题库抽象里塞。
+- **数独与年级无关，靠逐级解锁推进**：`SudokuDifficulty` 五档，一星恒开，其余档要上一档完成 `unlockAfter` 局才开（3/3/4/4）。一星是 **4×4** 小盘面，其余为 9×9。完成数存 `ProgressStore.stageCleared`（键是枚举名 `one`~`five`），走 `recordSudokuClear()`，**不写最高分/正确率**——数独没有对错率，混进问答科目的统计会互相干扰。另有 `stageBestSeconds` 记录单局最快用时。解锁门槛与判据都在 `SudokuDifficulty.unlockedBy()` 里，首页与页面都只调它，不要在 UI 里重算。
 - **数独盘面必须唯一解**：`lib/data/sudoku.dart` 挖空时每挖一格都跑一次回溯计数（上限 2），不唯一就补回去。`test/sudoku_test.dart` 会独立重算解数校验。改挖空策略后必须重跑该用例，否则多解盘面上「填满即算对」会把另一种正确填法判成冲突。
-- **`detailOf` 不能省**：`Poem.fullText` 是 `lines.join()`，对拼音（逐字组词）和数学（算式 + 思路）会挤成一行，所以这两种科目的展开正文各自 `join('\n')`。
+- **`detailOf` 不能省**：`Poem.fullText` 是 `lines.join()`，对拼音（逐字组词）、数学（算式 + 思路）、英语（例句两行）会挤成一行，所以这几种科目的展开正文各自 `join('\n')`。
 - `QuizEngine` 的 `poems` 是必填参数——故意不给默认值，避免新科目忘记传题库时静默出成诗词题。
 - `ProgressStore.load(topicId:)` 必须显式传科目 id。**没有旧存档迁移逻辑**（开发阶段，不兼容无前缀的历史键）。
 
+### 英语科目的接入状态
+
+- 英语正在另一处并行接入（题库、音频、插图、题型都已落文件，`Topic` 与 `QuizEngine` 分支可能尚未接完）。**本文件不描述它的完成度**——判断依据只有一条：`flutter analyze` 与 `flutter test` 是否干净。
+- 接入时的硬约束：`QuizEngine._tryMake` 的 switch 必须覆盖 `QuestionKind` 全部成员（含 5 个 `english*`），否则 switch 不穷尽会让**整个测试套件编译不过**，表现为「loading ...」后直接失败，而不是某条用例红。
+- **音频不在 APK 里**：英语全靠听，设备自带 TTS 在中文 ROM 上常缺英文音色或读错元音，所以音频用固定音色预生成、放 OSS（`EnglishAudio.baseUrl = https://oss.lliyuu520.cn/en-audio`），首次播放时下载到本地缓存。本地 `assets/audio/en/` 只是上传 OSS 前的源文件；`pubspec.yaml` 只声明 `assets/audio/`（Flutter 声明目录不递归），所以子目录里的音频**不会进包**——这是有意的，不要改成逐文件声明。
 
 ## 启动前状态
 
-`main.dart` 是**有状态根壳**：启动时读 `last_topic`（SharedPreferences 里的裸键，不带科目前缀）决定默认科目，`await ProgressStore.load(topicId:)` 与 `UserProfile.load()` 后 `runApp`。切换科目时根壳重建 `ProgressStore` 并 `setState`，`HomePage` 用 `ValueKey(topic.id)` 强制整棵重建，避免残留上一个科目的选中态。
+`main.dart` 是**有状态根壳**：启动时读 `last_topic`（SharedPreferences 里的裸键，不带科目前缀）决定默认科目，**一次把 `kTopics` 里所有科目的 `ProgressStore` 读齐**，再 `await UserProfile.load()` 后 `runApp`。切换科目时根壳只换 `_topic` / `_store` 指针并 `setState`，`last_topic` 后台 fire-and-forget 写入。
+
+**不再用 `ValueKey(topic.id)` 强制整树重建**——那会让切换卡顿。`HomePage` 在 `didUpdateWidget` 里自行同步引擎、难度档、练习范围、难度策略与玩法。
 
 `ProgressStore`、`UserProfile` 和 `Topic` 通过构造函数一路传给页面，页面用 `setState` + `AnimatedBuilder(animation: store)` 刷新，**没有 Provider/Riverpod/GetX**，不要为此引入状态管理库。
 
 ## 数据与算法约束（改代码前必读）
 
 - **`Poem.lines` 按「句」拆分，标点留在句尾**。接句题靠 `lines[i]` → `lines[i+1]` 定位，合并或去标点会直接破坏出题。
-- `Poem.id = '朝代|作者|标题'`，是错题本和生涯进度的唯一键。**新增诗必须保证三元组唯一**（`test` 里有 id 唯一性用例）。
+- `Poem.id = '朝代|作者|标题'`，是错题本和生涯进度的唯一键。**新增条目必须保证三元组唯一**（`test` 里有 id 唯一性用例）。
 - `grade`：1~9 对应一年级~九年级（成都现行统编版教材），**0 = 拓展**（教材未收的课外名篇与高中篇目），默认 0。漏标时宁可落进拓展档，也不混进低年级题池。
-- 题池**累加 + 加权**：选 N 年级时池为 1..N，本年级权重 1、低一档 1/3、再低 1/9，依次递减。衰减取 1/3 而非 1/2，是因为低年级条目本来就多（一年级 8 首对六年级累计 71 首），1/2 会让低年级题反超本年级。拓展档不参与年级累加。
-- 年级分布：一 8 / 二 11 / 三 13 / 四 12 / 五 15 / 六 12 / 七 8 / 八 7 / 九 5 / 拓展 18。单年级池小是正常的，一局题数自适应（`total` 取实际题数）。
+- 题池**累加 + 加权**，实现在 `grade.dart`：选 N 年级时池为 1..N，本年级权重 1、低一档 1/3、再低 1/9（`ReviewMode.standard`）；`reinforced` 改用 1/2，`off` 只留目标年级。衰减取 1/3 而非 1/2，是因为低年级条目本来就多（一年级 8 首对六年级累计 71 首），1/2 会让低年级题反超本年级。拓展档不参与年级累加，按顶层权重的 1/3 叠加。
+- 诗词年级分布：一 8 / 二 11 / 三 13 / 四 12 / 五 15 / 六 12 / 七 8 / 八 7 / 九 5 / 拓展 18。单年级池小是正常的，一局题数自适应（`total` 取实际题数）。
 - **拼音题库由脚本生成，不要手改 `pinyin.dart`**：`python -I tool/gen_pinyin.py` 用 pypinyin 按词组算声调（多音字取词内读音，如「长大 zhǎng」「银行 háng」「倔强 jiàng」），儿化与轻声在脚本的 `OVERRIDES` 里定向修正。手写 300+ 条必然出现声调错误，一个错调就是一道错题。
 - **pypinyin 不保证轻声**：亲属叠词「爸爸/妈妈/哥哥/姐姐/妹妹」它给原调，「衣服」给 fú，只有「弟弟/伯伯/婆婆」给对了。这些已写进 `OVERRIDES`。测试分两层——白名单查「有没有调号」，`亲属叠词与常见轻声词读音符合规范` 逐条钉死「调号对不对」，只靠白名单会把轻声错误放过去。
+- **英语题库同样由脚本生成**：`tool/english_bank.json` 是源，`tool/gen_english.py` 生成 `lib/data/english.dart`；音频用 `tool/check_english_audio.py` / `tool/verify_english_audio.py` 校验。字母要读字母名（`C` 写 `see`），直接读 `C. A. T.` 会被引擎切掉尾字母。
 - 拼音题库**字词与读音都必须唯一**：同音字（如「木/目」都是 mù）会让「选字词」题出现两个正确选项，测试会拦。
 - 干扰项必须来自**别的条目**，且作者题排除同作者、标题题排除同名、拼音「选读音」排除同读音、「选字词」排除同字词，否则选项里会出现重复正确答案。拼音接入时漏掉这一条，诗词题库下会抽出两个「李白」。
 - 填空题：字池需能精确拼出答案（同一字出现几次就放几次），干扰字不得与答案字重复；`_plain()` 的正则负责去标点，长度计算、挖空、字池都依赖它——改正则要同时检查 `_minLineLength` 与 `blankLen` 分支。
-- 计分：**每题 1 分，只算对错**，年级不影响得分（2026-11-19 取消倍率与连击加成）。答错不倒扣、连击清零，连击仅用于展示。
-- 一局内每首诗只出一次题；`preferPoemIds`（错题优先）只影响前 3 题，其余打乱。
+- 计分：**每题 1 分，只算对错**，年级与难度策略不影响得分（2026-11-19 取消倍率与连击加成）。答错不倒扣、连击清零，连击仅用于展示。
+- 一局内每条目只出一次题；`preferPoemIds`（错题优先）只影响前 3 题，其余打乱。
 
 ## 关键不变量
 
 - **算式题（数学科目）**：`Poem.title` 是「3 + 4」、`author` 是得数，由 `MathExpr.of()` 解析；解析不出的条目出不了算式题（返回 null 而不是崩）。干扰项按数值接近程度取（7 的邻居比 90 更有迷惑性）。
 - **`_pickFromOthers` 先去重再截窗口**：算式题里同一得数被几十条共用（整十数只有 10 种得数），若先按距离截窗口再去重，会凑不齐选项而整类题退化成另一种问法。`test/math_test.dart` 里有对应用例。
+- **成语题（`idiomBlank`）**：挖掉四字中的一字，从字池选字补全。字池需能拼出原成语，干扰字不得与正确字重复。
 - 题库或出题逻辑改动后，`flutter test` 必须全绿——测试断言了「每档都能出满实际题池容量」与「每个年级都有篇目」，把某年级的篇目清空或收紧干扰项条件会导致失败。
 - 诗词原文与作者、标题需准确；这是内容产品，错字比 UI 瑕疵严重。
 - 新增诗词顺延 `// ── 唐 · 李白 ──` 这样的分组注释，保持文件可按朝代作者浏览。
@@ -102,15 +121,21 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 - 仅 Android。`minSdk`/`targetSdk` 走 `flutter.*` 默认值，未额外指定。
 - **正式签名**：release 用 `D:/tools/keys/poem_quiz.keystore`（30 年有效期），配置在 `android/keystore.properties`（不入库，缺失时回落 debug 签名）。**keystore 或密码丢失 = 无法覆盖安装，只能卸载重装丢全部存档**，务必异地备份。
-- **分发**：APK 与版本清单托管在 `poem_quiz-dist` 公开仓库，经 jsDelivr 分发（国内直连）。发版流程见 README。jsDelivr 对同名文件有顽固缓存，发版时版本清单用新文件名（version-N.json）。
-- **App 内检查更新**：设置页「关于」区，清单地址在 `lib/data/update_service.dart` 的 `manifestUrl`。模拟器里 DNS 被污染会导致 HandshakeException，真机正常——验证全链路要上真机。
-- `android:label="诗词问答"`，图标由 `tool/gen_icon.py` 生成（朱印方章），改图标重跑该脚本而不是手改 png。
+- **分发**：APK 与版本清单托管在 OSS（`oss://lliyuu520/apk/`，CDN `oss.lliyuu520.cn`）与 `poem_quiz-dist` 公开仓库（jsDelivr 兜底）。`UpdateService.manifestUrls` 按序尝试。jsDelivr 对同名文件有顽固缓存，发版时版本清单用新文件名（version-N.json）。
+- **App 内检查更新**：设置页「关于」区。模拟器里 DNS 被污染会导致 HandshakeException，真机正常——验证全链路要上真机。安装走 `PackageInstaller`（新版系统不允许直接 `ACTION_VIEW` 拉起 APK）。
+- **应用名「拾」**（2026-11-20 由「日知」改）：`android:label`、`MaterialApp.title`、设置页版本前缀、`pubspec.yaml` description 四处要同步。包名 `com.lyu.poem_quiz` 与仓库名 `poem_quiz` 未改。
+- **图标由 `tool/gen_icon.py` 生成，改图标重跑脚本而不是手改 png**。`CHAR = "拾"` 是唯一的字面变量，换名字只改这一处。脚本同时产出：旧式 `ic_launcher.png` / `ic_launcher_round.png` 五档，以及自适应图标（`mipmap-anydpi-v26/` + `ic_launcher_foreground.png` + `drawable/ic_launcher_background.xml`）。**自适应前景必须按 66dp 安全圆的内接正方形算字号**（`s*33/108/√2`），按画布比例直接铺会让圆形蒙版切掉字角。
 - 字号仍硬编码（`serif(32)` 之类），**不做等比缩放**；响应式只用于「限宽」与「横屏分栏」，见下条。
 - **平板适配**：断点集中在 `lib/widgets/adaptive.dart`（compact <600 / medium 600~839 / expanded ≥840）。页面用 `ContentFrame` 限宽居中，答题页在 expanded 下走左右双栏（左题干、右作答 + 常驻按钮）。新增页面套 `ContentFrame` 即可，不要另写断点。
 - 方向锁在平板上**无效**：`targetSdk = 36`，Android 16 对 smallestWidth ≥600dp 的设备忽略 `screenOrientation`。横竖屏必须靠真布局适配，不要试图用 manifest 锁方向。
 - 触控目标保持 ≥48dp，**不要用 `VisualDensity.compact`**（会把 48 压到 40）。
-- `kSerifFallback` 依赖设备上的思源/宋体字体；Android 上一般能命中 Noto Serif CJK，缺失时会退到系统默认衬线。
+- `kSerifFallback` 依赖设备上的思源/宋体字体；Android 上一般能命中 Noto Serif CJK，缺失时会退到系统默认衬线。内容正文用内置 `WenKai`（霞鹜文楷子集），拉丁部分是单层 ɑ/ɡ，与教材拼音一致。
 
 ## 视觉规范
 
 宣纸底（`#F8F2E6`）+ 墨色文字 + 朱印（`#A63A2E`）点缀，衬线字体、字距 1~6、无强阴影、卡片用 1px 描边而非 elevation。颜色一律取 `AppColors` 常量，不写裸色值。
+
+- **全科目统一朱红**：tab 选中线、主按钮、chip 都用 `AppColors.seal`，不按科目换色——切科目换整套配色会让人觉得换了另一个 App。
+- `AppColors` 里仍有科目色（`pinyin` 青 / `math` 赭 / `sudoku` 靛 / `chengyu` 绛紫 / `english` 靛青），以及 `Topic.accent` / `Topic.accentSoft` / `Topic.seal` 字段。**这些当前不接 UI**，保留兼容；新增科目不用管它们。
+- **首页整页不滚动**：`Column + Expanded + Spacer`，玩法是横排三个紧凑 `_ModeChip`（约 68dp），没有「关卡/练习范围/玩法」分隔标题。加区块前先确认整页放得下，优先压缩而不是改成滚动。
+- 首页右上角是书本图标 `Icons.auto_stories_outlined`，不再有印章文案。
