@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/grade.dart';
+import '../data/practice_scope.dart';
 import '../data/profile.dart';
 import '../data/progress_store.dart';
 import '../data/quiz_engine.dart';
@@ -34,14 +35,14 @@ class HomePage extends StatefulWidget {
   final UserProfile profile;
 
   /// 切换科目。由根壳重建存档与页面树。
-  final Future<void> Function(Topic topic) onSwitchTopic;
+  final void Function(Topic topic) onSwitchTopic;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  late final QuizEngine _engine = QuizEngine(poems: widget.topic.entries);
+  late QuizEngine _engine = QuizEngine(poems: widget.topic.entries);
 
   /// 当前选中的玩法。玩法默认「快问快答」；学龄不再手选，由出生年月推算。
   GameMode _mode = GameMode.quick;
@@ -49,10 +50,27 @@ class _HomePageState extends State<HomePage> {
   /// 数独当前选中的难度档。开局时沿用上次通关的最高档。
   SudokuDifficulty _difficulty = SudokuDifficulty.one;
 
+  /// 本科目的练习范围与难度策略。按科目记忆（存在该科目的存档里）。
+  late PracticeScope _scope = widget.store.practiceScope;
+  late ChallengeTier _tier = widget.store.challengeTier;
+
   @override
   void initState() {
     super.initState();
     _difficulty = _highestUnlocked;
+  }
+
+  /// 切换科目时根壳复用本 Widget（不再强制整树重建），这里同步本科目的
+  /// 局部状态：题库引擎、难度档、练习范围与难度策略都按科目各自记忆。
+  @override
+  void didUpdateWidget(covariant HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.topic.id == widget.topic.id) return;
+    _engine = QuizEngine(poems: widget.topic.entries);
+    _difficulty = _highestUnlocked;
+    _scope = widget.store.practiceScope;
+    _tier = widget.store.challengeTier;
+    _mode = GameMode.quick;
   }
 
   /// 已解锁的最高档。开局默认落在这里，孩子不用每次往上翻。
@@ -71,22 +89,41 @@ class _HomePageState extends State<HomePage> {
 
   ProgressStore get _store => widget.store;
 
-  /// 本局使用的学龄档位。
-  ///
-  /// 由出生年月推算（见 [gradeForBirth]）：跨年级的科目直接用推算结果；
-  /// 题库只有单一年级的科目（如全是一年级口算的数学）推算档再高也没题可出，
-  /// 强制取题库里唯一的那个年级。
-  GradeLevel get _activeGrade {
-    final birth = gradeForBirth(
-      widget.profile.birthYear,
-      widget.profile.birthMonth,
+  /// 由出生年月推算的推荐学龄。只作为「跟随推荐」的默认值与提示，不锁定范围。
+  GradeRecommendation get _recommendation => recommendForBirth(
+        widget.profile.birthYear,
+        widget.profile.birthMonth,
+      );
+
+  /// 本局出题计划：范围 + 难度策略解析后的年级权重、选项数与题型配比。
+  PracticePlan get _plan => resolvePracticePlan(
+        scope: _scope,
+        entries: widget.topic.entries,
+        recommendation: _recommendation,
+        tier: _tier,
+      );
+
+  /// 打开范围/难度选择面板。选完写回该科目的存档。
+  Future<void> _pickScope() async {
+    final result = await showModalBottomSheet<({PracticeScope scope, ChallengeTier tier})>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ScopeSheet(
+        scope: _scope,
+        tier: _tier,
+        topic: widget.topic,
+        recommendation: _recommendation,
+      ),
     );
-    if (widget.topic.graded) return birth;
-    final only = widget.topic.entries.first.grade;
-    return GradeLevel.values.firstWhere(
-      (g) => g.grade == only,
-      orElse: () => GradeLevel.g1,
-    );
+    if (result == null) return;
+    await _store.setPracticeScope(result.scope);
+    await _store.setChallengeTier(result.tier);
+    if (!mounted) return;
+    setState(() {
+      _scope = result.scope;
+      _tier = result.tier;
+    });
   }
 
   Future<void> _start() async {
@@ -101,12 +138,12 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final grade = _activeGrade;
+    final plan = _plan;
     final session = buildSession(
       engine: _engine,
       topic: widget.topic,
       count: _mode.count,
-      grade: grade,
+      plan: plan,
       preferPoemIds: _mode.useWrongBook
           ? _store.wrongPoemIds
           : const <String>[],
@@ -117,7 +154,7 @@ class _HomePageState extends State<HomePage> {
     );
 
     if (session.questions.isEmpty) {
-      _toast(_mode.isCareer ? '本科目条目已全部掌握，去学习模式调整或重置生涯' : '题库暂时出不了题，请稍后再试');
+      _toast(_mode.isCareer ? '当前范围内条目已全部掌握，去学习模式调整或重置生涯' : '当前范围出不了题，换个范围试试');
       return;
     }
 
@@ -172,93 +209,95 @@ class _HomePageState extends State<HomePage> {
       body: PaperBackground(
         child: SafeArea(
           child: ContentFrame(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  _TitleBlock(store: _store, topic: widget.topic, onSettings: _openSettings),
-                  const SizedBox(height: 18),
-                  _TopicTabs(
-                    currentId: widget.topic.id,
-                    onSelect: widget.onSwitchTopic,
-                  ),
-                  const SizedBox(height: 20),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _TitleBlock(store: _store, topic: widget.topic, onSettings: _openSettings),
+                const SizedBox(height: 14),
+                _TopicTabs(
+                  currentId: widget.topic.id,
+                  onSelect: widget.onSwitchTopic,
+                ),
+                const SizedBox(height: 16),
 
-                  // 数独不走题库也不分学龄：整块难度关卡列表，逐级解锁。
-                  if (widget.topic.isBoardGame) ...<Widget>[
-                    const RuleDivider(label: '关卡'),
-                    const SizedBox(height: 12),
-                    _SudokuStages(
-                      store: _store,
-                      selected: _difficulty,
-                      onSelect: (d) => setState(() => _difficulty = d),
-                    ),
-                    const SizedBox(height: 22),
-                  ] else if (widget.topic.graded) ...<Widget>[
-                    // 学龄由出生年月推算，不再让用户选；这里只读展示推算结果。
-                    const RuleDivider(label: '学龄'),
-                    const SizedBox(height: 12),
-                    _GradeCard(
-                      grade: _activeGrade,
-                      profile: widget.profile,
-                      topic: widget.topic,
-                      onOpenSettings: _openSettings,
-                    ),
-                    const SizedBox(height: 22),
-                  ] else ...<Widget>[
-                    const RuleDivider(label: '内容'),
-                    const SizedBox(height: 12),
-                    _TopicIntro(topic: widget.topic),
-                    const SizedBox(height: 22),
-                  ],
+                // 内容区占满剩余高度；单页展示，不滚动。
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      if (widget.topic.isBoardGame) ...<Widget>[
+                        // 数独：五档关卡列表。
+                        _SudokuStages(
+                          store: _store,
+                          selected: _difficulty,
+                          onSelect: (d) => setState(() => _difficulty = d),
+                        ),
+                      ] else ...<Widget>[
+                        // 练习范围（或单一年级科目的内容说明）。
+                        if (widget.topic.graded)
+                          _ScopeCard(
+                            plan: _plan,
+                            topic: widget.topic,
+                            onTap: _pickScope,
+                          )
+                        else
+                          _TopicIntro(topic: widget.topic),
+                        const SizedBox(height: 14),
 
-                  // 数独是一整块盘面，没有「玩几题」的差别，玩法区整块隐藏。
-                  if (!widget.topic.isBoardGame) ...<Widget>[
-                    const RuleDivider(label: '玩法'),
-                    const SizedBox(height: 12),
-                    for (final mode in GameMode.values) ...<Widget>[
-                      _ModeCard(
-                        mode: mode,
-                        topic: widget.topic,
-                        selected: mode == _mode,
-                        onTap: () => setState(() => _mode = mode),
+                        // 玩法：横排三选一，紧凑不占高。
+                        Row(
+                          children: <Widget>[
+                            for (final mode in GameMode.values) ...<Widget>[
+                              Expanded(
+                                child: _ModeChip(
+                                  mode: mode,
+                                  topic: widget.topic,
+                                  selected: mode == _mode,
+                                  onTap: () => setState(() => _mode = mode),
+                                ),
+                              ),
+                              if (mode != GameMode.values.last)
+                                const SizedBox(width: 8),
+                            ],
+                          ],
+                        ),
+                      ],
+
+                      const Spacer(),
+
+                      PrimaryButton(
+                        label: widget.topic.isBoardGame
+                            ? '开始${_difficulty.title}'
+                            : (_mode.isCareer ? '开始生涯' : '开始答题'),
+                        icon: Icons.play_arrow_rounded,
+                        onPressed: _start,
                       ),
-                      const SizedBox(height: 10),
+
+                      // 学习模式与错题本只建立在题库之上，数独没有这两样。
+                      if (!widget.topic.isBoardGame) ...<Widget>[
+                        const SizedBox(height: 12),
+                        _SecondaryEntries(store: _store, topic: widget.topic),
+                      ],
+
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          widget.topic.isBoardGame
+                              ? '离线可玩 · 共 ${SudokuDifficulty.values.length} 档'
+                              : '共 ${widget.topic.entries.length} ${widget.topic.unit} · '
+                                  '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.inkFaint,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ),
                     ],
-                    const SizedBox(height: 10),
-                  ],
-
-                  PrimaryButton(
-                    label: widget.topic.isBoardGame
-                        ? '开始${_difficulty.title}'
-                        : (_mode.isCareer ? '开始生涯' : '开始答题'),
-                    icon: Icons.play_arrow_rounded,
-                    onPressed: _start,
                   ),
-
-                  // 学习模式与错题本都建立在题库之上，数独没有这两样。
-                  if (!widget.topic.isBoardGame) ...<Widget>[
-                    const SizedBox(height: 18),
-                    _SecondaryEntries(store: _store, topic: widget.topic),
-                  ],
-
-                  const SizedBox(height: 20),
-                  Center(
-                    child: Text(
-                      widget.topic.isBoardGame
-                          ? '离线可玩 · 共 ${SudokuDifficulty.values.length} 档'
-                          : '共 ${widget.topic.entries.length} ${widget.topic.unit} · '
-                              '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.inkFaint,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -323,7 +362,7 @@ class _TopicTabs extends StatelessWidget {
   });
 
   final String currentId;
-  final Future<void> Function(Topic topic) onSelect;
+  final void Function(Topic topic) onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -371,7 +410,7 @@ class _TopicTab extends StatelessWidget {
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                color: selected ? topic.accent : Colors.transparent,
+                color: selected ? AppColors.seal : Colors.transparent,
                 width: 2,
               ),
             ),
@@ -454,24 +493,14 @@ class _TitleBlock extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Container(
-              width: 52,
-              height: 52,
+              width: 40,
+              height: 40,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: topic.accent,
-                borderRadius: BorderRadius.circular(6),
+                color: AppColors.sealSoft,
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Text(
-                topic.seal,
-                textAlign: TextAlign.center,
-                style: serif(
-                  13,
-                  color: Colors.white,
-                  weight: FontWeight.w700,
-                  spacing: 0,
-                  height: 1.3,
-                ),
-              ),
+              child: Icon(Icons.auto_stories_outlined, size: 20, color: AppColors.seal),
             ),
           ],
         ),
@@ -540,28 +569,27 @@ class _MiniDivider extends StatelessWidget {
   }
 }
 
-/// 学龄推算卡：只读展示由出生年月推算出的档位与题池概况。
+/// 练习范围卡：展示当前范围、难度与题池构成，点击打开选择面板。
 ///
-/// 点击进设置页改出生年月——学龄是「用户是谁」的属性，不在首页反复调整。
-class _GradeCard extends StatelessWidget {
-  const _GradeCard({
-    required this.grade,
-    required this.profile,
+/// 与旧版只读学龄卡的区别：推荐学龄只是默认值，这里可以直接升档挑战、
+/// 降档巩固、叠加课外拓展或改为全库。
+class _ScopeCard extends StatelessWidget {
+  const _ScopeCard({
+    required this.plan,
     required this.topic,
-    required this.onOpenSettings,
+    required this.onTap,
   });
 
-  final GradeLevel grade;
-  final UserProfile profile;
+  final PracticePlan plan;
   final Topic topic;
-  final VoidCallback onOpenSettings;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onOpenSettings,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: InkCard(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
@@ -575,11 +603,7 @@ class _GradeCard extends StatelessWidget {
                   color: AppColors.sealSoft,
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: Icon(
-                  grade.isExtension ? Icons.auto_stories_outlined : Icons.school_outlined,
-                  size: 19,
-                  color: AppColors.seal,
-                ),
+                child: Icon(_icon, size: 19, color: AppColors.seal),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -587,7 +611,7 @@ class _GradeCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      grade.title,
+                      plan.label,
                       style: serif(16, weight: FontWeight.w600, spacing: 2),
                     ),
                     const SizedBox(height: 3),
@@ -615,24 +639,419 @@ class _GradeCard extends StatelessWidget {
     );
   }
 
-  /// 让「学龄 = 题池范围」在界面上可见：推算出几年级，就说明带着多少低年级题。
+  IconData get _icon => switch (plan.scope.kind) {
+        ScopeKind.extensionOnly => Icons.auto_stories_outlined,
+        ScopeKind.all || ScopeKind.textbook => Icons.library_books_outlined,
+        _ => Icons.school_outlined,
+      };
+
+  /// 让「范围 = 题池」在界面上可见：本档多少、回顾多少、拓展多少。
   String get _summary {
-    if (!profile.hasBirth) return '未设置出生年月 · 点击去设置页补填';
-    final count = topic.countForGrade(grade);
-    if (count == 0) {
-      return grade.isExtension
-          ? '拓展内容待补充 · 可出 0 ${topic.unit}'
-          : '${grade.title}内容待补充 · 可出 0 ${topic.unit}';
+    if (plan.needsBirthHint) {
+      return '未设置出生年月 · 暂按 1-3 年级起步，点这里可调整范围';
     }
-    if (grade.isExtension) {
-      return '按出生年月推算 · 教材未收的课外名篇 · 可出 $count ${topic.unit}';
-    }
-    final own = topic.entries.where((e) => e.grade == grade.grade).length;
-    final review = count - own;
-    final pool = own > 0
-        ? (review > 0 ? '本年级 $own · 另含低年级 $review ${topic.unit}' : '本年级可出 $own ${topic.unit}')
-        : '${grade.title}内容待补充，先练已收录的 $review ${topic.unit}';
-    return '按出生年月推算 · $pool';
+    final own = plan.targetGrade == null
+        ? 0
+        : topic.entries.where((e) => e.grade == plan.targetGrade).length;
+    final review = plan.curriculumPoolSize - own;
+    final parts = <String>[
+      if (own > 0) '本档 $own',
+      if (review > 0) '回顾 $review',
+      if (plan.extensionPoolSize > 0) '拓展 ${plan.extensionPoolSize}',
+    ];
+    return '${plan.tier.title} · 共 ${plan.poolSize} ${topic.unit}'
+        '${parts.isEmpty ? '' : ' · ${parts.join(' · ')}'}';
+  }
+}
+
+/// 范围与难度选择面板。
+///
+/// 三块：范围（推荐/年级/区间/拓展/全库）、拓展层叠加、低年级回顾强度，以及
+/// 与之正交的难度策略（轻松/标准/挑战）。确认后由首页写回该科目的存档。
+class _ScopeSheet extends StatefulWidget {
+  const _ScopeSheet({
+    required this.scope,
+    required this.tier,
+    required this.topic,
+    required this.recommendation,
+  });
+
+  final PracticeScope scope;
+  final ChallengeTier tier;
+  final Topic topic;
+  final GradeRecommendation recommendation;
+
+  @override
+  State<_ScopeSheet> createState() => _ScopeSheetState();
+}
+
+class _ScopeSheetState extends State<_ScopeSheet> {
+  late PracticeScope _scope = widget.scope;
+  late ChallengeTier _tier = widget.tier;
+
+  Topic get _topic => widget.topic;
+
+  /// 题库里真实存在的最�1~9 年级，决定年级 chip 的数量。
+  int get _maxGrade => _topic.maxSchoolGrade ?? 1;
+
+  PracticePlan get _preview => resolvePracticePlan(
+        scope: _scope,
+        entries: _topic.entries,
+        recommendation: widget.recommendation,
+        tier: _tier,
+      );
+
+  void _selectGrade(int grade) {
+    setState(() => _scope = PracticeScope.grade(grade).copyWith(
+          includeExtension: _scope.includeExtension,
+          review: _scope.review,
+        ));
+  }
+
+  void _selectKind(ScopeKind kind) {
+    setState(() {
+      _scope = switch (kind) {
+        ScopeKind.recommended => PracticeScope.recommended.copyWith(
+            includeExtension: _scope.includeExtension,
+            review: _scope.review,
+          ),
+        ScopeKind.extensionOnly => PracticeScope.extensionOnly,
+        ScopeKind.all => PracticeScope.all,
+        // 切到区间时保留当前上下沿，避免没有值。
+        ScopeKind.range => PracticeScope.range(
+            _scope.from ?? 1,
+            _scope.to ?? _maxGrade,
+          ).copyWith(review: _scope.review),
+        ScopeKind.grade => PracticeScope.grade(_scope.to ?? _maxGrade),
+        ScopeKind.textbook => PracticeScope.textbook,
+      };
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _preview;
+    final showReview = _scope.isCurriculum;
+    final showExtension = _scope.isCurriculum && _topic.hasExtension;
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.paper,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: <Widget>[
+                  Text('练习范围',
+                      style: serif(19, weight: FontWeight.w600, spacing: 3)),
+                  const Spacer(),
+                  Text(
+                    '推荐：${widget.recommendation.title}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.inkFaint,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                widget.recommendation.subtitle,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.inkSoft,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _PickChip(
+                    label: '跟随推荐',
+                    selected: _scope.kind == ScopeKind.recommended,
+                    onTap: () => _selectKind(ScopeKind.recommended),
+                  ),
+                  for (var g = 1; g <= _maxGrade; g++)
+                    _PickChip(
+                      label: _gradeLabel(g),
+                      selected: _scope.kind == ScopeKind.grade && _scope.to == g,
+                      onTap: () => _selectGrade(g),
+                    ),
+                  _PickChip(
+                    label: '区间',
+                    selected: _scope.kind == ScopeKind.range,
+                    onTap: () => _selectKind(ScopeKind.range),
+                  ),
+                  if (_topic.hasExtension)
+                    _PickChip(
+                      label: '仅拓展',
+                      selected: _scope.kind == ScopeKind.extensionOnly,
+                      onTap: () => _selectKind(ScopeKind.extensionOnly),
+                    ),
+                  _PickChip(
+                    label: '全库',
+                    selected: _scope.kind == ScopeKind.all,
+                    onTap: () => _selectKind(ScopeKind.all),
+                  ),
+                ],
+              ),
+              if (_scope.kind == ScopeKind.range) ...<Widget>[
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    Text('从',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.inkSoft)),
+                    _gradeDropdown(
+                      value: (_scope.from ?? 1).clamp(1, _maxGrade),
+                      onChanged: (v) => setState(() => _scope =
+                          PracticeScope.range(v, (_scope.to ?? _maxGrade).clamp(v, _maxGrade))
+                              .copyWith(review: _scope.review)),
+                    ),
+                    Text('到',
+                        style: TextStyle(
+                            fontSize: 13, color: AppColors.inkSoft)),
+                    _gradeDropdown(
+                      value: (_scope.to ?? _maxGrade).clamp(1, _maxGrade),
+                      onChanged: (v) => setState(() => _scope =
+                          PracticeScope.range((_scope.from ?? 1).clamp(1, v), v)
+                              .copyWith(review: _scope.review)),
+                    ),
+                  ],
+                ),
+              ],
+              if (showExtension) ...<Widget>[
+                const SizedBox(height: 8),
+                SwitchListTile(
+                  value: _scope.includeExtension,
+                  onChanged: (v) => setState(
+                      () => _scope = _scope.copyWith(includeExtension: v)),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('叠加课外拓展',
+                      style: serif(14, weight: FontWeight.w600, spacing: 1)),
+                  subtitle: const Text(
+                    '在教材范围之外少量混入课外名篇',
+                    style: TextStyle(fontSize: 11, color: AppColors.inkFaint),
+                  ),
+                ),
+              ],
+              if (showReview) ...<Widget>[
+                const SizedBox(height: 8),
+                Text('回顾低年级',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.inkSoft,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    for (final r in ReviewMode.values)
+                      _PickChip(
+                        label: switch (r) {
+                          ReviewMode.off => '只练本档',
+                          ReviewMode.standard => '标准回顾',
+                          ReviewMode.reinforced => '加强回顾',
+                        },
+                        selected: _scope.review == r,
+                        onTap: () => setState(
+                            () => _scope = _scope.copyWith(review: r)),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 18),
+              const Divider(color: AppColors.line, height: 1),
+              const SizedBox(height: 16),
+              Text('难度',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.inkSoft,
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              for (final t in ChallengeTier.values) ...<Widget>[
+                _TierTile(
+                  tier: t,
+                  selected: _tier == t,
+                  onTap: () => setState(() => _tier = t),
+                ),
+                const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 6),
+              Text(
+                '可出 ${preview.poolSize} ${_topic.unit} · ${preview.optionCount} 个选项',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.inkFaint,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              PrimaryButton(
+                label: '应用',
+                icon: Icons.check,
+                onPressed: () => Navigator.of(context)
+                    .pop((scope: _scope, tier: _tier)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _gradeLabel(int g) => switch (g) {
+        1 => '一',
+        2 => '二',
+        3 => '三',
+        4 => '四',
+        5 => '五',
+        6 => '六',
+        7 => '七',
+        8 => '八',
+        _ => '九',
+      };
+
+  Widget _gradeDropdown({required int value, required ValueChanged<int> onChanged}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: DropdownButton<int>(
+        value: value,
+        underline: const SizedBox.shrink(),
+        style: serif(15, spacing: 1),
+        items: <DropdownMenuItem<int>>[
+          for (var g = 1; g <= _maxGrade; g++)
+            DropdownMenuItem<int>(value: g, child: Text('$g 年级')),
+        ],
+        onChanged: (v) {
+          if (v != null) onChanged(v);
+        },
+      ),
+    );
+  }
+}
+
+/// 单选 chip：范围/回顾用。
+class _PickChip extends StatelessWidget {
+  const _PickChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        constraints: const BoxConstraints(minHeight: 40),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.seal : AppColors.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? AppColors.seal : AppColors.line),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: selected ? Colors.white : AppColors.inkSoft,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            letterSpacing: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 难度策略选项：标题 + 一句说明，与玩法卡同样的视觉。
+class _TierTile extends StatelessWidget {
+  const _TierTile({
+    required this.tier,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ChallengeTier tier;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: InkCard(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          borderColor: selected ? AppColors.gold : null,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      tier.title,
+                      style: serif(15, weight: FontWeight.w600, spacing: 2),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      tier.remark,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.inkSoft,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? AppColors.seal : AppColors.line,
+                    width: selected ? 5 : 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -798,8 +1217,9 @@ class _StageCard extends StatelessWidget {
   }
 }
 
-class _ModeCard extends StatelessWidget {
-  const _ModeCard({
+/// 玩法选择：横排三个紧凑 chip，一屏放下不滚动。
+class _ModeChip extends StatelessWidget {
+  const _ModeChip({
     required this.mode,
     required this.topic,
     required this.selected,
@@ -817,65 +1237,42 @@ class _ModeCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: InkCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          borderColor: selected ? AppColors.gold : null,
-          child: Row(
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          constraints: const BoxConstraints(minHeight: 68),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.sealSoft : AppColors.card,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.seal : AppColors.line,
+              width: selected ? 1.6 : 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: selected ? AppColors.sealSoft : AppColors.paperDeep,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(
-                  mode.icon,
-                  size: 19,
-                  color: selected ? AppColors.seal : AppColors.inkFaint,
+              Icon(
+                mode.icon,
+                size: 18,
+                color: selected ? AppColors.seal : AppColors.inkSoft,
+              ),
+              const SizedBox(height: 5),
+              Text(
+                mode.title,
+                textAlign: TextAlign.center,
+                style: serif(
+                  12,
+                  weight: FontWeight.w600,
+                  spacing: 1,
+                  color: selected ? AppColors.seal : AppColors.ink,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      mode.title,
-                      style: serif(16, weight: FontWeight.w600, spacing: 2),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      mode.subtitleFor(topic),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.inkSoft,
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
+              const SizedBox(height: 2),
               Text(
                 '${mode.count} 题',
-                style: const TextStyle(fontSize: 11, color: AppColors.inkFaint),
-              ),
-              const SizedBox(width: 8),
-              // 选中标记：单选语义，用圆点而非勾，避免和「已掌握」混淆。
-              Container(
-                width: 18,
-                height: 18,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected ? AppColors.seal : AppColors.line,
-                    width: selected ? 5 : 1.4,
-                  ),
-                ),
+                style: const TextStyle(fontSize: 10, color: AppColors.inkFaint),
               ),
             ],
           ),

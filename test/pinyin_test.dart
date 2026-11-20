@@ -194,7 +194,7 @@ void main() {
         grade: GradeLevel.g2,
       );
       expect(s.topic.id, 'pinyin');
-      expect(s.grade, GradeLevel.g2);
+      expect(s.plan.targetGrade, GradeLevel.g2.grade);
       expect(s.questions.length, 5);
       expect(s.total, 5);
     });

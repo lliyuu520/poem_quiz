@@ -125,6 +125,23 @@ class Topic {
   /// 首页据此隐藏学龄选择——选二年级只会出 0 题。
   int get gradeSpan => entries.map((e) => e.grade).toSet().length;
 
+  /// 题库里真实出现的年级集合（0 表示课外拓展）。
+  Set<int> get presentGrades => <int>{for (final e in entries) e.grade};
+
+  /// 题库里的最高教材年级；没有教材条目时返回 null。
+  int? get maxSchoolGrade {
+    int? best;
+    for (final e in entries) {
+      if (e.grade >= 1 && e.grade <= 9 && (best == null || e.grade > best)) {
+        best = e.grade;
+      }
+    }
+    return best;
+  }
+
+  /// 题库里是否有课外拓展条目（[Poem.grade] == 0）。
+  bool get hasExtension => entries.any((e) => e.grade == 0);
+
   /// 是否需要选学龄。跨两个年级以上才值得让用户选；
   /// 单一年级时题库本身就是唯一题池，选了也没有区别。
   ///

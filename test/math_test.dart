@@ -316,7 +316,7 @@ void main() {
         grade: GradeLevel.g1,
       );
       expect(s1.topic.id, 'math');
-      expect(s1.grade, GradeLevel.g1);
+      expect(s1.plan.targetGrade, GradeLevel.g1.grade);
       expect(s1.questions.length, 5);
       for (final q in s1.questions) {
         expect(isMathKind(q.kind), isTrue);
@@ -330,7 +330,7 @@ void main() {
         grade: GradeLevel.g2,
       );
       expect(s2.topic.id, 'math');
-      expect(s2.grade, GradeLevel.g2);
+      expect(s2.plan.targetGrade, GradeLevel.g2.grade);
       expect(s2.questions.length, 5);
     });
 

@@ -27,6 +27,11 @@ class QuizEngine {
   /// [gradeWeights] 决定题库范围与各年级的相对频率（学龄分层）：
   /// 键为年级、值为权重，如三年级为 `{1: 0.25, 2: 0.5, 3: 1}`。
   /// [optionCount] 控制选择题选项个数，需 ≥ 2。
+  ///
+  /// [kindWeights] 是题型抽样权重（空表示等权），配合难度策略使用：轻松多出认读题，
+  /// 挑战多出接句/补句这类需要主动回忆的题。
+  /// [farDistractors] 把干扰项取得更远（轻松策略），
+  /// [sameGroupDistractors] 优先取同朝代作者/同作者标题（挑战策略）。
   List<Question> generate({
     int count = 10,
     Set<QuestionKind>? kinds,
@@ -34,9 +39,13 @@ class QuizEngine {
     Set<String> excludePoemIds = const <String>{},
     int optionCount = 4,
     Map<int, double> gradeWeights = const <int, double>{},
+    Map<QuestionKind, double> kindWeights = const <QuestionKind, double>{},
+    bool farDistractors = false,
+    bool sameGroupDistractors = false,
   }) {
     final enabled = kinds == null || kinds.isEmpty ? QuestionKind.values.toSet() : kinds;
     final options = max(2, optionCount);
+    final bias = _Bias(far: farDistractors, sameGroup: sameGroupDistractors);
     final used = <String>{};
 
     /// 已经出过题的诗。一局内每首诗只出一次，否则同一首诗会占掉多个题位。
@@ -68,9 +77,9 @@ class QuizEngine {
 
       if (usedPoems.contains(poem.id)) continue;
 
-      final kindList = enabled.toList()..shuffle(_random);
+      final kindList = _kindOrder(enabled, kindWeights);
       for (final kind in kindList) {
-        final q = _tryMake(poem, kind, options);
+        final q = _tryMake(poem, kind, options, bias);
         if (q == null || used.contains(q.key)) continue;
         used.add(q.key);
         usedPoems.add(poem.id);
@@ -80,6 +89,29 @@ class QuizEngine {
     }
 
     return result;
+  }
+
+  /// 题型抽样顺序。权重为空时等权打乱；否则按权重做加权乱序
+  /// （Efraimidis–Spirakis：key = u^(1/w) 降序），权重高的题型更常排在前面。
+  List<QuestionKind> _kindOrder(
+    Set<QuestionKind> enabled,
+    Map<QuestionKind, double> weights,
+  ) {
+    final list = enabled.toList();
+    if (weights.isEmpty) return list..shuffle(_random);
+
+    final keyed = <({QuestionKind kind, double key})>[
+      for (final k in list)
+        (
+          kind: k,
+          key: () {
+            final w = weights[k] ?? 1.0;
+            if (w <= 0) return 0.0;
+            return pow(_random.nextDouble(), 1.0 / w).toDouble();
+          }(),
+        ),
+    ]..sort((a, b) => b.key.compareTo(a.key));
+    return <QuestionKind>[for (final e in keyed) e.kind];
   }
 
   /// 按年级权重随机取一首。权重为 0 或负数的条目不参与。
@@ -99,24 +131,24 @@ class QuizEngine {
     return weighted.last;
   }
 
-  Question? _tryMake(Poem poem, QuestionKind kind, int optionCount) {
+  Question? _tryMake(Poem poem, QuestionKind kind, int optionCount, _Bias bias) {
     switch (kind) {
       case QuestionKind.nextLine:
-        return _nextLine(poem, optionCount);
+        return _nextLine(poem, optionCount, bias);
       case QuestionKind.author:
-        return _author(poem, optionCount);
+        return _author(poem, optionCount, bias);
       case QuestionKind.title:
-        return _title(poem, optionCount);
+        return _title(poem, optionCount, bias);
       case QuestionKind.blank:
         return _blank(poem);
       case QuestionKind.pinyinOf:
-        return _pinyinOf(poem, optionCount);
+        return _pinyinOf(poem, optionCount, bias);
       case QuestionKind.wordOf:
-        return _wordOf(poem, optionCount);
+        return _wordOf(poem, optionCount, bias);
       case QuestionKind.mathResult:
-        return _mathResult(poem, optionCount);
+        return _mathResult(poem, optionCount, bias);
       case QuestionKind.mathBlank:
-        return _mathBlank(poem, optionCount);
+        return _mathBlank(poem, optionCount, bias);
       case QuestionKind.mathCompare:
         return _mathCompare(poem, optionCount);
       case QuestionKind.idiomBlank:
@@ -125,7 +157,7 @@ class QuizEngine {
   }
 
   /// 给汉字，选出正确读音。
-  Question? _pinyinOf(Poem entry, int optionCount) {
+  Question? _pinyinOf(Poem entry, int optionCount, _Bias bias) {
     final need = optionCount - 1;
     // 干扰项不能与本条同音，也不能是同一条目，否则选项里会出现重复答案。
     final distractors = _pickFromOthers(
@@ -133,6 +165,8 @@ class QuizEngine {
       count: need,
       excludePoem: (p) => p.id == entry.id || p.author == entry.author,
       pool: (p) => <String>[p.author],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
     );
     if (distractors.length < need) return null;
 
@@ -149,7 +183,7 @@ class QuizEngine {
   }
 
   /// 给读音，选出对应的汉字词。
-  Question? _wordOf(Poem entry, int optionCount) {
+  Question? _wordOf(Poem entry, int optionCount, _Bias bias) {
     final need = optionCount - 1;
     // 同理：同名字词不能当干扰项，否则选项里会有两个一样的词。
     final distractors = _pickFromOthers(
@@ -157,6 +191,8 @@ class QuizEngine {
       count: need,
       excludePoem: (p) => p.id == entry.id || p.title == entry.title,
       pool: (p) => <String>[p.title],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
     );
     if (distractors.length < need) return null;
 
@@ -173,7 +209,7 @@ class QuizEngine {
   }
 
   /// 算式题：选出得数。
-  Question? _mathResult(Poem entry, int optionCount) {
+  Question? _mathResult(Poem entry, int optionCount, _Bias bias) {
     final e = MathExpr.of(entry);
     if (e == null) return null;
     final need = optionCount - 1;
@@ -186,6 +222,8 @@ class QuizEngine {
       pool: (p) => <String>[p.author],
       numericHint: e.result,
       excludeText: '${e.result}',
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
     );
     if (distractors.length < need) return null;
 
@@ -210,7 +248,7 @@ class QuizEngine {
   /// 算式题：挖掉一个运算数，选出填进去的数。
   ///
   /// 只有一个未知数，方程的解唯一，所以干扰项只要排除相同数值就保证答案唯一。
-  Question? _mathBlank(Poem entry, int optionCount) {
+  Question? _mathBlank(Poem entry, int optionCount, _Bias bias) {
     final e = MathExpr.of(entry);
     if (e == null) return null;
     final need = optionCount - 1;
@@ -226,6 +264,8 @@ class QuizEngine {
         pool: (p) => <String>[p.author],
         numericHint: answer,
         excludeText: '$answer',
+        bias: bias,
+        preferGroup: (p) => p.dynasty == entry.dynasty,
       );
       if (distractors.length < need) continue;
 
@@ -297,7 +337,7 @@ class QuizEngine {
   }
 
   /// 给出第 i 句，要求选出第 i+1 句。
-  Question? _nextLine(Poem poem, int optionCount) {
+  Question? _nextLine(Poem poem, int optionCount, _Bias bias) {
     final need = optionCount - 1;
     final candidates = <int>[
       for (var i = 0; i < poem.lines.length - 1; i++)
@@ -317,6 +357,8 @@ class QuizEngine {
       pool: (p) => p.lines.where(
         (l) => _plain(l).length >= _minLineLength && l != correct && !poem.lines.contains(l),
       ),
+      bias: bias,
+      preferGroup: (p) => p.dynasty == poem.dynasty,
     );
     if (distractors.length < need) return null;
 
@@ -334,7 +376,7 @@ class QuizEngine {
   }
 
   /// 给一句，选出作者。
-  Question? _author(Poem poem, int optionCount) {
+  Question? _author(Poem poem, int optionCount, _Bias bias) {
     final need = optionCount - 1;
     final line = _randomLine(poem);
     if (line == null) return null;
@@ -345,6 +387,8 @@ class QuizEngine {
       count: need,
       excludePoem: (p) => p.author == poem.author,
       pool: (p) => <String>[p.author],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == poem.dynasty,
     );
     if (distractors.length < need) return null;
 
@@ -361,7 +405,7 @@ class QuizEngine {
   }
 
   /// 给一句，选出它出自哪首诗（同作者不同作品的干扰项也算）。
-  Question? _title(Poem poem, int optionCount) {
+  Question? _title(Poem poem, int optionCount, _Bias bias) {
     final need = optionCount - 1;
     final line = _randomLine(poem);
     if (line == null) return null;
@@ -372,6 +416,8 @@ class QuizEngine {
       count: need,
       excludePoem: (p) => p.title == poem.title,
       pool: (p) => <String>[p.title],
+      bias: bias,
+      preferGroup: (p) => p.author == poem.author,
     );
     if (distractors.length < need) return null;
 
@@ -508,6 +554,9 @@ class QuizEngine {
   /// [numericHint] 不为空时把候选当数字，按与它的接近程度排序，让干扰项贴着正确答案
   /// （如 7 的邻居 5、6、8），孩子不会被一眼排除的离谱数字带偏。
   /// [excludeText] 是必须排除的文本，用于挡住「和正确答案字面相同」的干扰项。
+  ///
+  /// [bias.sameGroup] 时优先取 [preferGroup] 命中的条目（更接近/更易混淆）；[bias.far]
+  /// 时从较远的一端取，干扰项更容易排除。
   List<String> _pickFromOthers({
     required Poem exclude,
     required int count,
@@ -516,12 +565,15 @@ class QuizEngine {
     bool Function(Poem)? excludePoem,
     int? numericHint,
     String? excludeText,
+    _Bias bias = const _Bias(),
+    bool Function(Poem)? preferGroup,
   }) {
     final skip = excludePoem ?? (p) => p.id == exclude.id;
 
     final candidates = <_Candidate>[];
     for (final p in poems) {
       if (skip(p)) continue;
+      final sameGroup = preferGroup?.call(p) ?? false;
       for (final s in pool(p)) {
         final trimmed = s.trim();
         if (trimmed.isEmpty || trimmed == excludeText) continue;
@@ -533,21 +585,33 @@ class QuizEngine {
         } else {
           distance = lengthHint == null ? 0 : (trimmed.length - lengthHint).abs();
         }
-        candidates.add(_Candidate(trimmed, distance));
+        candidates.add(_Candidate(trimmed, distance, sameGroup: sameGroup));
       }
     }
 
-    // 先按距离排序、再去重、最后截窗口。顺序不能反：算式题里同一个得数
-    // 会被几十条算式共用（整十数只有 10 种得数），先截窗口会让去重后只剩一两条。
-    candidates.sort((a, b) => a.distance.compareTo(b.distance));
+    // 先按「组内优先」与距离排序、再去重、最后截窗口。顺序不能反：算式题里同一个
+    // 得数会被几十条算式共用，先截窗口会让去重后只剩一两条。
+    candidates.sort((a, b) {
+      if (bias.sameGroup) {
+        final g = (b.sameGroup ? 1 : 0).compareTo(a.sameGroup ? 1 : 0);
+        if (g != 0) return g;
+      }
+      return a.distance.compareTo(b.distance);
+    });
     final distinct = <String>[];
     final seen = <String>{};
     for (final c in candidates) {
       if (seen.add(c.text)) distinct.add(c.text);
     }
 
-    // 距离最近的若干条里随机取，避免每次都是同几个干扰项。
-    final window = distinct.take(min(distinct.length, count * 4)).toList()..shuffle(_random);
+    // 轻松策略取较远的一端（更容易一眼排除），否则取距离最近的一端再随机。
+    final limit = min(distinct.length, count * 4);
+    final List<String> window;
+    if (bias.far && distinct.length > count) {
+      window = distinct.skip(distinct.length - limit).toList()..shuffle(_random);
+    } else {
+      window = distinct.take(limit).toList()..shuffle(_random);
+    }
     return window.take(count).toList();
   }
 
@@ -556,8 +620,16 @@ class QuizEngine {
       line.replaceAll(RegExp(r'[，。？！、；：“”‘’《》〈〉（）、,.!?;:\s]'), '');
 }
 
+/// 干扰项偏好：轻松取更远、更好排除；挑战优先同组、更易混淆。
+class _Bias {
+  const _Bias({this.far = false, this.sameGroup = false});
+  final bool far;
+  final bool sameGroup;
+}
+
 class _Candidate {
-  const _Candidate(this.text, this.distance);
+  const _Candidate(this.text, this.distance, {this.sameGroup = false});
   final String text;
   final int distance;
+  final bool sameGroup;
 }

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/question.dart';
 import 'grade.dart';
+import 'practice_scope.dart';
 import 'quiz_engine.dart';
 import 'topic.dart';
 
@@ -13,7 +14,7 @@ class QuizSession extends ChangeNotifier {
     required this.questions,
     required this.total,
     required this.topic,
-    required this.grade,
+    required this.plan,
     required this.careerMode,
   });
 
@@ -25,8 +26,8 @@ class QuizSession extends ChangeNotifier {
   /// 本科目。题型与文案格式都从它取，结算页也用它显示科目名。
   final Topic topic;
 
-  /// 学龄档位。
-  final GradeLevel grade;
+  /// 本局的练习计划（范围 + 难度策略）。结算页用它显示范围与难度。
+  final PracticePlan plan;
 
   /// 生涯模式：答对的诗会被记为已掌握，之后不再出题。
   final bool careerMode;
@@ -48,7 +49,7 @@ class QuizSession extends ChangeNotifier {
   Question get current => questions[index];
   int get progress => questions.isEmpty ? 0 : index + 1;
 
-  /// 每题 1 分，只算对错。年级只决定题池范围，不影响得分。
+  /// 每题 1 分，只算对错。范围与难度只影响出什么题，不影响得分。
   int get _gain => 1;
 
   /// 记录当前题的作答结果。不推进题号——推进由 [advance] 负责，
@@ -87,25 +88,41 @@ class QuizSession extends ChangeNotifier {
 /// 生成一局题目。
 ///
 /// [kinds] 为空时用科目自己的题型（[Topic.kinds]），不跨科目混题。
+/// 出题配置二选一：完整 [plan]（生产路径）或便捷 [grade]（以单一年级为主力、
+/// 标准难度，测试与简单场景用）。两者都传时以 [plan] 为准。
 QuizSession buildSession({
   required QuizEngine engine,
   required Topic topic,
   required int count,
-  required GradeLevel grade,
+  PracticePlan? plan,
+  GradeLevel? grade,
   Set<QuestionKind>? kinds,
   List<String> preferPoemIds = const <String>[],
   Set<String> excludePoemIds = const <String>{},
   bool careerMode = false,
   Random? random,
 }) {
+  final effectivePlan = plan ??
+      resolvePracticePlan(
+        scope: grade!.isExtension
+            ? PracticeScope.extensionOnly
+            : PracticeScope.grade(grade.grade),
+        entries: topic.entries,
+        // 已显式指定年级，推荐值不参与范围解析，仅用于兜底文案。
+        recommendation: const GradeRecommendation.inSchool(5),
+      );
+
   final rnd = random ?? Random();
   var questions = engine.generate(
     count: count,
     kinds: kinds ?? topic.kinds,
     preferPoemIds: preferPoemIds,
     excludePoemIds: excludePoemIds,
-    optionCount: grade.optionCount,
-    gradeWeights: grade.weights,
+    optionCount: effectivePlan.optionCount,
+    gradeWeights: effectivePlan.weights,
+    kindWeights: effectivePlan.kindWeights,
+    farDistractors: effectivePlan.farDistractors,
+    sameGroupDistractors: effectivePlan.sameGroupDistractors,
   );
 
   // 错题优先只在头几题生效，其余打散，避免整局都是同一首诗。
@@ -120,8 +137,7 @@ QuizSession buildSession({
     // 题库不足时按实际题数结算，否则进度会显示成「8 / 10」就结束。
     total: questions.length,
     topic: topic,
-    grade: grade,
+    plan: effectivePlan,
     careerMode: careerMode,
   );
 }
-

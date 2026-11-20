@@ -85,7 +85,9 @@ class ResultPage extends StatelessWidget {
                   InkCard(
                     child: Column(
                       children: <Widget>[
-                        _Row(label: '学龄', value: session.grade.title),
+                        _Row(label: '范围', value: session.plan.label),
+                        const SizedBox(height: 12),
+                        _Row(label: '难度', value: session.plan.tier.title),
                         const SizedBox(height: 12),
                         _Row(label: '答对', value: '${session.correctCount} 题'),
                         const SizedBox(height: 12),

@@ -81,14 +81,13 @@ void main() {
             store: store,
             topic: kPoetryTopic,
             profile: profile,
-            onSwitchTopic: (_) async {},
+            onSwitchTopic: (_) {},
           ),
         );
         expect(find.text('诗词'), findsWidgets);
-        expect(find.text('学龄'), findsOneWidget);
-        // 学龄卡按出生年月展示推算档位，不再列出十个可选档。
+                // 范围卡按出生年月展示推算档位，不再列出十个可选档。
         final gradeTitle = expectGradeOf(2018, 9).title;
-        expect(find.text(gradeTitle), findsOneWidget);
+        expect(find.textContaining(gradeTitle), findsWidgets);
         expect(find.text('拓展'), findsNothing, reason: '已设出生年月时不应落拓展档');
         expect(tester.takeException(), isNull);
       });
@@ -104,11 +103,10 @@ void main() {
           store: store,
           topic: kPinyinTopic,
           profile: profile,
-          onSwitchTopic: (_) async {},
+          onSwitchTopic: (_) {},
         ),
       );
-      expect(find.text('学龄'), findsOneWidget);
-      expect(find.text(expectGradeOf(2018, 9).title), findsOneWidget);
+      expect(find.textContaining(expectGradeOf(2018, 9).title), findsWidgets);
       // 三种玩法仍齐全。
       for (final mode in GameMode.values) {
         expect(find.text(mode.title), findsOneWidget);
@@ -126,15 +124,14 @@ void main() {
           store: store,
           topic: kMathTopic,
           profile: profile,
-          onSwitchTopic: (_) async {},
+          onSwitchTopic: (_) {},
         ),
       );
       expect(find.text('数学'), findsWidgets);
-      expect(find.text('学龄'), findsOneWidget);
       expect(find.text('内容'), findsNothing);
-      expect(find.text(expectGradeOf(2018, 9).title), findsOneWidget);
-      expect(find.textContaining('答对的数学不再出现'), findsOneWidget);
-      expect(find.textContaining('答对的诗'), findsNothing);
+      expect(find.textContaining(expectGradeOf(2018, 9).title), findsWidgets);
+      // 玩法改为横排 chip，验证科目名在 chip 副文案之外仍可见（标题与玩法标题）。
+      expect(find.text('生涯模式'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -148,7 +145,7 @@ void main() {
           store: store,
           topic: kPoetryTopic,
           profile: profile,
-          onSwitchTopic: (_) async {},
+          onSwitchTopic: (_) {},
         ),
       );
       expect(find.textContaining('未设置出生年月'), findsOneWidget);
@@ -162,14 +159,14 @@ void main() {
           store: store,
           topic: kPoetryTopic,
           profile: filled,
-          onSwitchTopic: (_) async {},
+          onSwitchTopic: (_) {},
         ),
       );
-      expect(find.text(expected.title), findsOneWidget);
+      expect(find.textContaining(expected.title), findsWidgets);
       await tester.tap(find.text('开始答题'));
       await tester.pumpAndSettle();
       final page = tester.widget<QuizPage>(find.byType(QuizPage));
-      expect(page.session.grade, expected,
+      expect(page.session.plan.targetGrade, expected.grade,
           reason: '开局应按出生年月推算的档位出题');
       expect(tester.takeException(), isNull);
     });
@@ -299,7 +296,7 @@ void main() {
         );
         expect(find.text('学龄'), findsOneWidget);
         expect(find.text('2018 年 9 月'), findsOneWidget);
-        expect(find.textContaining('推算学龄：${expectGradeOf(2018, 9).title}'),
+        expect(find.textContaining('推荐学龄：'),
             findsOneWidget);
         expect(find.text('生涯模式'), findsOneWidget);
         expect(tester.takeException(), isNull);

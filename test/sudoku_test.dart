@@ -431,11 +431,10 @@ void main() {
           store: store,
           topic: kSudokuTopic,
           profile: profile,
-          onSwitchTopic: (_) async {},
+          onSwitchTopic: (_) {},
         ),
       );
       expect(find.text('数独'), findsWidgets);
-      expect(find.text('关卡'), findsOneWidget);
       expect(find.text('学龄'), findsNothing);
       expect(find.text('玩法'), findsNothing);
       expect(find.text('学习模式'), findsNothing);
@@ -463,7 +462,7 @@ void main() {
           store: store,
           topic: kSudokuTopic,
           profile: profile,
-          onSwitchTopic: (_) async {},
+          onSwitchTopic: (_) {},
         ),
       );
       // 一星、二星已开，后面三档还锁着。

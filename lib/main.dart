@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,29 +21,33 @@ Future<void> main() async {
     (t) => t.id == savedId,
     orElse: () => kDefaultTopic,
   );
-  final store = await ProgressStore.load(topicId: topic.id);
+  // 所有科目的存档一次读齐：切 tab 时只是换指针，不再 await 磁盘 IO，
+  // 避免出现卡顿的空档。
+  final stores = <String, ProgressStore>{
+    for (final t in kTopics) t.id: await ProgressStore.load(topicId: t.id),
+  };
   final profile = await UserProfile.load();
   runApp(PoemQuizApp(
-    initialStore: store,
     initialTopic: topic,
+    stores: stores,
     initialProfile: profile,
   ));
 }
 
-/// 根壳：持有当前科目、对应存档与全局个人档案。
+/// 根壳：持有当前科目、全部科目存档与全局个人档案。
 ///
-/// 切换科目时重建 [ProgressStore]（每个科目一份独立存档），
-/// 并整棵树重建，避免上一个科目的引擎、错题本缓存残留。
+/// 切换科目只换 [_topic]/[_store] 指针并通知重建——存档在启动时已全部加载，
+/// 切换路径上没有异步等待，所以 tab 切换是即时的。
 class PoemQuizApp extends StatefulWidget {
   const PoemQuizApp({
     super.key,
-    required this.initialStore,
     required this.initialTopic,
+    required this.stores,
     required this.initialProfile,
   });
 
-  final ProgressStore initialStore;
   final Topic initialTopic;
+  final Map<String, ProgressStore> stores;
   final UserProfile initialProfile;
 
   @override
@@ -50,20 +56,24 @@ class PoemQuizApp extends StatefulWidget {
 
 class _PoemQuizAppState extends State<PoemQuizApp> {
   late Topic _topic = widget.initialTopic;
-  late ProgressStore _store = widget.initialStore;
+  late ProgressStore _store = widget.stores[widget.initialTopic.id]!;
   late final UserProfile _profile = widget.initialProfile;
 
-  /// 切换科目。存档按科目隔离，所以必须换一份 [ProgressStore]。
-  Future<void> switchTopic(Topic topic) async {
+  /// 持久化「上次科目」不挡切换：fire-and-forget，失败也不影响体验。
+  void _saveLastTopic(String id) {
+    unawaited(SharedPreferences.getInstance().then(
+      (prefs) => prefs.setString(_kLastTopic, id),
+      onError: (Object _) {},
+    ));
+  }
+
+  void switchTopic(Topic topic) {
     if (topic.id == _topic.id) return;
-    final store = await ProgressStore.load(topicId: topic.id);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kLastTopic, topic.id);
-    if (!mounted) return;
     setState(() {
       _topic = topic;
-      _store = store;
+      _store = widget.stores[topic.id]!;
     });
+    _saveLastTopic(topic.id);
   }
 
   @override
@@ -72,9 +82,9 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
       title: '日知',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      // key 让切换科目时 HomePage 整棵重建，不会残留上一个科目的选中态。
+      // 不用 ValueKey 强制整树重建：HomePage 在 didUpdateWidget 里自行同步
+      // 本科目的范围/难度状态，切换更平滑、不丢滚动位置与动画。
       home: HomePage(
-        key: ValueKey<String>(_topic.id),
         store: _store,
         topic: _topic,
         profile: _profile,

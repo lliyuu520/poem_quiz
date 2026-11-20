@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../data/grade.dart';
+import '../data/practice_scope.dart';
 import '../data/profile.dart';
 import '../data/progress_store.dart';
 import '../data/topic.dart';
@@ -53,7 +54,15 @@ class _SettingsPageState extends State<SettingsPage> {
     await profile.setBirth(year: year, month: month);
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('学龄已按出生年月更新')));
+        .showSnackBar(const SnackBar(content: Text('推荐学龄已按出生年月更新')));
+  }
+
+  /// 把本科目的练习范围与难度恢复为「跟随推荐 + 标准」。
+  Future<void> _resetScope() async {
+    await widget.store.resetPracticeScope();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('已恢复为跟随推荐')));
   }
 
   Future<void> _confirmResetCareer() async {
@@ -145,6 +154,54 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: _BirthTile(
                       profile: profile,
                       onTap: _pickBirth,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Padding(
+                    padding: EdgeInsets.only(left: 12),
+                    child: RuleDivider(label: '练习范围'),
+                  ),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: InkCard(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            store.practiceScope.describe(
+                              recommendForBirth(
+                                profile.birthYear,
+                                profile.birthMonth,
+                              ),
+                            ),
+                            style: serif(15, weight: FontWeight.w600, spacing: 1),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '难度 ${store.challengeTier.title} · 在首页「练习范围」里可随时调整',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.inkSoft,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: PrimaryButton(
+                      label: '恢复跟随推荐',
+                      icon: Icons.restart_alt,
+                      filled: false,
+                      onPressed: store.practiceScope.isRecommended &&
+                              store.challengeTier == ChallengeTier.standard
+                          ? null
+                          : _resetScope,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -243,7 +300,7 @@ class _BirthTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasBirth = profile.hasBirth;
-    final grade = gradeForBirth(profile.birthYear, profile.birthMonth);
+    final rec = recommendForBirth(profile.birthYear, profile.birthMonth);
 
     return Material(
       color: Colors.transparent,
@@ -281,10 +338,13 @@ class _BirthTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      hasBirth ? '推算学龄：${grade.title}' : '学龄档位按出生年月自动推算',
+                      hasBirth
+                          ? '推荐学龄：${rec.title} · ${rec.subtitle}'
+                          : '推荐学龄按出生年月自动推算，可随时手动调整练习范围',
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.inkSoft,
+                        height: 1.35,
                       ),
                     ),
                   ],

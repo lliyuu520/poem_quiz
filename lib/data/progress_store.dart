@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'practice_scope.dart';
+
 /// 本地存档。
 ///
 /// 每个科目一份独立的存档（最高分、正确率、错题本、生涯进度互不干扰），
@@ -21,6 +23,8 @@ class ProgressStore extends ChangeNotifier {
   static const _kMastered = 'career_mastered';
   static const _kStages = 'stage_cleared';
   static const _kStageBest = 'stage_best_seconds';
+  static const _kScope = 'practice_scope';
+  static const _kTier = 'challenge_tier';
 
   final SharedPreferences _prefs;
 
@@ -47,6 +51,13 @@ class ProgressStore extends ChangeNotifier {
 
   /// 数独各档的最快用时（秒）。
   final Map<String, int> stageBestSeconds = <String, int>{};
+
+  /// 本科目的练习范围，按科目记忆（诗词可超前、数学按年级，互不影响）。
+  /// 缺省即「跟随推荐」，与旧存档天然兼容。
+  PracticeScope practiceScope = PracticeScope.recommended;
+
+  /// 本科目的难度策略，缺省「标准」。
+  ChallengeTier challengeTier = ChallengeTier.standard;
 
   /// 加载指定科目的存档。
   static Future<ProgressStore> load({required String topicId}) async {
@@ -107,6 +118,33 @@ class ProgressStore extends ChangeNotifier {
         stageBestSeconds.clear();
       }
     }
+
+    practiceScope = PracticeScope.decode(_prefs.getString(_key(_kScope)));
+    final tierName = _prefs.getString(_key(_kTier));
+    challengeTier = ChallengeTier.values.firstWhere(
+      (t) => t.name == tierName,
+      orElse: () => ChallengeTier.standard,
+    );
+  }
+
+  /// 更新练习范围。缺省「跟随推荐」，不写入也可以——读回时同样缺省。
+  Future<void> setPracticeScope(PracticeScope scope) async {
+    practiceScope = scope;
+    await _prefs.setString(_key(_kScope), scope.encode());
+    notifyListeners();
+  }
+
+  /// 更新难度策略。
+  Future<void> setChallengeTier(ChallengeTier tier) async {
+    challengeTier = tier;
+    await _prefs.setString(_key(_kTier), tier.name);
+    notifyListeners();
+  }
+
+  /// 恢复本科目为「跟随推荐 + 标准难度」。
+  Future<void> resetPracticeScope() async {
+    await setPracticeScope(PracticeScope.recommended);
+    await setChallengeTier(ChallengeTier.standard);
   }
 
   double get accuracy {
