@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 默认离线；仅设置页手动「检查更新」时联网（下载版本清单与新 APK）。 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 应用内更新：把下载好的 APK 交给 PackageInstaller 安装。
+         缺这条权限时 commit() 之后系统不会弹安装确认框，表现为
+         「提示请在系统弹窗中确认安装」但什么都没发生（0.3.0 上实测到）。 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="拾"
         android:name="${applicationName}"

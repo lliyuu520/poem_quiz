@@ -7,21 +7,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 设置页「检查更新」：查版本清单 → 下载新 APK → 拉起系统安装器。
 ///
 /// - 只在用户点按钮时联网，不做后台轮询；
-/// - 托管在 dist 仓库，经 jsDelivr CDN 分发（国内直连）；
+/// - 版本清单与 APK 都托管在自有 OSS（`oss.lliyuu520.cn`），单一来源；
 /// - 下载到应用缓存目录，文件名带版本号，供安装器读取。
 class UpdateService {
   UpdateService({this.platform = const MethodChannel('poem_quiz/installer')});
 
-  /// 版本清单地址。按顺序尝试：OSS CDN 优先，jsDelivr 兜底。
+  /// 版本清单地址。
   ///
-  /// **jsDelivr 的 URL 必须带版本号**（`version-N.json`）。它对同名文件
-  /// 的缓存极其顽固，实测 `version.json` 长期返回两三个版本之前的旧清单，
-  /// 发版后刷新 CDN 也不生效。用新文件名可以绕过。
-  /// 每次发版：在 dist 仓库新增 `version-<code>.json`，并同步改这里。
-  static const List<String> manifestUrls = <String>[
-    'https://oss.lliyuu520.cn/apk/version.json',
-    'https://cdn.jsdelivr.net/gh/lliyuu520/poem_quiz-dist@main/version-7.json',
-  ];
+  /// **单一来源，没有兜底源**。曾用过 `poem_quiz-dist` 仓库 + jsDelivr 做兜底，
+  /// 但 jsDelivr 对同名文件的缓存极其顽固（实测 `version.json` 长期返回两三个
+  /// 版本之前的旧清单，刷新也不生效），维护成本高于收益，已移除。
+  /// OSS 与 CDN 都在自己手里，出问题可直接刷新缓存。
+  static const String manifestUrl =
+      'https://oss.lliyuu520.cn/apk/version.json';
 
   final MethodChannel platform;
 
@@ -34,27 +32,22 @@ class UpdateService {
 
   /// 拉取版本清单。失败抛 [UpdateException]。
   Future<RemoteVersion> fetchManifest() async {
-    UpdateException? lastError;
-    for (final url in manifestUrls) {
-      try {
-        final client = HttpClient();
-        final req = await client.getUrl(Uri.parse(url));
-        req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-        final resp = await req.close().timeout(const Duration(seconds: 15));
-        final body = await utf8.decoder.bind(resp).join();
-        client.close();
-        if (resp.statusCode != 200) {
-          throw UpdateException('服务器返回 ${resp.statusCode}');
-        }
-        return RemoteVersion.fromJson(
-            jsonDecode(body) as Map<String, dynamic>);
-      } on UpdateException catch (e) {
-        lastError = e;
-      } catch (e) {
-        lastError = UpdateException('无法连接更新服务器：$e');
+    try {
+      final client = HttpClient();
+      final req = await client.getUrl(Uri.parse(manifestUrl));
+      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      final resp = await req.close().timeout(const Duration(seconds: 15));
+      final body = await utf8.decoder.bind(resp).join();
+      client.close();
+      if (resp.statusCode != 200) {
+        throw UpdateException('服务器返回 ${resp.statusCode}');
       }
+      return RemoteVersion.fromJson(jsonDecode(body) as Map<String, dynamic>);
+    } on UpdateException {
+      rethrow;
+    } catch (e) {
+      throw UpdateException('无法连接更新服务器：$e');
     }
-    throw lastError ?? const UpdateException('无法连接更新服务器');
   }
 
   /// 下载 [version] 的 APK，回调下载进度（0.0~1.0）。
@@ -90,6 +83,38 @@ class UpdateService {
       rethrow;
     } catch (e) {
       throw UpdateException('下载失败：$e');
+    }
+  }
+
+  /// 提交安装到系统 PackageInstaller（随后由系统弹出确认页）。
+  ///
+  /// 把 MethodChannel 的 [PlatformException] 统一转成 [UpdateException]，
+  /// 否则设置页的 catch 接不住，会静默停在「已就绪」。
+  /// 是否已允许「安装未知应用」。
+  ///
+  /// 未授权时 `commit()` 不报错，但系统会静默丢弃安装请求，用户永远等不到
+  /// 确认弹窗（vivo 上实测：APK 已下载到 cache，界面却停在「请在系统弹窗中
+  /// 确认安装」）。所以安装前必须先查这个。
+  Future<bool> canInstall() async {
+    try {
+      final ok = await platform.invokeMethod<bool>('canInstall');
+      return ok ?? true;
+    } on MissingPluginException {
+      // 老版本没有这个通道，按「可以装」处理，保持向后兼容。
+      return true;
+    } on PlatformException {
+      return true;
+    }
+  }
+
+  /// 打开系统的「安装未知应用」授权页。
+  Future<void> openInstallSettings() async {
+    try {
+      await platform.invokeMethod<void>('openInstallSettings');
+    } on PlatformException catch (e) {
+      throw UpdateException(e.message ?? '无法打开授权页，请到系统设置里手动开启');
+    } on MissingPluginException {
+      throw const UpdateException('请到系统设置里手动开启「安装未知应用」');
     }
   }
 

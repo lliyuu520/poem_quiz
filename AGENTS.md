@@ -41,7 +41,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、连击、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>` |
-| `lib/data/update_service.dart` | 检查更新：`manifestUrls` 按序尝试 OSS CDN → jsDelivr |
+| `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
 | `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 15 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 1 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
@@ -131,8 +131,12 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 - 仅 Android。`minSdk`/`targetSdk` 走 `flutter.*` 默认值，未额外指定。
 - **正式签名**：release 用 `D:/tools/keys/poem_quiz.keystore`（30 年有效期），配置在 `android/keystore.properties`（不入库，缺失时回落 debug 签名）。**keystore 或密码丢失 = 无法覆盖安装，只能卸载重装丢全部存档**，务必异地备份。
-- **分发**：APK 与版本清单托管在 OSS（`oss://lliyuu520/apk/`，CDN `oss.lliyuu520.cn`）与 `poem_quiz-dist` 公开仓库（jsDelivr 兜底）。`UpdateService.manifestUrls` 按序尝试。jsDelivr 对同名文件有顽固缓存，发版时版本清单用新文件名（version-N.json）。
-- **App 内检查更新**：设置页「关于」区。模拟器里 DNS 被污染会导致 HandshakeException，真机正常——验证全链路要上真机。安装走 `PackageInstaller`（新版系统不允许直接 `ACTION_VIEW` 拉起 APK）。
+- **分发：单一来源，只用自有 OSS**（`oss://lliyuu520/apk/`，CDN `oss.lliyuu520.cn`）。曾用 `poem_quiz-dist` 仓库 + jsDelivr 兜底，已弃用——jsDelivr 对同名文件的缓存极其顽固，长期返回两三个版本之前的旧清单，刷新也不生效，维护成本高于收益。`UpdateService.manifestUrl` 是单个常量，不要加回多源回退。改清单后必须刷新 CDN 缓存。
+- **App 内检查更新**：设置页「关于」区。安装走 `PackageInstaller`（新版系统不允许直接 `ACTION_VIEW` 拉起 APK）。三个已踩的坑：
+  - commit 的 `PendingIntent` **必须 MUTABLE**。用 `FLAG_IMMUTABLE` 会报「The commit() status receiver should come from a mutable PendingIntent」，装不上。
+  - Manifest 必须声明 `REQUEST_INSTALL_PACKAGES`，否则 commit 之后系统不弹安装框。
+  - 该权限还要用户在系统设置里单独开启。**未开启时 commit() 不报错、系统静默丢弃请求**，用户永远等不到弹窗（vivo 实测：APK 已下载进 cache，界面却停在「请在系统弹窗中确认安装」）。所以安装前必须 `UpdateService.canInstall()` 先查，未授权就显示「去开启授权」按钮（`openInstallSettings`）。
+  - 排障时看 `cache/` 有没有 `poem_quiz_<code>.apk`：有就说明下载成功、问题在安装授权那一步。
 - **应用名「拾」**（2026-11-20 由「日知」改）：`android:label`、`MaterialApp.title`、设置页版本前缀、`pubspec.yaml` description 四处要同步。包名 `com.lyu.poem_quiz` 与仓库名 `poem_quiz` 未改。
 - **图标由 `tool/gen_icon.py` 生成，改图标重跑脚本而不是手改 png**。`CHAR = "拾"` 是唯一的字面变量，换名字只改这一处。脚本同时产出：旧式 `ic_launcher.png` / `ic_launcher_round.png` 五档，以及自适应图标（`mipmap-anydpi-v26/` + `ic_launcher_foreground.png` + `drawable/ic_launcher_background.xml`）。**自适应前景必须按 66dp 安全圆的内接正方形算字号**（`s*33/108/√2`），按画布比例直接铺会让圆形蒙版切掉字角。
 - 字号仍硬编码（`serif(32)` 之类），**不做等比缩放**；响应式只用于「限宽」与「横屏分栏」，见下条。

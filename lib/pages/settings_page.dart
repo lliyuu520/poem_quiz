@@ -515,9 +515,34 @@ class _UpdateSectionState extends State<_UpdateSection> {
         _state = 'ready';
         _message = 'v${remote.name} 下载完成，正在提交安装…';
       });
+
+      // 先确认「安装未知应用」已授权。没授权时 commit() 不报错，但系统会
+      // 静默丢弃请求，用户永远等不到弹窗——所以这里主动拦下来给指引。
+      if (!await _service.canInstall()) {
+        if (!mounted) return;
+        setState(() {
+          _state = 'needPermission';
+          _message = 'v${remote.name} 已下载，但需要先允许「安装未知应用」';
+        });
+        return;
+      }
+
       await _service.install(path);
       if (!mounted) return;
       setState(() => _message = '请在系统弹窗中确认安装 v${remote.name}');
+    } on UpdateException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _state = 'failed';
+        _message = e.message;
+      });
+    }
+  }
+
+  /// 打开系统授权页。用户授权后回来再点一次「检查更新」即可继续。
+  Future<void> _openPermission() async {
+    try {
+      await _service.openInstallSettings();
     } on UpdateException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -580,6 +605,26 @@ class _UpdateSectionState extends State<_UpdateSection> {
                       ? AppColors.seal
                       : AppColors.inkSoft,
                   height: 1.5,
+                ),
+              ),
+            ],
+            // 未授权「安装未知应用」时给出可点的入口，而不是只留一句提示。
+            if (_state == 'needPermission') ...<Widget>[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _openPermission,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.seal,
+                    side: BorderSide(
+                      color: AppColors.seal.withValues(alpha: 0.5),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('去开启授权', style: TextStyle(fontSize: 13)),
                 ),
               ),
             ],
