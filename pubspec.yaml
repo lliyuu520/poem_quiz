@@ -21,8 +21,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    # 只打音效。英语朗读音频（assets/audio/en/，约 930KB）刻意不打包：
-    # 它走 OSS 按需下载（见 lib/data/english_audio.dart），打进 APK 会让
+    # 只打音效。英语与拼音朗读音频（assets/audio/en/、pinyin/）刻意不打包：
+    # 它们走 OSS 按需下载（见 lib/data/speech_audio.dart），打进 APK 会让
     # 每次加词都得重新发版。这里逐个列出 wav，避免目录写法把子目录一起收进去。
     - assets/audio/correct.wav
     - assets/audio/wrong.wav

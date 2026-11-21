@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../data/english_audio.dart';
+import '../data/pinyin_audio.dart';
 import '../data/quiz_session.dart';
 import '../data/topic.dart';
 import '../models/question.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
-import '../widgets/english_speech.dart';
+import '../widgets/speech.dart';
 import 'result_page.dart';
 
 /// 答题页：选择题与填空题共用。
@@ -368,7 +369,7 @@ class _QuestionCard extends StatelessWidget {
                   question.prompt,
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors.inkFaint,
+                    color: AppColors.inkSoft,
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -380,12 +381,31 @@ class _QuestionCard extends StatelessWidget {
             _BlankPrompt(question: question, picked: picked, verdict: verdict)
           else if (isEnglishKind(question.kind))
             EnglishPrompt(question: question, topic: topic, verdict: verdict)
+          else if (question.isPinyin)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Flexible(
+                  child: Text(
+                    question.focus,
+                    textAlign: TextAlign.center,
+                    // 拼音的拉丁字母用文楷，保证 a/g 是教学体单层字形。
+                    style: serif(24, height: 1.6, spacing: 3, content: true),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SpeakButton(
+                  audioKey: PinyinAudioKeys.word(question.poem.title),
+                  size: 48,
+                  color: AppColors.seal,
+                ),
+              ],
+            )
           else
             Text(
               question.focus,
               textAlign: TextAlign.center,
-              // 拼音的题干是拉丁字母，用文楷保证 a/g 是教学体单层字形。
-              style: serif(24, height: 1.6, spacing: 3, content: question.isPinyin),
+              style: serif(24, height: 1.6, spacing: 3),
             ),
         ],
       ),
@@ -434,9 +454,11 @@ class _BlankPrompt extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: <Widget>[
-        if (question.blankBefore.isNotEmpty) Text(question.blankBefore, style: textStyle),
+        if (question.blankBefore.isNotEmpty)
+          Text(question.blankBefore, style: textStyle),
         ...slots,
-        if (question.blankAfter.isNotEmpty) Text(question.blankAfter, style: textStyle),
+        if (question.blankAfter.isNotEmpty)
+          Text(question.blankAfter, style: textStyle),
       ],
     );
 
@@ -494,10 +516,7 @@ class _Slot extends StatelessWidget {
       ),
       child: char == null
           ? null
-          : Text(
-              char!,
-              style: serif(21, spacing: 0, color: color),
-            ),
+          : Text(char!, style: serif(21, spacing: 0, color: color)),
     );
   }
 }
@@ -615,7 +634,13 @@ class _OptionTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   text,
-                  style: serif(17, color: fg, height: 1.45, spacing: 1.5, content: pinyin),
+                  style: serif(
+                    17,
+                    color: fg,
+                    height: 1.45,
+                    spacing: 1.5,
+                    content: pinyin,
+                  ),
                 ),
               ),
               if (state == _TileState.correct)
@@ -666,8 +691,8 @@ class _BlankAnswerArea extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.inkSoft,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(48, 48),
+                  tapTargetSize: MaterialTapTargetSize.padded,
                 ),
               ),
           ],
@@ -776,23 +801,38 @@ class _Feedback extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(icon, size: 18, color: color),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(icon, size: 18, color: color),
+              ),
               const SizedBox(width: 8),
-              Text(
-                correct ? '答对了' : '答错了',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: color,
+              Expanded(
+                child: Text(
+                  correct ? '答对了' : '答错了',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
                 ),
               ),
-              const Spacer(),
-              if (!correct)
-                Text(
-                  question.answerText,
-                  style: serif(15, color: color, spacing: 1, content: question.isPinyin),
+              if (!correct) ...<Widget>[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    question.answerText,
+                    textAlign: TextAlign.end,
+                    style: serif(
+                      15,
+                      color: color,
+                      spacing: 1,
+                      content: question.isPinyin,
+                    ),
+                  ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 10),

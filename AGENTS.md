@@ -6,7 +6,7 @@
 
 - 交付形态：**只有 Android APK**，自用。web 平台已于 2026-11-18 移除（`web/`、`build/web/`、`analysis_options` 的 exclude 一并清理）。
 - 不做微信小程序 / 小游戏：微信按注册形态判类目，个人主体没有能承载交互式答题的类目，小游戏需换 Cocos/Canvas 重写。不要再提议 Taro/uni-app/小游戏迁移，也不要重新加 web 平台。
-- 默认纯离线：题库内置、进度存本地、无账号体系。**联网点只有两个**，都由用户主动触发：设置页「检查更新」（下载版本清单与新 APK），英语音频首次播放时按条目懒下载（之后离线）。不做后台轮询、不发统计数据。新增功能默认保持离线。
+- 默认纯离线：题库内置、进度存本地、无账号体系。**联网点只有两类**，都由用户主动触发：设置页「检查更新」（下载版本清单与新 APK），英语与拼音音频首次播放时按条目懒下载（之后离线）。不做后台轮询、不发统计数据。新增功能默认保持离线。
 
 ## 常用命令
 
@@ -33,7 +33,9 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/math.dart` | 数学题库 `kMath`：358 条规则生成（一年级 196 / 二年级 162）；`MathExpr` 解析算式 |
 | `lib/data/chengyu.dart` | 成语题库 `kChengyu`：74 条，年级 1-6 分档，选字补全 |
 | `lib/data/english.dart` | 英语题库 `kEnglish`：82 条（字母 26 / 主题词 / 短句），年级 1-2（**由 `tool/gen_english.py` 生成，不要手改**） |
-| `lib/data/english_audio.dart` | 英语音频播放与缓存：**音频不在 APK 里**，按条目从 OSS 懒下载到本地 |
+| `lib/data/english_audio.dart` | 英语音频键与缓存入口；共用 `speech_audio.dart` 的下载与播放 |
+| `lib/data/pinyin_audio.dart` | 拼音点读音频键：按字词 UTF-16 编码生成稳定文件名 |
+| `lib/data/speech_audio.dart` | 英语 / 拼音音频共用播放与缓存：**音频不在 APK 里**，按条目从 OSS 懒下载到本地 |
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：109 首，唐 65 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位 + `gradeForBirth()` 推算 + **题池加权** `cumulativeWeights()` / `rangeWeights()` / `fullCurriculumWeights()`；`ReviewMode`（off / standard 1/3 / reinforced 1/2） |
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
@@ -67,7 +69,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - **题型随科目走，不随玩法走**：`Topic.kinds` 决定本科目能出哪些题型，`buildSession` 不传 `kinds` 时自动取科目题型，不会跨科目混题。玩法只决定题数与是否用错题本/生涯。
 - **学龄分档**：诗词、拼音、数学、成语都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
 - **学龄由出生年月推算，不是用户选择的**（2026-11-19 改）：`gradeForBirth(birthYear, birthMonth)` 按 9 月 1 日入学分界推出在读年级，九年级以上与未入学都落拓展档。出生年月存 `UserProfile`（裸键 `birth_year` / `birth_month`，全局一份，不属于任何科目），设置页修改。**首页没有 `_GradeCard` 了**——推算结果只作为练习范围的默认值。
-- **练习范围与难度策略是两个正交维度**（2026-11-20 改）：`PracticeScope` 决定「出哪些年级的条目」（跟随推荐 / 指定年级 / 年级区间 / 教材全覆盖 / 仅拓展 / 全库），`ChallengeTier` 决定「怎么考」（轻松 3 选项多认读 / 标准 / 挑战 4 选项多回忆）。两者按科目存在 `ProgressStore` 的 `practice_scope` / `challenge_tier` 键，由 `resolvePracticePlan()` 解析成 `PracticePlan`（`weights` + `optionCount` + `kindWeights` + 干扰项偏好），再喂给 `QuizEngine.generate`。**不要在 UI 里重算计划**，首页只调 `resolvePracticePlan()`。
+- **练习范围与难度策略是两个正交维度**（2026-11-20 改）：`PracticeScope` 决定「出哪些年级的条目」（跟随推荐 / 指定年级 / 年级区间 / 教材全覆盖 / 仅拓展 / 全库），`ChallengeTier` 决定「怎么考」（轻松 / 标准 / 挑战，三档均为 A、B、C、D 四个选项；轻松多认读 / 挑战多回忆）。两者按科目存在 `ProgressStore` 的 `practice_scope` / `challenge_tier` 键，由 `resolvePracticePlan()` 解析成 `PracticePlan`（`weights` + `optionCount` + `kindWeights` + 干扰项偏好），再喂给 `QuizEngine.generate`。**不要在 UI 里重算计划**，首页只调 `resolvePracticePlan()`。
 - **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库含一、二年级条目（`graded` 自动为 true），推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
 - **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」，成语是「一心一意」与「一心一意 · yì xīn yí yì」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
@@ -77,6 +79,13 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - **`detailOf` 不能省**：`Poem.fullText` 是 `lines.join()`，对拼音（逐字组词）、数学（算式 + 思路）、英语（例句两行）会挤成一行，所以这几种科目的展开正文各自 `join('\n')`。
 - `QuizEngine` 的 `poems` 是必填参数——故意不给默认值，避免新科目忘记传题库时静默出成诗词题。
 - `ProgressStore.load(topicId:)` 必须显式传科目 id。**没有旧存档迁移逻辑**（开发阶段，不兼容无前缀的历史键）。
+
+### 拼音语音
+
+- 两种题型、学习页与错题本都有喇叭，朗读当前字词，不新增听音题型；音频失败不挡作答。
+- `tool/gen_pinyin.py --audio` 用 `zh-CN-XiaoxiaoNeural`、语速 -15% 生成 320 条 Opus，上传至 `lliyuu-shi` 的 `shi-private/pinyin/`；文件名按字词 UTF-16 编码，不依赖列表位置。
+- `python -I tool/verify_pinyin_audio.py` 全量检查文件与解码；可选 `--asr --model <本地目录>` 辅助列疑点。**短单字 ASR 误报多、不能可靠区分声调**，多音字与轻声要结合题库标注试听，损坏音频不上传。
+- 音频仍不入 APK；`lib/data/speech_audio.dart` 与英语共用缓存和下载逻辑，英语 URL、缓存目录与 `files/en_audio_trace.log` 保持不变。
 
 ### 英语科目
 

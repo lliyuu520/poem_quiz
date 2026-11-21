@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../data/pinyin_audio.dart';
 import '../data/progress_store.dart';
 import '../data/topic.dart';
 import '../models/poem.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
-import '../widgets/english_speech.dart';
+import '../widgets/speech.dart';
 
 /// 学习模式：浏览本科目全部条目，按科目定义的分组筛选，可标记已掌握。
 class StudyPage extends StatefulWidget {
@@ -83,6 +84,7 @@ class _StudyPageState extends State<StudyPage> {
                     children: <Widget>[
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
+                        tooltip: '返回',
                         icon: const Icon(
                           Icons.arrow_back,
                           size: 20,
@@ -90,16 +92,21 @@ class _StudyPageState extends State<StudyPage> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        '学习模式',
-                        style: serif(20, weight: FontWeight.w600, spacing: 3),
+                      Expanded(
+                        child: Text(
+                          '学习模式',
+                          style: serif(20, weight: FontWeight.w600, spacing: 3),
+                        ),
                       ),
-                      const Spacer(),
-                      Text(
-                        '已掌握 ${mastered.length} / ${widget.topic.entries.length}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.inkFaint,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          '已掌握 ${mastered.length} / ${widget.topic.entries.length}',
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.inkSoft,
+                          ),
                         ),
                       ),
                     ],
@@ -129,12 +136,13 @@ class _StudyPageState extends State<StudyPage> {
                               icon: const Icon(
                                 Icons.close,
                                 size: 16,
-                                color: AppColors.inkFaint,
+                                color: AppColors.inkSoft,
                               ),
                               onPressed: () {
                                 _controller.clear();
                                 setState(() => _query = '');
                               },
+                              tooltip: '清空搜索',
                             ),
                       filled: true,
                       fillColor: AppColors.card,
@@ -223,27 +231,31 @@ class _GroupChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        // 触控目标不低于 48dp 高：原来的 6dp 内边距只做到 26~30dp，孩子容易点不中。
-        constraints: const BoxConstraints(minHeight: 40),
-        // 不能设 alignment：它会让容器撑满 Wrap 给的最大宽度，
-        // 12 个分组 chip 就变成一列占满整行。
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.seal : AppColors.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? AppColors.seal : AppColors.line),
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? AppColors.seal : AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: selected ? AppColors.seal : AppColors.line),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: selected ? Colors.white : AppColors.inkSoft,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            letterSpacing: 1,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: selected ? Colors.white : AppColors.inkSoft,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                letterSpacing: 1,
+              ),
+            ),
           ),
         ),
       ),
@@ -297,72 +309,93 @@ class _StudyTileState extends State<_StudyTile> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Flexible(
-                              child: Text(
-                                widget.name,
-                                style: serif(
-                                  17,
-                                  weight: FontWeight.w600,
-                                  spacing: 1,
+          Semantics(
+            button: true,
+            expanded: _expanded,
+            child: InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Flexible(
+                                child: Text(
+                                  widget.name,
+                                  style: serif(
+                                    17,
+                                    weight: FontWeight.w600,
+                                    spacing: 1,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            if (widget.mastered) ...<Widget>[
-                              const SizedBox(width: 6),
-                              const Icon(
-                                Icons.check_circle,
-                                size: 14,
-                                color: AppColors.jade,
-                              ),
+                              if (widget.mastered) ...<Widget>[
+                                const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.check_circle,
+                                  size: 14,
+                                  color: AppColors.jade,
+                                ),
+                              ],
                             ],
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.meta,
-                          style: widget.pinyin
-                              ? serif(12,
-                                  color: AppColors.inkSoft, content: true)
-                              : const TextStyle(
-                                  fontSize: 12, color: AppColors.inkSoft),
-                        ),
-                      ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.meta,
+                            style: widget.pinyin
+                                ? serif(
+                                    12,
+                                    color: AppColors.inkSoft,
+                                    content: true,
+                                  )
+                                : const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.inkSoft,
+                                  ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (EntrySpeakButton.audioKeyForEntry(widget.name, widget.group) != null)
-                    EntrySpeakButton(title: widget.name, group: widget.group),
-                  IconButton(
-                    onPressed: widget.onToggleMastered,
-                    icon: Icon(
-                      widget.mastered ? Icons.bookmark : Icons.bookmark_border,
-                      size: 19,
+                    if (widget.pinyin)
+                      SpeakButton(
+                        audioKey: PinyinAudioKeys.word(widget.name),
+                        size: 48,
+                        color: AppColors.seal,
+                      )
+                    else if (EntrySpeakButton.audioKeyForEntry(
+                          widget.name,
+                          widget.group,
+                        ) !=
+                        null)
+                      EntrySpeakButton(title: widget.name, group: widget.group),
+                    IconButton(
+                      onPressed: widget.onToggleMastered,
+                      icon: Icon(
+                        widget.mastered
+                            ? Icons.bookmark
+                            : Icons.bookmark_border,
+                        size: 19,
+                      ),
+                      color: widget.mastered
+                          ? AppColors.jade
+                          : AppColors.inkFaint,
+                      tooltip: widget.mastered ? '取消掌握' : '标记为已掌握',
+                      // 触控目标保持 ≥48dp：compact 会压到 40dp，孩子和大屏上更易误触。
                     ),
-                    color: widget.mastered
-                        ? AppColors.jade
-                        : AppColors.inkFaint,
-                    tooltip: widget.mastered ? '取消掌握' : '标记为已掌握',
-                    // 触控目标保持 ≥48dp：compact 会压到 40dp，孩子和大屏上更易误触。
-                  ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20,
-                    color: AppColors.inkFaint,
-                  ),
-                ],
+                    Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 20,
+                      color: AppColors.inkFaint,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -375,7 +408,12 @@ class _StudyTileState extends State<_StudyTile> {
                   const Divider(color: AppColors.line, height: 16),
                   Text(
                     widget.detail,
-                    style: serif(16, height: 1.8, spacing: 2, content: widget.pinyin),
+                    style: serif(
+                      16,
+                      height: 1.8,
+                      spacing: 2,
+                      content: widget.pinyin,
+                    ),
                   ),
                 ],
               ),

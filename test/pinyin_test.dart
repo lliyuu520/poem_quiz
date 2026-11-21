@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poem_quiz/data/grade.dart';
+import 'package:poem_quiz/data/pinyin_audio.dart';
 import 'package:poem_quiz/data/pinyin.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
@@ -33,7 +34,9 @@ void main() {
     test('规模足以支撑每个年级出满一局', () {
       expect(kPinyin.length, greaterThanOrEqualTo(300));
       // 每个年级都要有足够条目出一局 10 题（含累加后更低年级）。
-      for (final g in GradeLevel.values.where((g) => g.grade >= 1 && g.grade <= 6)) {
+      for (final g in GradeLevel.values.where(
+        (g) => g.grade >= 1 && g.grade <= 6,
+      )) {
         final n = kPinyinTopic.countForGrade(g);
         expect(n, greaterThanOrEqualTo(10), reason: '${g.title} 只有 $n 条，出不满一局');
       }
@@ -43,11 +46,15 @@ void main() {
   group('拼音科目', () {
     test('按学龄分档，题池随年级扩大', () {
       // 一年级只含一年级条目；六年级含全部。
-      expect(kPinyinTopic.countForGrade(GradeLevel.g1),
-          kPinyin.where((e) => e.grade == 1).length);
+      expect(
+        kPinyinTopic.countForGrade(GradeLevel.g1),
+        kPinyin.where((e) => e.grade == 1).length,
+      );
       expect(kPinyinTopic.countForGrade(GradeLevel.g6), kPinyin.length);
-      expect(kPinyinTopic.countForGrade(GradeLevel.g1),
-          lessThan(kPinyinTopic.countForGrade(GradeLevel.g3)));
+      expect(
+        kPinyinTopic.countForGrade(GradeLevel.g1),
+        lessThan(kPinyinTopic.countForGrade(GradeLevel.g3)),
+      );
     });
 
     test('每个年级都有条目', () {
@@ -93,10 +100,16 @@ void main() {
         '婆婆': 'pó po',
         '衣服': 'yī fu',
       };
-      final byTitle = <String, String>{for (final e in kPinyin) e.title: e.author};
+      final byTitle = <String, String>{
+        for (final e in kPinyin) e.title: e.author,
+      };
       for (final entry in expected.entries) {
-        expect(byTitle[entry.key], entry.value,
-            reason: '「${entry.key}」的读音应为 ${entry.value}，实际 ${byTitle[entry.key] ?? '（缺失）'}');
+        expect(
+          byTitle[entry.key],
+          entry.value,
+          reason:
+              '「${entry.key}」的读音应为 ${entry.value}，实际 ${byTitle[entry.key] ?? '（缺失）'}',
+        );
       }
     });
 
@@ -114,13 +127,28 @@ void main() {
       final entry = kPinyin.first;
       expect(kPinyinTopic.displayNameOf(entry), entry.title);
       expect(kPinyinTopic.displayNameOf(entry), isNot(contains('《')));
-      expect(kPinyinTopic.displaySummaryOf(entry), '${entry.title} · ${entry.author}');
+      expect(
+        kPinyinTopic.displaySummaryOf(entry),
+        '${entry.title} · ${entry.author}',
+      );
     });
 
     test('诗词科目仍显示书名号与「朝代 · 作者《标题》」', () {
       final entry = kPoetryTopic.entries.first;
       expect(kPoetryTopic.displayNameOf(entry), '《${entry.title}》');
       expect(kPoetryTopic.displaySummaryOf(entry), entry.source);
+    });
+  });
+
+  group('拼音语音', () {
+    test('音频键由字词派生，唯一且与列表位置无关', () {
+      expect(PinyinAudioKeys.word('长大'), 'py_957f5927');
+      expect(PinyinAudioKeys.word('长短'), 'py_957f77ed');
+      final keys = kPinyin.map((e) => PinyinAudioKeys.word(e.title)).toList();
+      expect(keys.toSet().length, kPinyin.length);
+      for (final key in keys) {
+        expect(key, matches(RegExp(r'^py_(?:[0-9a-f]{4})+$')));
+      }
     });
   });
 
@@ -150,7 +178,11 @@ void main() {
         )) {
           expect(q.focus, q.poem.title, reason: '题干应是字词');
           expect(q.answerText, q.poem.author, reason: '答案应是该字词读音');
-          expect(q.options.toSet().length, q.options.length, reason: '选项重复: ${q.options}');
+          expect(
+            q.options.toSet().length,
+            q.options.length,
+            reason: '选项重复: ${q.options}',
+          );
           expect(q.options[q.answerIndex], q.poem.author);
         }
       }
@@ -166,7 +198,11 @@ void main() {
         )) {
           expect(q.focus, q.poem.author, reason: '题干应是读音');
           expect(q.answerText, q.poem.title, reason: '答案应是字词');
-          expect(q.options.toSet().length, q.options.length, reason: '选项重复: ${q.options}');
+          expect(
+            q.options.toSet().length,
+            q.options.length,
+            reason: '选项重复: ${q.options}',
+          );
         }
       }
     });

@@ -85,7 +85,7 @@ void main() {
           ),
         );
         expect(find.text('诗词'), findsWidgets);
-                // 范围卡按出生年月展示推算档位，不再列出十个可选档。
+        // 范围卡按出生年月展示推算档位，不再列出十个可选档。
         final gradeTitle = expectGradeOf(2018, 9).title;
         expect(find.textContaining(gradeTitle), findsWidgets);
         expect(find.text('拓展'), findsNothing, reason: '已设出生年月时不应落拓展档');
@@ -166,8 +166,11 @@ void main() {
       await tester.tap(find.text('开始答题'));
       await tester.pumpAndSettle();
       final page = tester.widget<QuizPage>(find.byType(QuizPage));
-      expect(page.session.plan.targetGrade, expected.grade,
-          reason: '开局应按出生年月推算的档位出题');
+      expect(
+        page.session.plan.targetGrade,
+        expected.grade,
+        reason: '开局应按出生年月推算的档位出题',
+      );
       expect(tester.takeException(), isNull);
     });
   });
@@ -175,7 +178,12 @@ void main() {
   group('答题页', () {
     Future<QuizSession> makeSession() async {
       final engine = QuizEngine(poems: kPoetryTopic.entries);
-      return buildSession(engine: engine, topic: kPoetryTopic, count: 5, grade: GradeLevel.g3);
+      return buildSession(
+        engine: engine,
+        topic: kPoetryTopic,
+        count: 5,
+        grade: GradeLevel.g3,
+      );
     }
 
     for (final (name, size) in <(String, Size)>[
@@ -216,11 +224,11 @@ void main() {
       for (final p in prompts) {
         expect(find.text(p), findsNothing, reason: '拼音科目出了诗词题型：$p');
       }
+      expect(find.byIcon(Icons.volume_up_rounded), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
     // 英语题型的题干可能是「只有喇叭」，且带插画；这类布局与其它科目差别最大，
-    // 三种窗口都要过一遍。
     for (final (name, size) in <(String, Size)>[
       ('手机', phone),
       ('平板竖屏', tabletPortrait),
@@ -300,8 +308,11 @@ void main() {
       );
       final wideWidth = tester.getSize(find.byType(InkCard).first).width;
 
-      expect(wideWidth, lessThan(narrowWidth),
-          reason: '横屏应左右分栏，题目卡实际宽 $wideWidth（竖屏 $narrowWidth）');
+      expect(
+        wideWidth,
+        lessThan(narrowWidth),
+        reason: '横屏应左右分栏，题目卡实际宽 $wideWidth（竖屏 $narrowWidth）',
+      );
       expect(tester.takeException(), isNull);
     });
   });
@@ -317,16 +328,12 @@ void main() {
         await pumpAt(
           tester,
           size,
-          () => SettingsPage(
-            store: store,
-            topic: kPoetryTopic,
-            profile: profile,
-          ),
+          () =>
+              SettingsPage(store: store, topic: kPoetryTopic, profile: profile),
         );
         expect(find.text('学龄'), findsOneWidget);
         expect(find.text('2018 年 9 月'), findsOneWidget);
-        expect(find.textContaining('推荐学龄：'),
-            findsOneWidget);
+        expect(find.textContaining('推荐学龄：'), findsOneWidget);
         expect(find.text('生涯模式'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });

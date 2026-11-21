@@ -6,15 +6,40 @@
 - 少数 pypinyin 处理不了的（儿化音「花儿」→ huā r、轻声）在 OVERRIDES 里定向修正。
 - 每个词标注年级，按「一年级→六年级」难度递增编排。
 
-用法：python -I tool/gen_pinyin.py
-只生成数据文件，不参与构建。
+用法：
+    python -I tool/gen_pinyin.py            # 只生成 Dart 题库
+    python -I tool/gen_pinyin.py --audio    # 同时合成音频（需 edge-tts 与 ffmpeg）
+
+音频不打进 APK，按字词生成稳定文件名，上传 OSS 后首次播放时下载。
 """
 
+import argparse
+import asyncio
 import json
 import os
+import shutil
+import subprocess
 import sys
+from pathlib import Path
 
 from pypinyin import Style, pinyin
+
+ROOT = Path(__file__).resolve().parent.parent
+AUDIO_OUT = ROOT / 'assets' / 'audio' / 'pinyin'
+VOICE = 'zh-CN-XiaoxiaoNeural'
+
+
+def audio_key(word: str) -> str:
+    """与 lib/data/pinyin_audio.dart 一致：按 UTF-16 编码，与列表位置无关。"""
+    return 'py_' + ''.join(format(ord(ch), '04x') for ch in word)
+
+
+def audio_jobs() -> list[tuple[str, str]]:
+    jobs = []
+    for groups in GRADES.values():
+        for words in groups.values():
+            jobs.extend((audio_key(word), word) for word in words)
+    return list(dict.fromkeys(jobs))
 
 # pypinyin 按词取音仍会出错的，在这里定向修正（键为汉字词，值为读音列表）。
 OVERRIDES = {
@@ -123,7 +148,7 @@ def dart_escape(s: str) -> str:
     return s.replace("'", r"\'")
 
 
-def build():
+def build(audio: bool = False):
     entries = []
     seen = set()
     problems = []
@@ -199,6 +224,71 @@ def build():
         for p in problems:
             print('  ', p)
 
+    if audio:
+        asyncio.run(synth(entries))
+
+
+async def synth(entries: list[dict]) -> None:
+    """固定中文音色生成字词语音；失败可续跑，不因单条超时空等整批。"""
+    import edge_tts
+
+    AUDIO_OUT.mkdir(parents=True, exist_ok=True)
+    semaphore = asyncio.Semaphore(4)
+    failures = []
+
+    async def one(entry: dict) -> None:
+        name = audio_key(entry['word'])
+        if (AUDIO_OUT / f'{name}.opus').exists() or (AUDIO_OUT / f'{name}.mp3').exists():
+            return
+        async with semaphore:
+            for attempt in range(3):
+                try:
+                    await asyncio.wait_for(
+                        edge_tts.Communicate(entry['word'], VOICE, rate='-15%').save(
+                            str(AUDIO_OUT / f'{name}.mp3')
+                        ),
+                        timeout=30,
+                    )
+                    print(f"  synth {name}: {entry['word']}", flush=True)
+                    return
+                except (TimeoutError, OSError) as exc:
+                    print(f"  retry {name}: {type(exc).__name__}", flush=True)
+            failures.append(entry['word'])
+
+    await asyncio.gather(*(one(entry) for entry in entries))
+    if failures:
+        print(f'合成失败 {len(failures)} 条，重跑可续传：{failures}', flush=True)
+
+    ffmpeg = shutil.which('ffmpeg')
+    if not ffmpeg:
+        raise RuntimeError('找不到 ffmpeg，无法生成 opus')
+    for mp3 in AUDIO_OUT.glob('*.mp3'):
+        opus = mp3.with_suffix('.opus')
+        if not opus.exists():
+            subprocess.run(
+                [ffmpeg, '-y', '-loglevel', 'error', '-i', str(mp3),
+                 '-c:a', 'libopus', '-b:a', '32k', '-ac', '1', '-ar', '24000', str(opus)],
+                check=True,
+            )
+    manifest = {
+        'voice': VOICE,
+        'count': len(entries),
+        'files': [audio_key(entry['word']) for entry in entries],
+        'words': {audio_key(entry['word']): entry['word'] for entry in entries},
+    }
+    with (AUDIO_OUT / 'manifest.json').open('w', encoding='utf-8', newline='\n') as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+        f.write('\n')
+    print(f'音频 {len(entries)} 条，写入 {AUDIO_OUT.relative_to(ROOT)}')
 
 if __name__ == '__main__':
-    build()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--audio', action='store_true', help='合成字词点读音频')
+    parser.add_argument('--keep-mp3', action='store_true', help='转码后保留 mp3')
+    args = parser.parse_args()
+    build(audio=args.audio)
+    if args.audio and len(list(AUDIO_OUT.glob('*.opus'))) != len(audio_jobs()):
+        sys.exit('音频未生成齐全，请重跑补齐后再上传')
+    if args.audio and not args.keep_mp3:
+        for mp3 in AUDIO_OUT.glob('*.mp3'):
+            mp3.unlink()

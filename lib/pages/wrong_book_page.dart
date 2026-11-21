@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
+import '../data/pinyin_audio.dart';
 import '../data/progress_store.dart';
 import '../data/topic.dart';
 import '../models/poem.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
-import '../widgets/english_speech.dart';
+import '../widgets/speech.dart';
 
 /// 错题本：列出本科目答错过的条目，可展开看全文、手动移除。
 class WrongBookPage extends StatefulWidget {
@@ -52,6 +53,7 @@ class _WrongBookPageState extends State<WrongBookPage> {
                     children: <Widget>[
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
+                        tooltip: '返回',
                         icon: const Icon(
                           Icons.arrow_back,
                           size: 20,
@@ -63,7 +65,12 @@ class _WrongBookPageState extends State<WrongBookPage> {
                         '错题本',
                         style: serif(20, weight: FontWeight.w600, spacing: 3),
                       ),
-                      const Spacer(),
+                      Expanded(
+                        child: Text(
+                          '错题本',
+                          style: serif(20, weight: FontWeight.w600, spacing: 3),
+                        ),
+                      ),
                       if (poems.isNotEmpty)
                         TextButton(
                           onPressed: () => _confirmClear(context, store),
@@ -179,47 +186,71 @@ class _PoemTileState extends State<_PoemTile> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          widget.name,
-                          style: serif(17, weight: FontWeight.w600, spacing: 1),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.meta,
-                          style: widget.pinyin
-                              ? serif(12, color: AppColors.inkSoft, content: true)
-                              : const TextStyle(
-                                  fontSize: 12, color: AppColors.inkSoft),
-                        ),
-                      ],
+          Semantics(
+            button: true,
+            expanded: _expanded,
+            child: InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            widget.name,
+                            style: serif(
+                              17,
+                              weight: FontWeight.w600,
+                              spacing: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.meta,
+                            style: widget.pinyin
+                                ? serif(
+                                    12,
+                                    color: AppColors.inkSoft,
+                                    content: true,
+                                  )
+                                : const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.inkSoft,
+                                  ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (EntrySpeakButton.audioKeyForEntry(widget.name, widget.group) != null)
-                    EntrySpeakButton(title: widget.name, group: widget.group),
-                  IconButton(
-                    onPressed: widget.onRemove,
-                    icon: const Icon(Icons.check_circle_outline, size: 18),
-                    color: AppColors.jade,
-                    tooltip: '标记为已掌握',
-                    // 触控目标保持 ≥48dp：compact 会压到 40dp，孩子和大屏上更易误触。
-                  ),
-                  Icon(
-                    _expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 20,
-                    color: AppColors.inkFaint,
-                  ),
-                ],
+                    if (widget.pinyin)
+                      SpeakButton(
+                        audioKey: PinyinAudioKeys.word(widget.name),
+                        size: 48,
+                        color: AppColors.seal,
+                      )
+                    else if (EntrySpeakButton.audioKeyForEntry(
+                          widget.name,
+                          widget.group,
+                        ) !=
+                        null)
+                      EntrySpeakButton(title: widget.name, group: widget.group),
+                    IconButton(
+                      onPressed: widget.onRemove,
+                      icon: const Icon(Icons.check_circle_outline, size: 18),
+                      color: AppColors.jade,
+                      tooltip: '移出错题本',
+                      // 触控目标保持 ≥48dp：compact 会压到 40dp，孩子和大屏上更易误触。
+                    ),
+                    Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 20,
+                      color: AppColors.inkFaint,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -232,7 +263,12 @@ class _PoemTileState extends State<_PoemTile> {
                   const Divider(color: AppColors.line, height: 16),
                   Text(
                     widget.detail,
-                    style: serif(16, height: 1.8, spacing: 2, content: widget.pinyin),
+                    style: serif(
+                      16,
+                      height: 1.8,
+                      spacing: 2,
+                      content: widget.pinyin,
+                    ),
                   ),
                 ],
               ),
