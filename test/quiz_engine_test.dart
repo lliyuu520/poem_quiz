@@ -193,11 +193,8 @@ void main() {
   });
 
   group('学龄', () {
-    test('选项数按学龄档位', () {
-      // 一、二年级 3 个选项，三年级以上 4 个。
-      expect(GradeLevel.g1.optionCount, 3);
-      expect(GradeLevel.g2.optionCount, 3);
-      for (final g in GradeLevel.values.where((g) => g.grade >= 3 || g.isExtension)) {
+    test('各年级统一使用 4 个选项', () {
+      for (final g in GradeLevel.values) {
         expect(g.optionCount, 4, reason: '${g.title} 应为 4 个选项');
       }
 

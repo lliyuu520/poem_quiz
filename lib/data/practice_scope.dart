@@ -35,7 +35,7 @@ enum ScopeKind {
 enum ChallengeTier {
   gentle(
     title: '轻松',
-    remark: '3 个选项 · 多出认读题 · 干扰项好区分',
+    remark: '4 个选项 · 多出认读题 · 干扰项好区分',
   ),
   standard(
     title: '标准',
@@ -351,7 +351,7 @@ PracticePlan resolvePracticePlan({
     targetGrade = maxSchoolGrade;
   }
 
-  final optionCount = _optionCountFor(tier, targetGrade, recommendation);
+  final optionCount = 4;
   final kindWeights = kindWeightsFor(tier);
 
   final curriculumPoolSize =
@@ -379,22 +379,6 @@ Map<int, double> _clampToPresent(Map<int, double> weights, Set<int> present) {
     for (final entry in weights.entries)
       if (present.contains(entry.key)) entry.key: entry.value,
   };
-}
-
-int _optionCountFor(
-  ChallengeTier tier,
-  int? targetGrade,
-  GradeRecommendation recommendation,
-) {
-  switch (tier) {
-    case ChallengeTier.gentle:
-      return 3;
-    case ChallengeTier.standard:
-      final grade = targetGrade ?? recommendation.baselineGrade.grade;
-      return (grade == 1 || grade == 2) ? 3 : 4;
-    case ChallengeTier.challenge:
-      return 4;
-  }
 }
 
 /// 各策略下的题型权重。空映射表示等权（引擎内部按等权处理）。

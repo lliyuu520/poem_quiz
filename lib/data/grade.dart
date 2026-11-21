@@ -32,8 +32,8 @@ enum GradeLevel {
 
   bool get isSchoolGrade => grade >= 1 && grade <= 9;
 
-  /// 标准策略下的默认选项数：低年级减少干扰项，降低认读负担。
-  int get optionCount => (grade == 1 || grade == 2) ? 3 : 4;
+  /// 所有年级统一使用 A、B、C、D 四个选项。
+  int get optionCount => 4;
 
   /// 以本年级为主、逐级向低年级衰减的累计权重（1/3 衰减）。
   ///

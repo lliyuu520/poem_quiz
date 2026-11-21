@@ -157,16 +157,19 @@ void main() {
           p.kindWeights[QuestionKind.author]!, isTrue);
     });
 
-    test('轻松档：3 个选项，干扰项取更远', () {
+    test('轻松档：4 个选项，干扰项取更远', () {
       final p = plan(PracticeScope.grade(5), tier: ChallengeTier.gentle);
-      expect(p.optionCount, 3);
+      expect(p.optionCount, 4);
       expect(p.farDistractors, isTrue);
     });
 
-    test('标准档：选项数随年级，题型等权', () {
-      expect(plan(PracticeScope.grade(1)).optionCount, 3);
-      expect(plan(PracticeScope.grade(2)).optionCount, 3);
-      expect(plan(PracticeScope.grade(3)).optionCount, 4);
+    test('各难度策略与年级均为 4 个选项', () {
+      for (final tier in ChallengeTier.values) {
+        for (var grade = 1; grade <= 9; grade++) {
+          expect(plan(PracticeScope.grade(grade), tier: tier).optionCount, 4);
+        }
+      }
+      expect(plan(PracticeScope.extensionOnly).optionCount, 4);
       expect(plan(PracticeScope.grade(3)).kindWeights, isEmpty);
     });
   });

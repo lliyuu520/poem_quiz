@@ -53,8 +53,8 @@ const Topic kPinyinTopic = Topic(
   // 拼音条目不需要书名号，直接显示字词。
   nameOf: _pinyinName,
   summaryOf: _pinyinSummary,
-  tagline: '看字读音，看音认字',
-  intro: '看字词选读音、看读音选字词。拼音只在一年级系统学习，所以不分学龄档。',
+  tagline: '看字读音，听音辨词',
+  intro: '看字词选读音、看读音选字词。点喇叭听字词读音，按学龄分档练习。',
   seal: '音\nquiz',
   accent: AppColors.pinyin,
   accentSoft: AppColors.pinyinSoft,
