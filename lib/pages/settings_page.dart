@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -41,13 +43,19 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final year = await showDialog<int>(
       context: context,
-      builder: (ctx) => _YearPickerDialog(initialYear: initialYear, now: now),
+      builder: (ctx) => MediaQuery(
+        data: MediaQuery.of(context),
+        child: _YearPickerDialog(initialYear: initialYear, now: now),
+      ),
     );
     if (year == null || !mounted) return;
 
     final month = await showDialog<int>(
       context: context,
-      builder: (ctx) => _MonthPickerDialog(initialMonth: initialMonth),
+      builder: (ctx) => MediaQuery(
+        data: MediaQuery.of(context),
+        child: _MonthPickerDialog(initialMonth: initialMonth),
+      ),
     );
     if (month == null || !mounted) return;
 
@@ -134,6 +142,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             size: 20,
                             color: AppColors.inkSoft,
                           ),
+                          tooltip: '返回',
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -151,10 +160,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 12),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: _BirthTile(
-                      profile: profile,
-                      onTap: _pickBirth,
-                    ),
+                    child: _BirthTile(profile: profile, onTap: _pickBirth),
                   ),
                   const SizedBox(height: 16),
                   const Padding(
@@ -176,7 +182,11 @@ class _SettingsPageState extends State<SettingsPage> {
                                 profile.birthMonth,
                               ),
                             ),
-                            style: serif(15, weight: FontWeight.w600, spacing: 1),
+                            style: serif(
+                              15,
+                              weight: FontWeight.w600,
+                              spacing: 1,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -198,7 +208,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       label: '恢复跟随推荐',
                       icon: Icons.restart_alt,
                       filled: false,
-                      onPressed: store.practiceScope.isRecommended &&
+                      onPressed:
+                          store.practiceScope.isRecommended &&
                               store.challengeTier == ChallengeTier.standard
                           ? null
                           : _resetScope,
@@ -350,7 +361,11 @@ class _BirthTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 18, color: AppColors.inkFaint),
+              const Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: AppColors.inkFaint,
+              ),
             ],
           ),
         ),
@@ -373,9 +388,12 @@ class _YearPickerDialog extends StatelessWidget {
     final last = now.year;
     final years = <int>[for (var y = last; y >= first; y--) y];
     final controller = FixedExtentScrollController(
-      initialItem: years.indexOf(
-        initialYear.clamp(first, last).toInt(),
-      ),
+      initialItem: years.indexOf(initialYear.clamp(first, last).toInt()),
+    );
+    // 滚轮行高跟系统字号走；至少 40dp，再留一行内边距，避免大字体下选项被裁。
+    final itemExtent = max(
+      40.0,
+      MediaQuery.textScalerOf(context).scale(16) + 12,
     );
 
     return _CupertinoStyleDialog(
@@ -383,7 +401,7 @@ class _YearPickerDialog extends StatelessWidget {
       child: Expanded(
         child: CupertinoPicker(
           scrollController: controller,
-          itemExtent: 40,
+          itemExtent: itemExtent,
           onSelectedItemChanged: (_) {},
           children: <Widget>[
             for (final y in years)
@@ -404,15 +422,21 @@ class _MonthPickerDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        FixedExtentScrollController(initialItem: initialMonth - 1);
+    final controller = FixedExtentScrollController(
+      initialItem: initialMonth - 1,
+    );
+    // 与年份滚轮同一套大字体行高规则。
+    final itemExtent = max(
+      40.0,
+      MediaQuery.textScalerOf(context).scale(16) + 12,
+    );
 
     return _CupertinoStyleDialog(
       title: '出生月份',
       child: Expanded(
         child: CupertinoPicker(
           scrollController: controller,
-          itemExtent: 40,
+          itemExtent: itemExtent,
           onSelectedItemChanged: (_) {},
           children: <Widget>[
             for (var m = 1; m <= 12; m++)
@@ -483,9 +507,9 @@ class _UpdateSectionState extends State<_UpdateSection> {
   @override
   void initState() {
     super.initState();
-    _service
-        .currentVersion()
-        .then((v) => mounted ? setState(() => _currentName = v.name) : null);
+    _service.currentVersion().then(
+      (v) => mounted ? setState(() => _currentName = v.name) : null,
+    );
   }
 
   Future<void> _check() async {
@@ -590,8 +614,9 @@ class _UpdateSectionState extends State<_UpdateSection> {
                   value: _progress,
                   minHeight: 4,
                   backgroundColor: AppColors.line,
-                  valueColor:
-                      const AlwaysStoppedAnimation<Color>(AppColors.seal),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.seal,
+                  ),
                 ),
               ),
             ],

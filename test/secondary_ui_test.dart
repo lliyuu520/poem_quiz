@@ -1,0 +1,220 @@
+import 'dart:math';
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:poem_quiz/data/grade.dart';
+import 'package:poem_quiz/data/practice_scope.dart';
+import 'package:poem_quiz/data/profile.dart';
+import 'package:poem_quiz/data/progress_store.dart';
+import 'package:poem_quiz/data/quiz_engine.dart';
+import 'package:poem_quiz/data/quiz_session.dart';
+import 'package:poem_quiz/data/topics.dart';
+import 'package:poem_quiz/pages/home_page.dart';
+import 'package:poem_quiz/pages/result_page.dart';
+import 'package:poem_quiz/pages/settings_page.dart';
+import 'package:poem_quiz/pages/study_page.dart';
+import 'package:poem_quiz/pages/wrong_book_page.dart';
+import 'package:poem_quiz/theme/app_theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  const phone = Size(400, 800);
+
+  Future<void> pumpAt(
+    WidgetTester tester,
+    Widget child, {
+    double textScale = 1.0,
+    Size size = phone,
+  }) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+          child: child,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  group('设置页', () {
+    testWidgets('返回按钮有可访问提示，大字体下单屏内容可滚动且不溢出', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final profile = await UserProfile.load();
+      await pumpAt(
+        tester,
+        SettingsPage(store: store, topic: kPoetryTopic, profile: profile),
+        textScale: 2,
+      );
+
+      final back = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byIcon(Icons.arrow_back),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(back.tooltip, '返回');
+      expect(find.byType(SingleChildScrollView), findsOneWidget);
+      expect(find.text('学龄'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('年月滚轮行高随系统字号增长且不低于 40dp', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final profile = await UserProfile.load();
+      await pumpAt(
+        tester,
+        SettingsPage(store: store, topic: kPoetryTopic, profile: profile),
+        textScale: 2,
+      );
+
+      await tester.tap(find.text('设置出生年月'));
+      await tester.pumpAndSettle();
+      final yearPicker = tester
+          .widgetList<CupertinoPicker>(find.byType(CupertinoPicker))
+          .first;
+      expect(
+        yearPicker.itemExtent,
+        max(40.0, const TextScaler.linear(2).scale(16) + 12),
+      );
+
+      await tester.tap(find.text('确定'));
+      await tester.pumpAndSettle();
+      final monthPicker = tester.widget<CupertinoPicker>(
+        find.byType(CupertinoPicker),
+      );
+      expect(
+        monthPicker.itemExtent,
+        max(40.0, const TextScaler.linear(2).scale(16) + 12),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('首页', () {
+    testWidgets('常规手机所有操作在首屏且无需滚动，大字体可滚动兜底', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final profile = await UserProfile.load();
+      Widget home() => HomePage(
+        store: store,
+        topic: kPoetryTopic,
+        profile: profile,
+        onSwitchTopic: (_) {},
+      );
+
+      await pumpAt(tester, home());
+      final scroll = tester.widget<SingleChildScrollView>(
+        find.byType(SingleChildScrollView),
+      );
+      expect(scroll.physics, isNotNull);
+      expect(
+        tester
+            .state<ScrollableState>(find.byType(Scrollable))
+            .position
+            .maxScrollExtent,
+        0,
+      );
+      expect(find.text('开始答题'), findsOneWidget);
+      expect(find.text('学习模式'), findsOneWidget);
+      expect(find.text('错题本'), findsOneWidget);
+      final startY = tester.getTopLeft(find.text('开始答题')).dy;
+      final modeY = tester.getTopLeft(find.text('快问快答')).dy;
+      final studyY = tester.getTopLeft(find.text('学习模式')).dy;
+      expect(startY, greaterThan(modeY));
+      expect(studyY, greaterThan(startY));
+      expect(tester.getBottomLeft(find.text('学习模式')).dy, lessThan(800));
+      expect(tester.takeException(), isNull);
+
+      await pumpAt(tester, home(), textScale: 1.5);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('学习页与错题本', () {
+    testWidgets('学习页大字体下标题、搜索、48dp 分组与展开语义正常', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      await pumpAt(
+        tester,
+        StudyPage(store: store, topic: kPoetryTopic),
+        textScale: 1.5,
+      );
+
+      final back = tester.widget<IconButton>(
+        find.ancestor(
+          of: find.byIcon(Icons.arrow_back),
+          matching: find.byType(IconButton),
+        ),
+      );
+      expect(back.tooltip, '返回');
+      final all = find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.button == true &&
+            widget.properties.selected == true &&
+            widget.child is Material,
+      );
+      expect(all, findsWidgets);
+      final chip = all.first;
+      expect(tester.getSize(chip).height, greaterThanOrEqualTo(48));
+      await tester.tap(find.text('全部'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('错题本返回与移除提示匹配行为，展开状态可读', (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'poetry_wrong_poems': '["${kPoetryTopic.entries.first.id}"]',
+      });
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      await pumpAt(tester, WrongBookPage(store: store, topic: kPoetryTopic));
+      expect(find.byTooltip('返回'), findsOneWidget);
+      expect(find.byTooltip('移出错题本'), findsOneWidget);
+      expect(find.byTooltip('标记为已掌握'), findsNothing);
+      await tester.tap(
+        find.text(kPoetryTopic.displayNameOf(kPoetryTopic.entries.first)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(kPoetryTopic.entries.first.fullText), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('结算页', () {
+    testWidgets('大字体与长范围文案下统计卡自然换行且不溢出', (tester) async {
+      final plan = resolvePracticePlan(
+        scope: PracticeScope.recommended,
+        entries: kPoetryTopic.entries,
+        recommendation: const GradeRecommendation.inSchool(3),
+      );
+      expect(plan.label, contains('跟随推荐'), reason: '测试素材应覆盖长范围文案');
+
+      final engine = QuizEngine(poems: kPoetryTopic.entries);
+      final session = buildSession(
+        engine: engine,
+        topic: kPoetryTopic,
+        count: 8,
+        plan: plan,
+      );
+      for (var i = 0; i < session.questions.length; i++) {
+        session.submit(correct: i % 3 != 0);
+      }
+
+      await pumpAt(tester, ResultPage(session: session), textScale: 2);
+      expect(find.text('答对'), findsWidgets);
+      expect(find.text('答错'), findsWidgets);
+      expect(find.text('正确率'), findsOneWidget);
+      expect(find.textContaining('${session.correctCount} 题'), findsOneWidget);
+      expect(find.text(plan.label), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+}

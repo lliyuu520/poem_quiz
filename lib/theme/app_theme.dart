@@ -9,7 +9,8 @@ class AppColors {
   static const card = Color(0xFFFFFCF4);
   static const ink = Color(0xFF262119);
   static const inkSoft = Color(0xFF6E6455);
-  static const inkFaint = Color(0xFF9C9280);
+  // 辅助文字也用于数量、范围与解锁条件，不能只满足装饰线的低对比度。
+  static const inkFaint = Color(0xFF6E6455);
   static const seal = Color(0xFFA63A2E);
   static const sealSoft = Color(0xFFF3E2DC);
   static const gold = Color(0xFFB08A34);
@@ -73,10 +74,7 @@ TextStyle serif(
 }
 
 ThemeData buildAppTheme() {
-  final base = ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-  );
+  final base = ThemeData(useMaterial3: true, brightness: Brightness.light);
 
   return base.copyWith(
     scaffoldBackgroundColor: AppColors.paper,

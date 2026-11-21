@@ -78,7 +78,8 @@ class _HomePageState extends State<HomePage> {
     var best = SudokuDifficulty.one;
     for (final level in SudokuDifficulty.values) {
       final prev = level.previous;
-      if (prev == null || widget.store.clearedOf(prev.name) >= level.unlockAfter) {
+      if (prev == null ||
+          widget.store.clearedOf(prev.name) >= level.unlockAfter) {
         best = level;
       } else {
         break;
@@ -90,32 +91,31 @@ class _HomePageState extends State<HomePage> {
   ProgressStore get _store => widget.store;
 
   /// 由出生年月推算的推荐学龄。只作为「跟随推荐」的默认值与提示，不锁定范围。
-  GradeRecommendation get _recommendation => recommendForBirth(
-        widget.profile.birthYear,
-        widget.profile.birthMonth,
-      );
+  GradeRecommendation get _recommendation =>
+      recommendForBirth(widget.profile.birthYear, widget.profile.birthMonth);
 
   /// 本局出题计划：范围 + 难度策略解析后的年级权重、选项数与题型配比。
   PracticePlan get _plan => resolvePracticePlan(
-        scope: _scope,
-        entries: widget.topic.entries,
-        recommendation: _recommendation,
-        tier: _tier,
-      );
+    scope: _scope,
+    entries: widget.topic.entries,
+    recommendation: _recommendation,
+    tier: _tier,
+  );
 
   /// 打开范围/难度选择面板。选完写回该科目的存档。
   Future<void> _pickScope() async {
-    final result = await showModalBottomSheet<({PracticeScope scope, ChallengeTier tier})>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _ScopeSheet(
-        scope: _scope,
-        tier: _tier,
-        topic: widget.topic,
-        recommendation: _recommendation,
-      ),
-    );
+    final result =
+        await showModalBottomSheet<({PracticeScope scope, ChallengeTier tier})>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => _ScopeSheet(
+            scope: _scope,
+            tier: _tier,
+            topic: widget.topic,
+            recommendation: _recommendation,
+          ),
+        );
     if (result == null) return;
     await _store.setPracticeScope(result.scope);
     await _store.setChallengeTier(result.tier);
@@ -209,31 +209,33 @@ class _HomePageState extends State<HomePage> {
         child: SafeArea(
           child: ContentFrame(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                _TitleBlock(store: _store, topic: widget.topic, onSettings: _openSettings),
-                const SizedBox(height: 14),
-                _TopicTabs(
-                  currentId: widget.topic.id,
-                  onSelect: widget.onSwitchTopic,
-                ),
-                const SizedBox(height: 16),
-
-                // 内容区占满剩余高度；单页展示，不滚动。
-                Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                // 常规窗口没有可滚动距离；只有短屏或大字体确有必要时才滚动。
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      if (widget.topic.isBoardGame) ...<Widget>[
-                        // 数独：五档关卡列表。
+                      _TitleBlock(
+                        store: _store,
+                        topic: widget.topic,
+                        onSettings: _openSettings,
+                      ),
+                      const SizedBox(height: 14),
+                      _TopicTabs(
+                        currentId: widget.topic.id,
+                        onSelect: widget.onSwitchTopic,
+                      ),
+                      const SizedBox(height: 16),
+                      if (widget.topic.isBoardGame)
                         _SudokuStages(
                           store: _store,
                           selected: _difficulty,
                           onSelect: (d) => setState(() => _difficulty = d),
-                        ),
-                      ] else ...<Widget>[
-                        // 练习范围（或单一年级科目的内容说明）。
+                        )
+                      else ...<Widget>[
                         if (widget.topic.graded)
                           _ScopeCard(
                             plan: _plan,
@@ -243,8 +245,6 @@ class _HomePageState extends State<HomePage> {
                         else
                           _TopicIntro(topic: widget.topic),
                         const SizedBox(height: 14),
-
-                        // 玩法：横排三选一，紧凑不占高。
                         Row(
                           children: <Widget>[
                             for (final mode in GameMode.values) ...<Widget>[
@@ -262,9 +262,8 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ],
-
-                      const Spacer(),
-
+                      // 主操作紧跟选择项，留白放在内容与页脚之间。
+                      const SizedBox(height: 20),
                       PrimaryButton(
                         label: widget.topic.isBoardGame
                             ? '开始${_difficulty.title}'
@@ -272,23 +271,22 @@ class _HomePageState extends State<HomePage> {
                         icon: Icons.play_arrow_rounded,
                         onPressed: _start,
                       ),
-
-                      // 学习模式与错题本只建立在题库之上，数独没有这两样。
                       if (!widget.topic.isBoardGame) ...<Widget>[
                         const SizedBox(height: 12),
                         _SecondaryEntries(store: _store, topic: widget.topic),
                       ],
-
                       const SizedBox(height: 12),
+                      SizedBox(height: constraints.maxHeight > 620 ? 12 : 0),
                       Center(
                         child: Text(
                           widget.topic.isBoardGame
                               ? '离线可玩 · 共 ${SudokuDifficulty.values.length} 档'
                               : '共 ${widget.topic.entries.length} ${widget.topic.unit} · '
-                                  '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
+                                    '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.inkFaint,
+                            fontSize: 12,
+                            color: AppColors.inkSoft,
                             letterSpacing: 1,
                           ),
                         ),
@@ -296,7 +294,7 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -355,10 +353,7 @@ enum GameMode {
 ///
 /// 底部一条细线 + 当前科目的短横，用各科墨色标出选中态。
 class _TopicTabs extends StatelessWidget {
-  const _TopicTabs({
-    required this.currentId,
-    required this.onSelect,
-  });
+  const _TopicTabs({required this.currentId, required this.onSelect});
 
   final String currentId;
   final void Function(Topic topic) onSelect;
@@ -399,29 +394,34 @@ class _TopicTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: selected ? AppColors.seal : Colors.transparent,
-                width: 2,
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: selected ? AppColors.seal : Colors.transparent,
+                  width: 2,
+                ),
               ),
             ),
-          ),
-          child: Text(
-            topic.name,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              color: selected ? AppColors.ink : AppColors.inkFaint,
-              letterSpacing: 2,
+            child: Text(
+              topic.name,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? AppColors.ink : AppColors.inkSoft,
+                letterSpacing: 2,
+              ),
             ),
           ),
         ),
@@ -499,39 +499,45 @@ class _TitleBlock extends StatelessWidget {
                 color: AppColors.sealSoft,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(Icons.auto_stories_outlined, size: 20, color: AppColors.seal),
+              child: Icon(
+                Icons.auto_stories_outlined,
+                size: 20,
+                color: AppColors.seal,
+              ),
             ),
           ],
         ),
         if (!store.isEmpty) ...<Widget>[
-          const SizedBox(height: 18),
-          InkCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: topic.isBoardGame
-                // 数独记的是各档完成局数，没有错题本与正确率。
-                ? Row(
-                    children: <Widget>[
-                      _MiniStat(
-                        label: '已完成',
-                        value: '${SudokuDifficulty.values.fold<int>(0, (sum, d) => sum + store.clearedOf(d.name))} 局',
-                      ),
-                      _MiniDivider(),
-                      _MiniStat(label: '已解锁', value: _unlockedCount),
-                    ],
-                  )
-                : Row(
-                    children: <Widget>[
-                      _MiniStat(label: '最高分', value: '${store.bestScore}'),
-                      _MiniDivider(),
-                      _MiniStat(
-                        label: '总正确率',
-                        value: '${(store.accuracy * 100).round()}%',
-                      ),
-                      _MiniDivider(),
-                      _MiniStat(label: '错题本', value: '${store.wrongPoemIds.length}'),
-                    ],
-                  ),
-          ),
+          const SizedBox(height: 12),
+          topic.isBoardGame
+              // 数独记的是各档完成局数，没有错题本与正确率。
+              ? Wrap(
+                  spacing: 16,
+                  runSpacing: 4,
+                  children: <Widget>[
+                    _MiniStat(
+                      label: '已完成',
+                      value:
+                          '${SudokuDifficulty.values.fold<int>(0, (sum, d) => sum + store.clearedOf(d.name))} 局',
+                    ),
+                    _MiniStat(label: '已解锁', value: _unlockedCount),
+                  ],
+                )
+              : Wrap(
+                  spacing: 16,
+                  runSpacing: 4,
+                  children: <Widget>[
+                    _MiniStat(label: '最高分', value: '${store.bestScore}'),
+                    _MiniStat(
+                      label: '总正确率',
+                      value: '${(store.accuracy * 100).round()}%',
+                    ),
+                    _MiniStat(
+                      label: '错题本',
+                      value: '${store.wrongPoemIds.length}',
+                    ),
+                  ],
+                ),
         ],
       ],
     );
@@ -546,25 +552,18 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: <Widget>[
-          Text(value, style: serif(19, weight: FontWeight.w700, spacing: 0)),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11, color: AppColors.inkFaint),
+    return Text.rich(
+      TextSpan(
+        text: '$label ',
+        style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+        children: <InlineSpan>[
+          TextSpan(
+            text: value,
+            style: serif(14, weight: FontWeight.w700, spacing: 0),
           ),
         ],
       ),
     );
-  }
-}
-
-class _MiniDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 1, height: 24, color: AppColors.line);
   }
 }
 
@@ -639,10 +638,10 @@ class _ScopeCard extends StatelessWidget {
   }
 
   IconData get _icon => switch (plan.scope.kind) {
-        ScopeKind.extensionOnly => Icons.auto_stories_outlined,
-        ScopeKind.all || ScopeKind.textbook => Icons.library_books_outlined,
-        _ => Icons.school_outlined,
-      };
+    ScopeKind.extensionOnly => Icons.auto_stories_outlined,
+    ScopeKind.all || ScopeKind.textbook => Icons.library_books_outlined,
+    _ => Icons.school_outlined,
+  };
 
   /// 让「范围 = 题池」在界面上可见：本档多少、回顾多少、拓展多少。
   String get _summary {
@@ -694,33 +693,35 @@ class _ScopeSheetState extends State<_ScopeSheet> {
   int get _maxGrade => _topic.maxSchoolGrade ?? 1;
 
   PracticePlan get _preview => resolvePracticePlan(
-        scope: _scope,
-        entries: _topic.entries,
-        recommendation: widget.recommendation,
-        tier: _tier,
-      );
+    scope: _scope,
+    entries: _topic.entries,
+    recommendation: widget.recommendation,
+    tier: _tier,
+  );
 
   void _selectGrade(int grade) {
-    setState(() => _scope = PracticeScope.grade(grade).copyWith(
-          includeExtension: _scope.includeExtension,
-          review: _scope.review,
-        ));
+    setState(
+      () => _scope = PracticeScope.grade(grade).copyWith(
+        includeExtension: _scope.includeExtension,
+        review: _scope.review,
+      ),
+    );
   }
 
   void _selectKind(ScopeKind kind) {
     setState(() {
       _scope = switch (kind) {
         ScopeKind.recommended => PracticeScope.recommended.copyWith(
-            includeExtension: _scope.includeExtension,
-            review: _scope.review,
-          ),
+          includeExtension: _scope.includeExtension,
+          review: _scope.review,
+        ),
         ScopeKind.extensionOnly => PracticeScope.extensionOnly,
         ScopeKind.all => PracticeScope.all,
         // 切到区间时保留当前上下沿，避免没有值。
         ScopeKind.range => PracticeScope.range(
-            _scope.from ?? 1,
-            _scope.to ?? _maxGrade,
-          ).copyWith(review: _scope.review),
+          _scope.from ?? 1,
+          _scope.to ?? _maxGrade,
+        ).copyWith(review: _scope.review),
         ScopeKind.grade => PracticeScope.grade(_scope.to ?? _maxGrade),
         ScopeKind.textbook => PracticeScope.textbook,
       };
@@ -761,8 +762,10 @@ class _ScopeSheetState extends State<_ScopeSheet> {
               const SizedBox(height: 14),
               Row(
                 children: <Widget>[
-                  Text('练习范围',
-                      style: serif(19, weight: FontWeight.w600, spacing: 3)),
+                  Text(
+                    '练习范围',
+                    style: serif(19, weight: FontWeight.w600, spacing: 3),
+                  ),
                   const Spacer(),
                   Text(
                     '推荐：${widget.recommendation.title}',
@@ -795,7 +798,8 @@ class _ScopeSheetState extends State<_ScopeSheet> {
                   for (var g = 1; g <= _maxGrade; g++)
                     _PickChip(
                       label: _gradeLabel(g),
-                      selected: _scope.kind == ScopeKind.grade && _scope.to == g,
+                      selected:
+                          _scope.kind == ScopeKind.grade && _scope.to == g,
                       onTap: () => _selectGrade(g),
                     ),
                   _PickChip(
@@ -820,23 +824,31 @@ class _ScopeSheetState extends State<_ScopeSheet> {
                 const SizedBox(height: 12),
                 Row(
                   children: <Widget>[
-                    Text('从',
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.inkSoft)),
+                    Text(
+                      '从',
+                      style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                    ),
                     _gradeDropdown(
                       value: (_scope.from ?? 1).clamp(1, _maxGrade),
-                      onChanged: (v) => setState(() => _scope =
-                          PracticeScope.range(v, (_scope.to ?? _maxGrade).clamp(v, _maxGrade))
-                              .copyWith(review: _scope.review)),
+                      onChanged: (v) => setState(
+                        () => _scope = PracticeScope.range(
+                          v,
+                          (_scope.to ?? _maxGrade).clamp(v, _maxGrade),
+                        ).copyWith(review: _scope.review),
+                      ),
                     ),
-                    Text('到',
-                        style: TextStyle(
-                            fontSize: 13, color: AppColors.inkSoft)),
+                    Text(
+                      '到',
+                      style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
+                    ),
                     _gradeDropdown(
                       value: (_scope.to ?? _maxGrade).clamp(1, _maxGrade),
-                      onChanged: (v) => setState(() => _scope =
-                          PracticeScope.range((_scope.from ?? 1).clamp(1, v), v)
-                              .copyWith(review: _scope.review)),
+                      onChanged: (v) => setState(
+                        () => _scope = PracticeScope.range(
+                          (_scope.from ?? 1).clamp(1, v),
+                          v,
+                        ).copyWith(review: _scope.review),
+                      ),
                     ),
                   ],
                 ),
@@ -846,10 +858,13 @@ class _ScopeSheetState extends State<_ScopeSheet> {
                 SwitchListTile(
                   value: _scope.includeExtension,
                   onChanged: (v) => setState(
-                      () => _scope = _scope.copyWith(includeExtension: v)),
+                    () => _scope = _scope.copyWith(includeExtension: v),
+                  ),
                   contentPadding: EdgeInsets.zero,
-                  title: Text('叠加课外拓展',
-                      style: serif(14, weight: FontWeight.w600, spacing: 1)),
+                  title: Text(
+                    '叠加课外拓展',
+                    style: serif(14, weight: FontWeight.w600, spacing: 1),
+                  ),
                   subtitle: const Text(
                     '在教材范围之外少量混入课外名篇',
                     style: TextStyle(fontSize: 11, color: AppColors.inkFaint),
@@ -858,11 +873,14 @@ class _ScopeSheetState extends State<_ScopeSheet> {
               ],
               if (showReview) ...<Widget>[
                 const SizedBox(height: 8),
-                Text('回顾低年级',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.inkSoft,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  '回顾低年级',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.inkSoft,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -876,8 +894,8 @@ class _ScopeSheetState extends State<_ScopeSheet> {
                           ReviewMode.reinforced => '加强回顾',
                         },
                         selected: _scope.review == r,
-                        onTap: () => setState(
-                            () => _scope = _scope.copyWith(review: r)),
+                        onTap: () =>
+                            setState(() => _scope = _scope.copyWith(review: r)),
                       ),
                   ],
                 ),
@@ -885,11 +903,14 @@ class _ScopeSheetState extends State<_ScopeSheet> {
               const SizedBox(height: 18),
               const Divider(color: AppColors.line, height: 1),
               const SizedBox(height: 16),
-              Text('难度',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.inkSoft,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                '难度',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.inkSoft,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 8),
               for (final t in ChallengeTier.values) ...<Widget>[
                 _TierTile(
@@ -912,8 +933,8 @@ class _ScopeSheetState extends State<_ScopeSheet> {
               PrimaryButton(
                 label: '应用',
                 icon: Icons.check,
-                onPressed: () => Navigator.of(context)
-                    .pop((scope: _scope, tier: _tier)),
+                onPressed: () =>
+                    Navigator.of(context).pop((scope: _scope, tier: _tier)),
               ),
             ],
           ),
@@ -923,18 +944,21 @@ class _ScopeSheetState extends State<_ScopeSheet> {
   }
 
   String _gradeLabel(int g) => switch (g) {
-        1 => '一',
-        2 => '二',
-        3 => '三',
-        4 => '四',
-        5 => '五',
-        6 => '六',
-        7 => '七',
-        8 => '八',
-        _ => '九',
-      };
+    1 => '一',
+    2 => '二',
+    3 => '三',
+    4 => '四',
+    5 => '五',
+    6 => '六',
+    7 => '七',
+    8 => '八',
+    _ => '九',
+  };
 
-  Widget _gradeDropdown({required int value, required ValueChanged<int> onChanged}) {
+  Widget _gradeDropdown({
+    required int value,
+    required ValueChanged<int> onChanged,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: DropdownButton<int>(
@@ -967,24 +991,31 @@ class _PickChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        constraints: const BoxConstraints(minHeight: 40),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.seal : AppColors.card,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? AppColors.seal : AppColors.line),
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: selected ? AppColors.seal : AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: selected ? AppColors.seal : AppColors.line),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: selected ? Colors.white : AppColors.inkSoft,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            letterSpacing: 1,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: selected ? Colors.white : AppColors.inkSoft,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                letterSpacing: 1,
+              ),
+            ),
           ),
         ),
       ),
@@ -1074,7 +1105,11 @@ class _TopicIntro extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             topic.intro,
-            style: const TextStyle(fontSize: 11, color: AppColors.inkSoft, height: 1.5),
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.inkSoft,
+              height: 1.5,
+            ),
           ),
         ],
       ),
@@ -1138,76 +1173,87 @@ class _StageCard extends StatelessWidget {
 
     final subtitle = unlocked
         ? (cleared == 0
-            ? level.remark
-            : '已完成 $cleared 局${best == null ? '' : ' · 最快 ${best ~/ 60 > 0 ? '${best ~/ 60} 分 ' : ''}${best % 60} 秒'}')
+              ? level.remark
+              : '已完成 $cleared 局${best == null ? '' : ' · 最快 ${best ~/ 60 > 0 ? '${best ~/ 60} 分 ' : ''}${best % 60} 秒'}')
         : '完成${previous!.title} $prevCleared/${level.unlockAfter} 局解锁';
 
     return Opacity(
-      opacity: unlocked ? 1 : 0.55,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: unlocked ? onTap : null,
-          borderRadius: BorderRadius.circular(12),
-          child: InkCard(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            borderColor: selected ? AppColors.gold : null,
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 34,
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: unlocked ? AppColors.sealSoft : AppColors.paperDeep,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: unlocked
-                      ? Text(
-                          '${level.index + 1}',
-                          style: serif(
-                            16,
-                            color: AppColors.seal,
-                            weight: FontWeight.w700,
-                            spacing: 0,
-                          ),
-                        )
-                      : const Icon(Icons.lock_outline, size: 17, color: AppColors.inkFaint),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        level.title,
-                        style: serif(15, weight: FontWeight.w600, spacing: 2),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.inkSoft,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (unlocked)
+      opacity: unlocked ? 1 : 0.75,
+      child: Semantics(
+        button: unlocked,
+        enabled: unlocked,
+        selected: selected,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: unlocked ? onTap : null,
+            borderRadius: BorderRadius.circular(12),
+            child: InkCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              borderColor: selected ? AppColors.gold : null,
+              child: Row(
+                children: <Widget>[
                   Container(
-                    width: 18,
-                    height: 18,
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: selected ? AppColors.seal : AppColors.line,
-                        width: selected ? 5 : 1.4,
-                      ),
+                      color: unlocked
+                          ? AppColors.sealSoft
+                          : AppColors.paperDeep,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: unlocked
+                        ? Text(
+                            '${level.index + 1}',
+                            style: serif(
+                              16,
+                              color: AppColors.seal,
+                              weight: FontWeight.w700,
+                              spacing: 0,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.lock_outline,
+                            size: 17,
+                            color: AppColors.inkFaint,
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          level.title,
+                          style: serif(15, weight: FontWeight.w600, spacing: 2),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.inkSoft,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-              ],
+                  if (unlocked)
+                    Container(
+                      width: 18,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected ? AppColors.seal : AppColors.line,
+                          width: selected ? 5 : 1.4,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1232,48 +1278,55 @@ class _ModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          constraints: const BoxConstraints(minHeight: 68),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.sealSoft : AppColors.card,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? AppColors.seal : AppColors.line,
-              width: selected ? 1.6 : 1,
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            constraints: const BoxConstraints(minHeight: 68),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.sealSoft : AppColors.card,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: selected ? AppColors.seal : AppColors.line,
+                width: selected ? 1.6 : 1,
+              ),
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Icon(
-                mode.icon,
-                size: 18,
-                color: selected ? AppColors.seal : AppColors.inkSoft,
-              ),
-              const SizedBox(height: 5),
-              Text(
-                mode.title,
-                textAlign: TextAlign.center,
-                style: serif(
-                  12,
-                  weight: FontWeight.w600,
-                  spacing: 1,
-                  color: selected ? AppColors.seal : AppColors.ink,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  mode.icon,
+                  size: 18,
+                  color: selected ? AppColors.seal : AppColors.inkSoft,
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                '${mode.count} 题',
-                style: const TextStyle(fontSize: 10, color: AppColors.inkFaint),
-              ),
-            ],
+                const SizedBox(height: 5),
+                Text(
+                  mode.title,
+                  textAlign: TextAlign.center,
+                  style: serif(
+                    12,
+                    weight: FontWeight.w600,
+                    spacing: 1,
+                    color: selected ? AppColors.seal : AppColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${mode.count} 题',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.inkSoft,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1315,14 +1368,16 @@ class _SecondaryEntries extends StatelessWidget {
             icon: Icons.assignment_late_outlined,
             label: '错题本',
             badge: wrongCount > 0 ? '$wrongCount ${topic.unit}' : '空',
-            onTap: () {
-              if (wrongCount == 0) return;
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => WrongBookPage(store: store, topic: topic),
-                ),
-              );
-            },
+            onTap: wrongCount == 0
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            WrongBookPage(store: store, topic: topic),
+                      ),
+                    );
+                  },
           ),
         ),
       ],
@@ -1341,7 +1396,7 @@ class _EntryButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final String badge;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1371,9 +1426,11 @@ class _EntryButton extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       badge,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.inkFaint,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: onTap == null
+                            ? AppColors.inkFaint
+                            : AppColors.inkSoft,
                       ),
                     ),
                   ],

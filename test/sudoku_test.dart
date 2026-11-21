@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,9 +105,9 @@ int countSolutions(List<int> grid) {
 }
 
 List<int> solutionOf(Sudoku puzzle) => <int>[
-      for (var r = 0; r < puzzle.size; r++)
-        for (var c = 0; c < puzzle.size; c++) puzzle.solutionAt(r, c),
-    ];
+  for (var r = 0; r < puzzle.size; r++)
+    for (var c = 0; c < puzzle.size; c++) puzzle.solutionAt(r, c),
+];
 
 void main() {
   group('数独终盘', () {
@@ -121,11 +122,17 @@ void main() {
       final seen = <String>{};
       for (final level in SudokuDifficulty.values) {
         for (final solved in level.solutions) {
-          expect(solved.length, level.cellCount,
-              reason: '${level.title} 终盘尺寸应为 ${level.size}×${level.size}');
+          expect(
+            solved.length,
+            level.cellCount,
+            reason: '${level.title} 终盘尺寸应为 ${level.size}×${level.size}',
+          );
           expect(isValidGrid(solved), isTrue, reason: '${level.title} 终盘不合法');
-          expect(seen.add('${level.size}:${solved.join()}'), isTrue,
-              reason: '${level.title} 出现了重复终盘');
+          expect(
+            seen.add('${level.size}:${solved.join()}'),
+            isTrue,
+            reason: '${level.title} 出现了重复终盘',
+          );
         }
       }
     });
@@ -137,8 +144,11 @@ void main() {
       for (final level in SudokuDifficulty.values) {
         for (final puzzle in Sudoku.allOf(level)) {
           total++;
-          expect(puzzle.audit(), isNull,
-              reason: '${level.title} 有一道盘面自检失败：${puzzle.audit()}');
+          expect(
+            puzzle.audit(),
+            isNull,
+            reason: '${level.title} 有一道盘面自检失败：${puzzle.audit()}',
+          );
         }
       }
       // 五档 × 每档 2 终盘 × 2 挖空目标。
@@ -148,8 +158,11 @@ void main() {
     test('独立重算解数：每道题恰好一组解', () {
       for (final level in SudokuDifficulty.values) {
         for (final puzzle in Sudoku.allOf(level)) {
-          expect(countSolutions(puzzle.given), 1,
-              reason: '${level.title} 出现了非唯一解或无解');
+          expect(
+            countSolutions(puzzle.given),
+            1,
+            reason: '${level.title} 出现了非唯一解或无解',
+          );
         }
       }
     });
@@ -173,8 +186,11 @@ void main() {
         final known = Sudoku.allOf(level).map((p) => p.given.join()).toSet();
         for (var i = 0; i < 40; i++) {
           final p = Sudoku.open(level, null);
-          expect(known, contains(p.given.join()),
-              reason: '${level.title} 抽到了集合外的盘面');
+          expect(
+            known,
+            contains(p.given.join()),
+            reason: '${level.title} 抽到了集合外的盘面',
+          );
           expect(p.audit(), isNull);
         }
       }
@@ -185,16 +201,22 @@ void main() {
         final maxTarget = level.holes.reduce((a, b) => a > b ? a : b);
         for (final puzzle in Sudoku.allOf(level)) {
           final holes = puzzle.blanks.length;
-          expect(holes, lessThanOrEqualTo(maxTarget),
-              reason: '${level.title} 挖了 $holes 格，超过目标 $maxTarget');
+          expect(
+            holes,
+            lessThanOrEqualTo(maxTarget),
+            reason: '${level.title} 挖了 $holes 格，超过目标 $maxTarget',
+          );
           for (var r = 0; r < puzzle.size; r++) {
             final inRow = puzzle.given
                 .skip(r * puzzle.size)
                 .take(puzzle.size)
                 .where((v) => v != 0)
                 .length;
-            expect(inRow, greaterThan(0),
-                reason: '${level.title} 第 ${r + 1} 行没有提示');
+            expect(
+              inRow,
+              greaterThan(0),
+              reason: '${level.title} 第 ${r + 1} 行没有提示',
+            );
           }
         }
       }
@@ -209,8 +231,11 @@ void main() {
               .reduce((a, b) => a < b ? a : b),
       ];
       for (var i = 1; i < counts.length; i++) {
-        expect(counts[i], greaterThan(counts[i - 1]),
-            reason: '第 ${i + 1} 档没有比第 $i 档更难：$counts');
+        expect(
+          counts[i],
+          greaterThan(counts[i - 1]),
+          reason: '第 ${i + 1} 档没有比第 $i 档更难：$counts',
+        );
       }
     });
 
@@ -222,8 +247,10 @@ void main() {
               expect(p.isGiven(r, c), p.given[r * p.size + c] != 0);
             }
           }
-          expect(p.blanks.length + p.given.where((v) => v != 0).length,
-              p.cellCount);
+          expect(
+            p.blanks.length + p.given.where((v) => v != 0).length,
+            p.cellCount,
+          );
         }
       }
     });
@@ -268,7 +295,9 @@ void main() {
       final solved = solved9();
       // 构造只有 18 个提示、但其中一格重复的盘面。
       // 位掩码按位或会把重复悄悄合并，若解数算法不先查冲突就会误报「唯一解」。
-      final grid = <int>[for (var i = 0; i < 81; i++) i % 9 == 0 ? solved[i] : 0];
+      final grid = <int>[
+        for (var i = 0; i < 81; i++) i % 9 == 0 ? solved[i] : 0,
+      ];
       grid[1] = grid[0];
       expect(countSolutions(grid), 0, reason: '冲突盘面不该算出解');
       expect(Sudoku.auditGrid(solved, grid), isNotNull);
@@ -316,7 +345,8 @@ void main() {
         for (var round = 0; round < rounds; round++) {
           final holes = minHoles + rnd.nextInt(holeSpan);
           final grid = List<int>.from(solved);
-          final positions = List<int>.generate(cellCount, (i) => i)..shuffle(rnd);
+          final positions = List<int>.generate(cellCount, (i) => i)
+            ..shuffle(rnd);
           for (var k = 0; k < holes && k < positions.length; k++) {
             grid[positions[k]] = 0;
           }
@@ -327,9 +357,13 @@ void main() {
           if (verdict != null && verdict.contains('没有提示')) continue;
           final auditSaysUnique = verdict == null;
 
-          expect(auditSaysUnique, independent == 1,
-              reason: '解数判断不一致（${level.title}）：独立实现 $independent 组解，'
-                  'auditGrid 结论「${verdict ?? '唯一解'}」\n${grid.join()}');
+          expect(
+            auditSaysUnique,
+            independent == 1,
+            reason:
+                '解数判断不一致（${level.title}）：独立实现 $independent 组解，'
+                'auditGrid 结论「${verdict ?? '唯一解'}」\n${grid.join()}',
+          );
           checked++;
           if (auditSaysUnique) unique++;
         }
@@ -345,10 +379,16 @@ void main() {
     test('一星恒解锁，其余看上一档完成数', () {
       expect(SudokuDifficulty.one.unlockedBy(0), isTrue);
       for (final level in SudokuDifficulty.values.skip(1)) {
-        expect(level.unlockedBy(level.unlockAfter - 1), isFalse,
-            reason: '${level.title} 在未达标时不该解锁');
-        expect(level.unlockedBy(level.unlockAfter), isTrue,
-            reason: '${level.title} 达标后应解锁');
+        expect(
+          level.unlockedBy(level.unlockAfter - 1),
+          isFalse,
+          reason: '${level.title} 在未达标时不该解锁',
+        );
+        expect(
+          level.unlockedBy(level.unlockAfter),
+          isTrue,
+          reason: '${level.title} 达标后应解锁',
+        );
       }
     });
 
@@ -409,14 +449,58 @@ void main() {
     Future<void> pumpAt(
       WidgetTester tester,
       Size size,
-      Widget Function() build,
-    ) async {
+      Widget Function() build, {
+      double textScale = 1.0,
+    }) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(theme: buildAppTheme(), home: build()));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildAppTheme(),
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+            child: build(),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
     }
+
+    Future<void> pumpSudoku(
+      WidgetTester tester,
+      Size size, {
+      double textScale = 1.0,
+      SudokuDifficulty difficulty = SudokuDifficulty.one,
+      Random? random,
+    }) async {
+      final store = await ProgressStore.load(topicId: kSudokuTopic.id);
+      await pumpAt(
+        tester,
+        size,
+        () => SudokuPage(store: store, difficulty: difficulty, random: random),
+        textScale: textScale,
+      );
+    }
+
+    /// 当前盘面；通过页面状态读值，避免从一堆文本里猜哪个是格子。
+    _SudokuPageProbe probeOf(WidgetTester tester) {
+      return _SudokuPageProbe(
+        SudokuPage.debugStateOf(tester.state(find.byType(SudokuPage))),
+      );
+    }
+
+    Finder cellFinder(String label) => find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.container &&
+          widget.properties.label == label,
+      description: label,
+    );
+
+    InkWell digitKey(WidgetTester tester, int digit) => tester.widget<InkWell>(
+      find.byKey(ValueKey<String>('sudoku-digit-$digit')),
+    );
 
     const phone = Size(400, 800);
     const tabletLandscape = Size(1280, 800);
@@ -480,47 +564,189 @@ void main() {
         await pumpAt(
           tester,
           size,
-          () => SudokuPage(
-            store: store,
-            difficulty: SudokuDifficulty.one,
-          ),
+          () => SudokuPage(store: store, difficulty: SudokuDifficulty.one),
         );
         expect(find.text('一星'), findsOneWidget);
         // 一星是 4×4 入门盘面，只显示 1-4 数字键。
         for (var d = 1; d <= SudokuDifficulty.one.size; d++) {
-          expect(find.byKey(ValueKey<String>('sudoku-digit-$d')), findsOneWidget);
+          expect(
+            find.byKey(ValueKey<String>('sudoku-digit-$d')),
+            findsOneWidget,
+          );
         }
-        expect(find.byKey(const ValueKey<String>('sudoku-digit-5')), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('sudoku-digit-5')),
+          findsNothing,
+        );
         expect(find.text('擦除'), findsOneWidget);
         expect(find.text('撤销'), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }
 
-    testWidgets('点空格再点数字会填上，撤销能退回', (tester) async {
-      final store = await ProgressStore.load(topicId: kSudokuTopic.id);
-      await pumpAt(
-        tester,
-        phone,
-        () => SudokuPage(store: store, difficulty: SudokuDifficulty.one),
+    testWidgets('用满的数字键仍可改写玩家格，题面给定格才禁用', (tester) async {
+      await pumpSudoku(tester, phone);
+      var probe = probeOf(tester);
+      final blanks = probe.puzzle.blanks.toList();
+      final blank = blanks.first;
+      final index = blank.$1 * probe.puzzle.size + blank.$2;
+      final solution = probe.puzzle.solutionAt(blank.$1, blank.$2);
+      final other = solution % probe.puzzle.size + 1;
+
+      // 先错填，再重复点同值，验证按键始终可用且同值不改写历史。
+      await tester.tap(find.byKey(ValueKey<String>('sudoku-digit-$other')));
+      await tester.pumpAndSettle();
+      probe = probeOf(tester);
+      expect(probe.values[index], other);
+      expect(probe.history.length, 1);
+      await tester.tap(find.byKey(ValueKey<String>('sudoku-digit-$other')));
+      await tester.pumpAndSettle();
+      probe = probeOf(tester);
+      expect(probe.values[index], other);
+      expect(probe.history.length, 1);
+
+      // 某个数字已经用满盘面，且仍有空格时，它仍是可改写玩家格的工具。
+      final (nearFullDigit, nearFullBlank) = blanks
+          .map((blank) => (probe.puzzle.solutionAt(blank.$1, blank.$2), blank))
+          .firstWhere(
+            (entry) =>
+                probe.values.where((v) => v == entry.$1).length ==
+                probe.puzzle.size - 1,
+            orElse: () => (0, blanks.first),
+          );
+      expect(nearFullDigit, isNonZero, reason: '当前一星题面没有可凑满的数字');
+      await tester.tap(
+        cellFinder(probe.labelOf(nearFullBlank.$1, nearFullBlank.$2)),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ValueKey<String>('sudoku-digit-$nearFullDigit')),
+      );
+      await tester.pumpAndSettle();
+      probe = probeOf(tester);
+      expect(
+        probe.values.where((v) => v == nearFullDigit).length,
+        probe.puzzle.size,
       );
 
-      // 开局默认选中第一个空格。数字键用 key 定位，避免和盘面上已有的数字混淆。
-      int textCount() => tester.widgetList<Text>(find.byType(Text)).length;
-      final before = textCount();
-
-      // 找一个还有空位可填的数字：填满的数字键是禁用的。
-      for (var d = 1; d <= SudokuDifficulty.one.size; d++) {
-        await tester.tap(find.byKey(ValueKey<String>('sudoku-digit-$d')));
-        await tester.pumpAndSettle();
-        if (textCount() > before) break;
-      }
-      expect(textCount(), greaterThan(before), reason: '落子后盘面上应多一个数字');
-
-      await tester.tap(find.text('撤销'));
+      final anotherBlank = blanks.firstWhere(
+        (p) =>
+            p != nearFullBlank &&
+            probe.values[p.$1 * probe.puzzle.size + p.$2] == 0,
+      );
+      final anotherIndex =
+          anotherBlank.$1 * probe.puzzle.size + anotherBlank.$2;
+      await tester.tap(
+        cellFinder(probe.labelOf(anotherBlank.$1, anotherBlank.$2)),
+        warnIfMissed: false,
+      );
       await tester.pumpAndSettle();
-      expect(textCount(), before, reason: '撤销后应回到落子前');
+      probe = probeOf(tester);
+
+      // 满额数字仍可用来改写玩家格；剩余数量只是辅助展示。
+      expect(find.text('剩 0'), findsWidgets);
+      expect(digitKey(tester, nearFullDigit).onTap, isNotNull);
+      await tester.tap(
+        find.byKey(ValueKey<String>('sudoku-digit-$nearFullDigit')),
+      );
+      await tester.pumpAndSettle();
+      probe = probeOf(tester);
+      expect(
+        probe.values[anotherIndex],
+        nearFullDigit,
+        reason: '即使显示剩 0，数字键仍能改写另一个玩家格',
+      );
+
+      final givenRow = List<int>.generate(
+        probe.puzzle.size,
+        (r) => r,
+      ).firstWhere((r) => probe.puzzle.given[r * probe.puzzle.size] != 0);
+      await tester.tap(
+        cellFinder(probe.labelOf(givenRow, 0)),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      for (var d = 1; d <= probe.puzzle.size; d++) {
+        expect(digitKey(tester, d).onTap, isNull, reason: '给定格时数字 $d 应禁用');
+      }
+      expect(probe.values[givenRow * probe.puzzle.size], isNonZero);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('81 格都有行列、值、来源、选中与点击语义', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpSudoku(
+        tester,
+        phone,
+        difficulty: SudokuDifficulty.two,
+        random: Random(7),
+      );
+      final probe = probeOf(tester);
+      for (var r = 0; r < probe.puzzle.size; r++) {
+        for (var c = 0; c < probe.puzzle.size; c++) {
+          final finder = cellFinder(probe.labelOf(r, c));
+          expect(finder, findsOneWidget);
+          final data = tester.getSemantics(finder).getSemanticsData();
+          expect(data.label, probe.labelOf(r, c));
+          expect(data.flagsCollection.isButton, isTrue);
+          expect(data.flagsCollection.isEnabled, Tristate.isTrue);
+          expect(
+            data.flagsCollection.isSelected,
+            probe.selected == r * probe.puzzle.size + c
+                ? Tristate.isTrue
+                : Tristate.isFalse,
+          );
+          expect(data.flagsCollection.isReadOnly, probe.puzzle.isGiven(r, c));
+        }
+      }
+      expect(probe.labelOf(0, 0), startsWith('第 1 行第 1 列，'));
+      expect(probe.labelOf(8, 8), startsWith('第 9 行第 9 列，'));
+      semantics.dispose();
+    });
+
+    testWidgets('9×9 手机大字体下盘面与顶栏无溢出', (tester) async {
+      await pumpSudoku(
+        tester,
+        const Size(360, 780),
+        textScale: 2,
+        difficulty: SudokuDifficulty.two,
+        random: Random(11),
+      );
+      final probe = probeOf(tester);
+      for (var r = 0; r < probe.puzzle.size; r++) {
+        for (var c = 0; c < probe.puzzle.size; c++) {
+          expect(
+            tester.getSize(cellFinder(probe.labelOf(r, c))).width,
+            greaterThan(35),
+          );
+        }
+      }
+      expect(find.text('擦除'), findsOneWidget);
+      expect(find.text('撤销'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
+}
+
+/// 包装当前真实盘面快照；不断言某一道固定盘面。
+class _SudokuPageProbe {
+  _SudokuPageProbe(this._state);
+
+  final SudokuPageDebugState _state;
+
+  Sudoku get puzzle => _state.puzzle;
+  List<int> get values => _state.values;
+  List<(int, int)> get history => _state.history;
+  int? get selected => _state.selected;
+
+  String labelOf(int row, int column) {
+    final value = values[row * puzzle.size + column];
+    return <String>[
+      '第 ${row + 1} 行第 ${column + 1} 列',
+      value == 0 ? '空格' : '$value',
+      puzzle.isGiven(row, column) ? '题面数字，不可编辑' : '玩家填写',
+      if (_state.conflicts.contains(row * puzzle.size + column)) '有冲突',
+    ].join('，');
+  }
 }

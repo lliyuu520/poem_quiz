@@ -71,7 +71,10 @@ class ResultPage extends StatelessWidget {
                           highlight: true,
                         ),
                         _Divider(),
-                        _Stat(label: '答错', value: '${answered - session.correctCount}'),
+                        _Stat(
+                          label: '答错',
+                          value: '${answered - session.correctCount}',
+                        ),
                         _Divider(),
                         _Stat(
                           label: '正确率',
@@ -102,7 +105,7 @@ class ResultPage extends StatelessWidget {
                             value: session.clearedPoemIds.isEmpty
                                 ? '本局无新增'
                                 : '新增掌握 ${session.clearedPoemIds.length} '
-                                    '${session.topic.unit}',
+                                      '${session.topic.unit}',
                           ),
                         ],
                       ],
@@ -228,19 +231,29 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 短内容维持左右两端对齐；大字体或长内容让右侧收缩、自然换行，
+    // 不用缩小字体，也不让它把左侧标签挤出卡片。
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: const TextStyle(fontSize: 14, color: AppColors.inkSoft),
+        Flexible(
+          flex: 2,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 14, color: AppColors.inkSoft),
+          ),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            color: AppColors.ink,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 16),
+        Flexible(
+          flex: 3,
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.ink,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

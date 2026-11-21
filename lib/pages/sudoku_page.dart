@@ -31,6 +31,37 @@ class SudokuPage extends StatefulWidget {
 
   @override
   State<SudokuPage> createState() => _SudokuPageState();
+
+  /// 测试读取当前真实盘面，避免断言依赖随机抽到的固定题。
+  @visibleForTesting
+  static SudokuPageDebugState debugStateOf(State<SudokuPage> state) {
+    final page = state as _SudokuPageState;
+    return SudokuPageDebugState(
+      puzzle: page._puzzle,
+      values: List<int>.of(page._values),
+      history: List<(int, int)>.of(page._history),
+      selected: page._selected,
+      conflicts: page._conflicts,
+    );
+  }
+}
+
+/// 测试可读的盘面快照。字段都来自当前状态，不提供写入入口。
+@visibleForTesting
+class SudokuPageDebugState {
+  const SudokuPageDebugState({
+    required this.puzzle,
+    required this.values,
+    required this.history,
+    required this.selected,
+    required this.conflicts,
+  });
+
+  final Sudoku puzzle;
+  final List<int> values;
+  final List<(int, int)> history;
+  final int? selected;
+  final Set<int> conflicts;
 }
 
 class _SudokuPageState extends State<SudokuPage> {
@@ -179,20 +210,25 @@ class _SudokuPageState extends State<SudokuPage> {
     // 记录本档完成一局；跨过门槛时在弹窗里告诉孩子解锁了下一档。
     final before = widget.store.clearedOf(_difficulty.name);
     final next = _nextDifficulty;
-    _unlockedNext = next != null &&
+    _unlockedNext =
+        next != null &&
         before < next.unlockAfter &&
         before + 1 >= next.unlockAfter;
-    unawaited(widget.store.recordSudokuClear(
-      stage: _difficulty.name,
-      seconds: _seconds,
-    ));
+    unawaited(
+      widget.store.recordSudokuClear(
+        stage: _difficulty.name,
+        seconds: _seconds,
+      ),
+    );
     _showDoneDialog();
   }
 
   /// 下一档；已是最后一档返回 null。
   SudokuDifficulty? get _nextDifficulty {
     final next = _difficulty.index + 1;
-    return next < SudokuDifficulty.values.length ? SudokuDifficulty.values[next] : null;
+    return next < SudokuDifficulty.values.length
+        ? SudokuDifficulty.values[next]
+        : null;
   }
 
   Future<void> _showDoneDialog() async {
@@ -202,7 +238,10 @@ class _SudokuPageState extends State<SudokuPage> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card,
-        title: Text('填满了', style: serif(20, weight: FontWeight.w700, spacing: 3)),
+        title: Text(
+          '填满了',
+          style: serif(20, weight: FontWeight.w700, spacing: 3),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,7 +255,11 @@ class _SudokuPageState extends State<SudokuPage> {
               const SizedBox(height: 12),
               Text(
                 '解锁了「${next.title}」',
-                style: serif(15, color: AppColors.seal, weight: FontWeight.w600),
+                style: serif(
+                  15,
+                  color: AppColors.seal,
+                  weight: FontWeight.w600,
+                ),
               ),
             ],
           ],
@@ -259,9 +302,8 @@ class _SudokuPageState extends State<SudokuPage> {
                 _header(),
                 Expanded(
                   child: AdaptiveBuilder(
-                    builder: (context, size) => size.isExpanded
-                        ? _wideLayout()
-                        : _narrowLayout(),
+                    builder: (context, size) =>
+                        size.isExpanded ? _wideLayout() : _narrowLayout(),
                   ),
                 ),
               ],
@@ -276,6 +318,7 @@ class _SudokuPageState extends State<SudokuPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 16, 2),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -283,14 +326,34 @@ class _SudokuPageState extends State<SudokuPage> {
             tooltip: '退出',
           ),
           const SizedBox(width: 2),
-          SealTag(text: _difficulty.title),
-          const Spacer(),
-          _Stat(icon: Icons.timer_outlined, text: _formatDuration(_seconds)),
-          const SizedBox(width: 14),
-          _Stat(
-            icon: Icons.edit_note_outlined,
-            text: '错 $_mistakes',
-            color: _mistakes > 0 ? AppColors.seal : AppColors.inkSoft,
+          Flexible(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SealTag(text: _difficulty.title),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 14,
+                runSpacing: 4,
+                children: <Widget>[
+                  _Stat(
+                    icon: Icons.timer_outlined,
+                    text: _formatDuration(_seconds),
+                  ),
+                  _Stat(
+                    icon: Icons.edit_note_outlined,
+                    text: '错 $_mistakes',
+                    color: _mistakes > 0 ? AppColors.seal : AppColors.inkSoft,
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -307,10 +370,7 @@ class _SudokuPageState extends State<SudokuPage> {
         children: <Widget>[
           Expanded(flex: 3, child: _boardArea()),
           const SizedBox(width: 28),
-          Expanded(
-            flex: 2,
-            child: SingleChildScrollView(child: _keypadArea()),
-          ),
+          Expanded(flex: 2, child: SingleChildScrollView(child: _keypadArea())),
         ],
       ),
     );
@@ -319,7 +379,7 @@ class _SudokuPageState extends State<SudokuPage> {
   /// 窄屏：盘面在上，数字键在下。
   Widget _narrowLayout() {
     return ContentFrame(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -355,6 +415,7 @@ class _SudokuPageState extends State<SudokuPage> {
 
   Widget _keypadArea() {
     final selectedValue = _selected == null ? 0 : _values[_selected!];
+    final editable = !_isSelectedGiven;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -366,7 +427,8 @@ class _SudokuPageState extends State<SudokuPage> {
             for (var d = 1; d <= _puzzle.size; d++)
               _NumberKey(
                 digit: d,
-                used: _remainingOf(d) == 0,
+                remaining: _remainingOf(d),
+                enabled: editable,
                 onTap: () => _input(d),
               ),
           ],
@@ -397,7 +459,11 @@ class _SudokuPageState extends State<SudokuPage> {
         Text(
           _difficulty.remark,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 11, color: AppColors.inkFaint, height: 1.5),
+          style: const TextStyle(
+            fontSize: 11,
+            color: AppColors.inkFaint,
+            height: 1.5,
+          ),
         ),
       ],
     );
@@ -469,7 +535,10 @@ class _Board extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.card,
-        border: Border.all(color: AppColors.ink.withValues(alpha: 0.55), width: 1.6),
+        border: Border.all(
+          color: AppColors.ink.withValues(alpha: 0.55),
+          width: 1.6,
+        ),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
@@ -481,13 +550,16 @@ class _Board extends StatelessWidget {
                   for (var c = 0; c < size; c++)
                     Expanded(
                       child: _Cell(
+                        row: r,
+                        column: c,
                         value: values[r * size + c],
                         isGiven: given[r * size + c] != 0,
                         conflict: conflicts.contains(r * size + c),
                         selected: selected == r * size + c,
                         related: _isRelated(r, c),
                         sameValue:
-                            selectedValue != 0 && values[r * size + c] == selectedValue,
+                            selectedValue != 0 &&
+                            values[r * size + c] == selectedValue,
                         boxTop: r % boxDim == 0,
                         boxLeft: c % boxDim == 0,
                         boxBottom: r == size - 1,
@@ -517,6 +589,8 @@ class _Board extends StatelessWidget {
 
 class _Cell extends StatelessWidget {
   const _Cell({
+    required this.row,
+    required this.column,
     required this.value,
     required this.isGiven,
     required this.conflict,
@@ -530,6 +604,8 @@ class _Cell extends StatelessWidget {
     required this.onTap,
   });
 
+  final int row;
+  final int column;
   final int value;
   final bool isGiven;
   final bool conflict;
@@ -541,6 +617,16 @@ class _Cell extends StatelessWidget {
   final bool boxBottom;
   final bool boxRight;
   final VoidCallback onTap;
+
+  String get _semanticLabel {
+    final parts = <String>[
+      '第 ${row + 1} 行第 ${column + 1} 列',
+      value == 0 ? '空格' : '$value',
+      isGiven ? '题面数字，不可编辑' : '玩家填写',
+      if (conflict) '有冲突',
+    ];
+    return parts.join('，');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -558,69 +644,101 @@ class _Cell extends StatelessWidget {
     final fg = conflict
         ? AppColors.seal
         : isGiven
-            ? AppColors.ink
-            : AppColors.gold;
+        ? AppColors.ink
+        : AppColors.gold;
 
     final thick = AppColors.ink.withValues(alpha: 0.55);
     const thin = AppColors.line;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border(
-            left: BorderSide(
-              color: boxLeft ? thick : thin,
-              width: boxLeft ? 1.6 : 0.5,
-            ),
-            top: BorderSide(
-              color: boxTop ? thick : thin,
-              width: boxTop ? 1.6 : 0.5,
-            ),
-            right: boxRight ? BorderSide(color: thick, width: 1.6) : BorderSide.none,
-            bottom: boxBottom ? BorderSide(color: thick, width: 1.6) : BorderSide.none,
-          ),
-        ),
-        alignment: Alignment.center,
-        child: value == 0
-            ? null
-            : Text(
-                '$value',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: isGiven ? FontWeight.w700 : FontWeight.w500,
-                  color: fg,
-                  fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-                ),
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: _semanticLabel,
+      button: true,
+      enabled: true,
+      selected: selected,
+      readOnly: isGiven,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        // 9×9 手机上单格约 36dp，物理上凑不到 48dp 触控目标。
+        // 方案是缩小页面边距保持整盘同屏，并把点击范围严格留在格内：
+        // 不向外扩展热区、不与相邻格重叠，避免误触。
+        child: Container(
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border(
+              left: BorderSide(
+                color: boxLeft ? thick : thin,
+                width: boxLeft ? 1.6 : 0.5,
               ),
+              top: BorderSide(
+                color: boxTop ? thick : thin,
+                width: boxTop ? 1.6 : 0.5,
+              ),
+              right: boxRight
+                  ? BorderSide(color: thick, width: 1.6)
+                  : BorderSide.none,
+              bottom: boxBottom
+                  ? BorderSide(color: thick, width: 1.6)
+                  : BorderSide.none,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: value == 0
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.all(1.5),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$value',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: isGiven ? FontWeight.w700 : FontWeight.w500,
+                        color: fg,
+                        fontFeatures: const <FontFeature>[
+                          FontFeature.tabularFigures(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+        ),
       ),
     );
   }
 }
 
-/// 数字键。该数字已填满时变淡，提示不用再找。
+/// 数字键。只随当前格是否可编辑启停；剩余数量是辅助信息，
+/// 不据此禁用——它是改写玩家格的工具，错填和同值改写都必须可用。
 class _NumberKey extends StatelessWidget {
   const _NumberKey({
     required this.digit,
-    required this.used,
+    required this.remaining,
+    required this.enabled,
     required this.onTap,
   });
 
   final int digit;
-  final bool used;
+
+  /// 盘面上还差几个这个数字；仅用于展示。
+  final int remaining;
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: used ? 0.35 : 1,
+    final fg = enabled ? AppColors.ink : AppColors.inkFaint;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: '数字 $digit，还可填 $remaining 个',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           key: ValueKey<String>('sudoku-digit-$digit'),
-          onTap: used ? null : onTap,
+          onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(12),
           child: Container(
             width: 56,
@@ -631,14 +749,39 @@ class _NumberKey extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.line, width: 1.2),
             ),
-            child: Text(
-              '$digit',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: AppColors.ink,
-                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '$digit',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: fg,
+                        fontFeatures: const <FontFeature>[
+                          FontFeature.tabularFigures(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '剩 $remaining',
+                      style: const TextStyle(
+                        fontSize: 8,
+                        color: AppColors.inkFaint,
+                        height: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
