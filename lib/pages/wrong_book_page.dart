@@ -61,10 +61,6 @@ class _WrongBookPageState extends State<WrongBookPage> {
                         ),
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        '错题本',
-                        style: serif(20, weight: FontWeight.w600, spacing: 3),
-                      ),
                       Expanded(
                         child: Text(
                           '错题本',
@@ -97,19 +93,52 @@ class _WrongBookPageState extends State<WrongBookPage> {
                             ),
                           ),
                         )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                          itemCount: poems.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, i) => _PoemTile(
-                            name: widget.topic.displayNameOf(poems[i]),
-                            group: widget.topic.groupOf(poems[i]),
-                            pinyin: widget.topic.id == 'pinyin',
-                            meta: widget.topic.metaOf(poems[i]),
-                            detail: widget.topic.displayDetailOf(poems[i]),
-                            onRemove: () => store.removeWrong(poems[i].id),
-                          ),
+                      : AdaptiveBuilder(
+                          builder: (context, size) => size.isExpanded
+                              // 宽屏双列：与学习页同一套分摊方式。
+                              ? SingleChildScrollView(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    12,
+                                    20,
+                                    24,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: _tileColumn(poems, 0),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _tileColumn(poems, 1),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    12,
+                                    20,
+                                    24,
+                                  ),
+                                  itemCount: poems.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, i) => _PoemTile(
+                                    name: widget.topic.displayNameOf(poems[i]),
+                                    group: widget.topic.groupOf(poems[i]),
+                                    pinyin: widget.topic.id == 'pinyin',
+                                    meta: widget.topic.metaOf(poems[i]),
+                                    detail: widget.topic.displayDetailOf(
+                                      poems[i],
+                                    ),
+                                    onRemove: () =>
+                                        store.removeWrong(poems[i].id),
+                                  ),
+                                ),
                         ),
                 ),
               ],
@@ -117,6 +146,29 @@ class _WrongBookPageState extends State<WrongBookPage> {
           ),
         ),
       ),
+    );
+  }
+
+  /// 宽屏双列中的一列：按奇偶下标分摊条目，列内仍是可展开卡。
+  Widget _tileColumn(List<Poem> poems, int offset) {
+    final tiles = <Widget>[];
+    for (var i = offset; i < poems.length; i += 2) {
+      if (tiles.isNotEmpty) tiles.add(const SizedBox(height: 10));
+      tiles.add(
+        _PoemTile(
+          name: widget.topic.displayNameOf(poems[i]),
+          group: widget.topic.groupOf(poems[i]),
+          pinyin: widget.topic.id == 'pinyin',
+          meta: widget.topic.metaOf(poems[i]),
+          detail: widget.topic.displayDetailOf(poems[i]),
+          onRemove: () => widget.store.removeWrong(poems[i].id),
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: tiles,
     );
   }
 

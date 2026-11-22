@@ -9,6 +9,7 @@ import 'package:poem_quiz/data/profile.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
+import 'package:poem_quiz/data/topic.dart';
 import 'package:poem_quiz/data/topics.dart';
 import 'package:poem_quiz/pages/home_page.dart';
 import 'package:poem_quiz/pages/result_page.dart';
@@ -140,6 +141,75 @@ void main() {
   });
 
   group('学习页与错题本', () {
+    for (final topic in <Topic>[
+      kPoetryTopic,
+      kPinyinTopic,
+      kMathTopic,
+      kEnglishTopic,
+      kChengyuTopic,
+    ]) {
+      for (final (name, size, textScale) in <(String, Size, double)>[
+        ('小屏手机', const Size(375, 667), 1),
+        ('手机大字体', phone, 1.5),
+        ('平板横屏', const Size(1280, 800), 1),
+      ]) {
+        testWidgets('${topic.name}学习页 $name 分组紧凑且可选择、展开条目', (tester) async {
+          final store = await ProgressStore.load(topicId: topic.id);
+          await pumpAt(
+            tester,
+            StudyPage(store: store, topic: topic),
+            size: size,
+            textScale: textScale,
+          );
+          expect(tester.takeException(), isNull);
+          final chips = find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics &&
+                widget.properties.button == true &&
+                widget.properties.selected != null &&
+                widget.child is Material,
+          );
+          expect(chips, findsWidgets);
+          expect(
+            tester.getSize(chips.first).width,
+            lessThan(120),
+            reason: '「全部」按钮应随文字收窄，不能每个分组独占一行',
+          );
+          expect(tester.getSize(chips.first).height, greaterThanOrEqualTo(48));
+
+          for (final chip in chips.evaluate()) {
+            expect(
+              find.byWidget(chip.widget).hitTestable(),
+              findsOneWidget,
+              reason: '每个分组都应留在屏幕内并能点击',
+            );
+          }
+          final entry = topic.entries.first;
+          final group = find.descendant(
+            of: chips,
+            matching: find.text(topic.groupOf(entry)),
+          );
+          expect(group.hitTestable(), findsOneWidget);
+          await tester.tap(group);
+          await tester.pumpAndSettle();
+          final title = find.text(topic.displayNameOf(entry));
+          expect(title.hitTestable(), findsOneWidget);
+          await tester.tap(title);
+          await tester.pumpAndSettle();
+          // 展开正文必须在滚动列表区里：窄屏是 ListView，宽屏双列是
+          // SingleChildScrollView，两者都以 Scrollable 承载。
+          expect(
+            find.descendant(
+              of: find.byType(Scrollable),
+              matching: find.text(topic.displayDetailOf(entry)),
+            ),
+            findsOneWidget,
+          );
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+
     testWidgets('学习页大字体下标题、搜索、48dp 分组与展开语义正常', (tester) async {
       final store = await ProgressStore.load(topicId: kPoetryTopic.id);
       await pumpAt(

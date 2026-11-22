@@ -122,178 +122,232 @@ class _SettingsPageState extends State<SettingsPage> {
     final total = widget.topic.entries.length;
     final profile = widget.profile;
 
+    // 分区先拼好，窄屏顺序单列、宽屏两列并排（学龄+范围 | 生涯+关于）。
+    final birthSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const Padding(
+          padding: EdgeInsets.only(left: 12),
+          child: RuleDivider(label: '学龄'),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: _BirthTile(profile: profile, onTap: _pickBirth),
+        ),
+      ],
+    );
+
+    final scopeSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const SizedBox(height: 16),
+        const Padding(
+          padding: EdgeInsets.only(left: 12),
+          child: RuleDivider(label: '练习范围'),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: InkCard(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  store.practiceScope.describe(
+                    recommendForBirth(profile.birthYear, profile.birthMonth),
+                  ),
+                  style: serif(15, weight: FontWeight.w600, spacing: 1),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '难度 ${store.challengeTier.title} · 在首页「练习范围」里可随时调整',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.inkSoft,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: PrimaryButton(
+            label: '恢复跟随推荐',
+            icon: Icons.restart_alt,
+            filled: false,
+            onPressed:
+                store.practiceScope.isRecommended &&
+                    store.challengeTier == ChallengeTier.standard
+                ? null
+                : _resetScope,
+          ),
+        ),
+      ],
+    );
+
+    final careerSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const SizedBox(height: 16),
+        const Padding(
+          padding: EdgeInsets.only(left: 12),
+          child: RuleDivider(label: '生涯模式'),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: InkCard(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        '已掌握 $mastered / $total',
+                        style: serif(16, weight: FontWeight.w600, spacing: 1),
+                      ),
+                    ),
+                    Text(
+                      mastered == 0
+                          ? '暂无进度'
+                          : '${(mastered / total * 100).round()}%',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.inkFaint,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: LinearProgressIndicator(
+                    value: total == 0 ? 0 : mastered / total,
+                    minHeight: 4,
+                    backgroundColor: AppColors.line,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.jade,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  '答对的${widget.topic.name}不再出现在生涯模式里。'
+                  '全部通关后用这里重置，重新开始。',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.inkSoft,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: PrimaryButton(
+            label: '重置生涯进度',
+            icon: Icons.restart_alt,
+            filled: false,
+            onPressed: mastered == 0 ? null : _confirmResetCareer,
+          ),
+        ),
+      ],
+    );
+
+    final aboutSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const SizedBox(height: 24),
+        const RuleDivider(label: '关于'),
+        const SizedBox(height: 12),
+        const _UpdateSection(),
+      ],
+    );
+
     return Scaffold(
       body: PaperBackground(
         child: SafeArea(
-          child: ContentFrame(
-            padding: const EdgeInsets.fromLTRB(8, 8, 20, 28),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.only(left: 0),
-                    child: Row(
-                      children: <Widget>[
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            size: 20,
-                            color: AppColors.inkSoft,
-                          ),
-                          tooltip: '返回',
+          // AdaptiveBuilder 在 ContentFrame 外侧量窗口宽：内侧会被限宽
+          // 减内边距压到 840 以下，平板上误判成 medium。
+          child: AdaptiveBuilder(
+            builder: (context, size) {
+              final wide = size.isExpanded;
+              return ContentFrame(
+                padding: const EdgeInsets.fromLTRB(8, 8, 20, 28),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.only(left: 0),
+                        child: Row(
+                          children: <Widget>[
+                            IconButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              icon: const Icon(
+                                Icons.arrow_back,
+                                size: 20,
+                                color: AppColors.inkSoft,
+                              ),
+                              tooltip: '返回',
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '设置',
+                              style: serif(
+                                20,
+                                weight: FontWeight.w600,
+                                spacing: 3,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '设置',
-                          style: serif(20, weight: FontWeight.w600, spacing: 3),
+                      ),
+                      const SizedBox(height: 16),
+                      if (wide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[birthSection, scopeSection],
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[careerSection, aboutSection],
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            birthSection,
+                            scopeSection,
+                            careerSection,
+                            aboutSection,
+                          ],
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 12),
-                    child: RuleDivider(label: '学龄'),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: _BirthTile(profile: profile, onTap: _pickBirth),
-                  ),
-                  const SizedBox(height: 16),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 12),
-                    child: RuleDivider(label: '练习范围'),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: InkCard(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            store.practiceScope.describe(
-                              recommendForBirth(
-                                profile.birthYear,
-                                profile.birthMonth,
-                              ),
-                            ),
-                            style: serif(
-                              15,
-                              weight: FontWeight.w600,
-                              spacing: 1,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '难度 ${store.challengeTier.title} · 在首页「练习范围」里可随时调整',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.inkSoft,
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: PrimaryButton(
-                      label: '恢复跟随推荐',
-                      icon: Icons.restart_alt,
-                      filled: false,
-                      onPressed:
-                          store.practiceScope.isRecommended &&
-                              store.challengeTier == ChallengeTier.standard
-                          ? null
-                          : _resetScope,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 12),
-                    child: RuleDivider(label: '生涯模式'),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: InkCard(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  '已掌握 $mastered / $total',
-                                  style: serif(
-                                    16,
-                                    weight: FontWeight.w600,
-                                    spacing: 1,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                mastered == 0
-                                    ? '暂无进度'
-                                    : '${(mastered / total * 100).round()}%',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.inkFaint,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(2),
-                            child: LinearProgressIndicator(
-                              value: total == 0 ? 0 : mastered / total,
-                              minHeight: 4,
-                              backgroundColor: AppColors.line,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.jade,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            '答对的${widget.topic.name}不再出现在生涯模式里。'
-                            '全部通关后用这里重置，重新开始。',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.inkSoft,
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: PrimaryButton(
-                      label: '重置生涯进度',
-                      icon: Icons.restart_alt,
-                      filled: false,
-                      onPressed: mastered == 0 ? null : _confirmResetCareer,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const RuleDivider(label: '关于'),
-                  const SizedBox(height: 12),
-                  const _UpdateSection(),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),

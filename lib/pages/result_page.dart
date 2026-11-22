@@ -18,126 +18,209 @@ class ResultPage extends StatelessWidget {
 
     // 按正确率给一句评语，比单纯报数字更有反馈感。文案由科目提供（见 Topic.marks）。
     final mark = session.topic.markFor(accuracy);
+    final wrongTiles = <Widget>[
+      for (final id in session.wrongPoemIds)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: InkCard(
+            padding: const EdgeInsets.all(14),
+            child: _WrongPoemTile(id: id, session: session),
+          ),
+        ),
+    ];
 
     return Scaffold(
       body: PaperBackground(
         child: SafeArea(
-          child: ContentFrame(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      onPressed: () =>
-                          Navigator.of(context).popUntil((r) => r.isFirst),
-                      icon: const Icon(
-                        Icons.close,
-                        size: 20,
-                        color: AppColors.inkSoft,
-                      ),
-                      tooltip: '返回首页',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: Text(
-                      mark.title,
-                      style: serif(30, weight: FontWeight.w700, spacing: 6),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Text(
-                      mark.remark,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.inkSoft,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  InkCard(
-                    padding: const EdgeInsets.symmetric(vertical: 22),
-                    child: Row(
-                      children: <Widget>[
-                        _Stat(
-                          label: '答对',
-                          value: '${session.correctCount}',
-                          highlight: true,
-                        ),
-                        _Divider(),
-                        _Stat(
-                          label: '答错',
-                          value: '${answered - session.correctCount}',
-                        ),
-                        _Divider(),
-                        _Stat(
-                          label: '正确率',
-                          value: '${(accuracy * 100).round()}%',
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  InkCard(
-                    child: Column(
-                      children: <Widget>[
-                        _Row(label: '范围', value: session.plan.label),
-                        const SizedBox(height: 12),
-                        _Row(label: '难度', value: session.plan.tier.title),
-                        const SizedBox(height: 12),
-                        _Row(label: '答对', value: '${session.correctCount} 题'),
-                        const SizedBox(height: 12),
-                        _Row(
-                          label: '答错',
-                          value: '${answered - session.correctCount} 题',
-                        ),
-                        if (session.careerMode) ...<Widget>[
-                          const SizedBox(height: 12),
-                          _Row(
-                            label: '生涯推进',
-                            value: session.clearedPoemIds.isEmpty
-                                ? '本局无新增'
-                                : '新增掌握 ${session.clearedPoemIds.length} '
-                                      '${session.topic.unit}',
+          // AdaptiveBuilder 在 ContentFrame 外侧量窗口宽：内侧会被限宽减
+          // 内边距压到 840 以下，平板上误判成 medium。
+          child: AdaptiveBuilder(
+            builder: (context, size) => ContentFrame(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              child: SingleChildScrollView(
+                child: size.isExpanded
+                    // 宽屏双栏：左边成绩与统计，右边错题清单可对照回看。
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                _closeButton(context),
+                                const SizedBox(height: 8),
+                                Center(
+                                  child: Text(
+                                    mark.title,
+                                    style: serif(
+                                      34,
+                                      weight: FontWeight.w700,
+                                      spacing: 6,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Center(
+                                  child: Text(
+                                    mark.remark,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.inkSoft,
+                                      letterSpacing: 1,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 28),
+                                _statsCard(answered, accuracy),
+                                const SizedBox(height: 16),
+                                _detailCard(answered),
+                                const SizedBox(height: 24),
+                                PrimaryButton(
+                                  label: '返回首页',
+                                  icon: Icons.home_outlined,
+                                  onPressed: () => Navigator.of(
+                                    context,
+                                  ).popUntil((r) => r.isFirst),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                const RuleDivider(label: '本局错题'),
+                                const SizedBox(height: 16),
+                                if (wrongTiles.isEmpty)
+                                  Text(
+                                    '本局没有错题',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.inkFaint,
+                                      letterSpacing: 2,
+                                    ),
+                                  )
+                                else ...wrongTiles,
+                              ],
+                            ),
                           ),
                         ],
-                      ],
-                    ),
-                  ),
-
-                  if (session.wrongPoemIds.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 24),
-                    const RuleDivider(label: '本局错题'),
-                    const SizedBox(height: 16),
-                    for (final id in session.wrongPoemIds)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: InkCard(
-                          padding: const EdgeInsets.all(14),
-                          child: _WrongPoemTile(id: id, session: session),
-                        ),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          _closeButton(context),
+                          const SizedBox(height: 8),
+                          Center(
+                            child: Text(
+                              mark.title,
+                              style: serif(
+                                30,
+                                weight: FontWeight.w700,
+                                spacing: 6,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Center(
+                            child: Text(
+                              mark.remark,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.inkSoft,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          _statsCard(answered, accuracy),
+                          const SizedBox(height: 16),
+                          _detailCard(answered),
+                          if (wrongTiles.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 24),
+                            const RuleDivider(label: '本局错题'),
+                            const SizedBox(height: 16),
+                            ...wrongTiles,
+                          ],
+                          const SizedBox(height: 24),
+                          PrimaryButton(
+                            label: '返回首页',
+                            icon: Icons.home_outlined,
+                            onPressed: () =>
+                                Navigator.of(context).popUntil((r) => r.isFirst),
+                          ),
+                        ],
                       ),
-                  ],
-
-                  const SizedBox(height: 24),
-                  PrimaryButton(
-                    label: '返回首页',
-                    icon: Icons.home_outlined,
-                    onPressed: () =>
-                        Navigator.of(context).popUntil((r) => r.isFirst),
-                  ),
-                ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _closeButton(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: IconButton(
+        onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+        icon: const Icon(Icons.close, size: 20, color: AppColors.inkSoft),
+        tooltip: '返回首页',
+      ),
+    );
+  }
+
+  Widget _statsCard(int answered, double accuracy) {
+    return InkCard(
+      padding: const EdgeInsets.symmetric(vertical: 22),
+      child: Row(
+        children: <Widget>[
+          _Stat(
+            label: '答对',
+            value: '${session.correctCount}',
+            highlight: true,
+          ),
+          _Divider(),
+          _Stat(
+            label: '答错',
+            value: '${answered - session.correctCount}',
+          ),
+          _Divider(),
+          _Stat(
+            label: '正确率',
+            value: '${(accuracy * 100).round()}%',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailCard(int answered) {
+    return InkCard(
+      child: Column(
+        children: <Widget>[
+          _Row(label: '范围', value: session.plan.label),
+          const SizedBox(height: 12),
+          _Row(label: '难度', value: session.plan.tier.title),
+          const SizedBox(height: 12),
+          _Row(label: '答对', value: '${session.correctCount} 题'),
+          const SizedBox(height: 12),
+          _Row(
+            label: '答错',
+            value: '${answered - session.correctCount} 题',
+          ),
+          if (session.careerMode) ...<Widget>[
+            const SizedBox(height: 12),
+            _Row(
+              label: '生涯推进',
+              value: session.clearedPoemIds.isEmpty
+                  ? '本局无新增'
+                  : '新增掌握 ${session.clearedPoemIds.length} '
+                        '${session.topic.unit}',
+            ),
+          ],
+        ],
       ),
     );
   }

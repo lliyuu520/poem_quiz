@@ -119,50 +119,46 @@ class _SpeakButtonState extends State<SpeakButton> {
 
 /// 题干区：英语题的题干可能是「只有音频」，也可能是「词 + 喇叭」。
 ///
-/// 判题后补上英文原文与中文释义，让孩子知道自己刚才听的是什么。
+/// 听音类题判题后题干只留喇叭（可以再听一遍对照）；原文与释义由答题页
+/// 底部的反馈卡给出，正确选项也会高亮，题干里不再重复一份——判题后
+/// 题干、选项、反馈叠起来本来就长，能省一段是一段。
 class EnglishPrompt extends StatelessWidget {
   const EnglishPrompt({
     super.key,
     required this.question,
     required this.topic,
     required this.verdict,
+    this.enlarged = false,
   });
 
   final Question question;
   final Topic topic;
   final bool? verdict;
 
+  /// 宽屏舞台模式：喇叭、插画与词字号整体放大。
+  final bool enlarged;
+
   @override
   Widget build(BuildContext context) {
     final entry = question.poem;
     final key = _audioKeyFor(question);
-    // 听音类题的题干留空，屏幕只给喇叭；判题后才露出原文。
+    // 听音类题的题干留空，屏幕只给喇叭。
     final audioOnly = question.focus.isEmpty;
 
     return Column(
       children: <Widget>[
         if (audioOnly) ...<Widget>[
-          SpeakButton(audioKey: key, size: 72, label: '点这里听'),
-          if (verdict != null) ...<Widget>[
-            const SizedBox(height: 16),
-            Text(
-              entry.title,
-              textAlign: TextAlign.center,
-              style: serif(22, height: 1.5, spacing: 1.5, content: true),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              entry.author,
-              textAlign: TextAlign.center,
-              style: serif(14, color: AppColors.inkSoft),
-            ),
-          ],
+          SpeakButton(
+            audioKey: key,
+            size: enlarged ? 96 : 72,
+            label: verdict == null ? '点这里听' : '再听一遍',
+          ),
         ] else ...<Widget>[
           // 词 / 字母：插画在上，词在下，喇叭在右。
           if (hasEnglishArt(entry.title))
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: EnglishArt(name: entry.title, size: 96),
+              child: EnglishArt(name: entry.title, size: enlarged ? 128 : 96),
             ),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -171,12 +167,17 @@ class EnglishPrompt extends StatelessWidget {
                 child: Text(
                   question.focus,
                   textAlign: TextAlign.center,
-                  style: serif(30, height: 1.4, spacing: 2, content: true),
+                  style: serif(
+                    enlarged ? 38 : 30,
+                    height: 1.4,
+                    spacing: 2,
+                    content: true,
+                  ),
                 ),
               ),
               if (key != null) ...<Widget>[
                 const SizedBox(width: 12),
-                SpeakButton(audioKey: key, size: 44),
+                SpeakButton(audioKey: key, size: enlarged ? 52 : 44),
               ],
             ],
           ),

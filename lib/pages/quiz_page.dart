@@ -34,10 +34,19 @@ class _QuizPageState extends State<QuizPage> {
 
   bool _locked = false;
 
+  /// 窄屏内容区的滚动控制器；切下一题时回到顶部。
+  final ScrollController _scroll = ScrollController();
+
   @override
   void initState() {
     super.initState();
     _question = widget.session.current;
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
   }
 
   /// 选项点击（选择题）。
@@ -86,6 +95,8 @@ class _QuizPageState extends State<QuizPage> {
       _verdict = null;
       _locked = false;
     });
+    // 上一题留下的滚动位置对新题没有意义；回到顶部先看题干。
+    if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   Future<void> _finish() async {
@@ -114,13 +125,16 @@ class _QuizPageState extends State<QuizPage> {
           child: SafeArea(
             child: Column(
               children: <Widget>[
-                _Header(
-                  session: session,
-                  onQuit: () async {
-                    if (await _confirmLeave() && context.mounted) {
-                      Navigator.of(context).pop();
-                    }
-                  },
+                ContentFrame(
+                  maxWidth: 1200,
+                  child: _Header(
+                    session: session,
+                    onQuit: () async {
+                      if (await _confirmLeave() && context.mounted) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
                 ),
                 Expanded(
                   child: AdaptiveBuilder(
@@ -137,24 +151,36 @@ class _QuizPageState extends State<QuizPage> {
     );
   }
 
-  /// 宽屏（平板横屏）：左侧诗句、右侧作答。
+  /// 宽屏（平板横屏）：舞台式双栏。
   ///
-  /// 题目与选项同屏可见，主操作固定在右栏底部，不随内容滚动跑掉。
+  /// 题干在左栏垂直居中，判题前后纹丝不动（填空题的字块要原位补字）；
+  /// 选项在右栏垂直居中，反馈卡与主按钮收在右栏底部，出现/收起走
+  /// AnimatedSize 平滑过渡，选项只轻微上移不跳变。
   Widget _wideLayout(BuildContext context) {
     return ContentFrame(
       maxWidth: 1200,
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Expanded(
             flex: 3,
-            child: SingleChildScrollView(
-              child: _QuestionCard(
-                question: _question,
-                picked: _pickedChars,
-                verdict: _verdict,
-                topic: widget.session.topic,
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  // 用 Center 而不是 IntrinsicHeight：作答区的字块池里有
+                  // LayoutBuilder，不支持求 intrinsic 尺寸。
+                  child: Center(
+                    child: _QuestionCard(
+                      question: _question,
+                      picked: _pickedChars,
+                      verdict: _verdict,
+                      topic: widget.session.topic,
+                      enlarged: true,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -162,31 +188,41 @@ class _QuizPageState extends State<QuizPage> {
           Expanded(
             flex: 2,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        _answerArea(),
-                        if (_verdict != null) ...<Widget>[
-                          const SizedBox(height: 16),
-                          _Feedback(
-                            question: _question,
-                            correct: _verdict!,
-                            topic: widget.session.topic,
-                          ),
-                        ],
-                      ],
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: Center(child: _answerArea(enlarged: true)),
+                      ),
                     ),
                   ),
                 ),
-                // 主按钮常驻底部，避免长内容把它挤出屏幕。
-                if (_verdict != null) ...<Widget>[
-                  const SizedBox(height: 12),
-                  _nextButton(),
-                ],
+                // 反馈与主按钮常驻右栏底部，避免长内容把它挤出屏幕；
+                // AnimatedSize 让出现与收起的高度变化平滑展开。
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                  alignment: Alignment.bottomCenter,
+                  child: _verdict == null
+                      ? const SizedBox(width: double.infinity)
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            const SizedBox(height: 12),
+                            _Feedback(
+                              question: _question,
+                              correct: _verdict!,
+                              topic: widget.session.topic,
+                            ),
+                            const SizedBox(height: 12),
+                            _nextButton(),
+                          ],
+                        ),
+                ),
               ],
             ),
           ),
@@ -196,39 +232,51 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   /// 窄屏（手机、平板竖屏）：单列限宽，纵向排列。
+  ///
+  /// 「下一题」常驻底部，不跟反馈内容一起滚动——判题后题干、选项、反馈
+  /// 叠起来常常超过一屏，按钮被挤出屏幕就得滑动才能继续（与宽屏同一策略）。
   Widget _narrowLayout(BuildContext context) {
     return ContentFrame(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _QuestionCard(
-              question: _question,
-              picked: _pickedChars,
-              verdict: _verdict,
-              topic: widget.session.topic,
-            ),
-            const SizedBox(height: 20),
-            _answerArea(),
-            if (_verdict != null) ...<Widget>[
-              const SizedBox(height: 20),
-              _Feedback(
-                question: _question,
-                correct: _verdict!,
-                topic: widget.session.topic,
+      child: Column(
+        children: <Widget>[
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _scroll,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _QuestionCard(
+                    question: _question,
+                    picked: _pickedChars,
+                    verdict: _verdict,
+                    topic: widget.session.topic,
+                  ),
+                  const SizedBox(height: 20),
+                  _answerArea(),
+                  if (_verdict != null) ...<Widget>[
+                    const SizedBox(height: 20),
+                    _Feedback(
+                      question: _question,
+                      correct: _verdict!,
+                      topic: widget.session.topic,
+                    ),
+                  ],
+                ],
               ),
-              const SizedBox(height: 16),
-              _nextButton(),
-            ],
+            ),
+          ),
+          if (_verdict != null) ...<Widget>[
+            const SizedBox(height: 12),
+            _nextButton(),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  /// 作答区：填空题是字块池，选择题是选项列表。
-  Widget _answerArea() {
+  /// 作答区：填空题是字块池，选择题是选项列表。宽屏下放大触控与字号。
+  Widget _answerArea({bool enlarged = false}) {
     if (_question.isBlank) {
       return _BlankAnswerArea(
         question: _question,
@@ -236,6 +284,7 @@ class _QuizPageState extends State<QuizPage> {
         verdict: _verdict,
         onTap: _onCharTap,
         onUndo: _undoChar,
+        enlarged: enlarged,
       );
     }
     return _OptionList(
@@ -243,6 +292,7 @@ class _QuizPageState extends State<QuizPage> {
       selectedIndex: _selectedIndex,
       verdict: _verdict,
       onTap: _onOptionTap,
+      enlarged: enlarged,
     );
   }
 
@@ -346,6 +396,7 @@ class _QuestionCard extends StatelessWidget {
     required this.picked,
     required this.verdict,
     required this.topic,
+    this.enlarged = false,
   });
 
   final Question question;
@@ -353,34 +404,90 @@ class _QuestionCard extends StatelessWidget {
   final bool? verdict;
   final Topic topic;
 
+  /// 宽屏舞台模式：题干字号与写字格整体放大，孩子离屏幕远也看得清。
+  final bool enlarged;
+
+  /// 普通题干：纯文本居中。
+  ///
+  /// 含 □ 的算式题把占位符渲染成与填空题一致的写字格——纯字符 □ 混在
+  /// 大号数字里不起眼，孩子找不到「缺哪格」。
+  Widget _plainFocus(String focus, bool enlarged) {
+    final style = serif(
+      enlarged ? 34 : 24,
+      height: 1.6,
+      spacing: enlarged ? 4 : 3,
+    );
+    if (!focus.contains('□')) {
+      return Text(focus, textAlign: TextAlign.center, style: style);
+    }
+    final parts = focus.split('□');
+    final spans = <InlineSpan>[];
+    for (var i = 0; i < parts.length; i++) {
+      final part = parts[i];
+      if (i > 0) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.middle,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: enlarged ? 6 : 4),
+              child: _Slot(char: null, correct: false, enlarged: enlarged),
+            ),
+          ),
+        );
+      }
+      if (part.isNotEmpty) spans.add(TextSpan(text: part));
+    }
+    return Text.rich(
+      TextSpan(style: style, children: spans),
+      textAlign: TextAlign.center,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return InkCard(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      padding: enlarged
+          ? const EdgeInsets.fromLTRB(24, 24, 24, 28)
+          : const EdgeInsets.fromLTRB(20, 20, 20, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
               SealTag(text: question.kind.label),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   question.prompt,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.inkSoft,
-                    letterSpacing: 0.5,
+                  // 题型标签之下的这句才是孩子要执行的任务——用正文字号
+                  // 与墨色，不再当辅助小字，否则会被直接跳过。
+                  style: TextStyle(
+                    fontSize: enlarged ? 19 : 16,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.ink,
+                    letterSpacing: 1,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: enlarged ? 22 : 18),
           if (question.isBlank)
-            _BlankPrompt(question: question, picked: picked, verdict: verdict)
+            _BlankPrompt(
+              question: question,
+              picked: picked,
+              verdict: verdict,
+              enlarged: enlarged,
+            )
           else if (isEnglishKind(question.kind))
-            EnglishPrompt(question: question, topic: topic, verdict: verdict)
+            EnglishPrompt(
+              question: question,
+              topic: topic,
+              verdict: verdict,
+              enlarged: enlarged,
+            )
           else if (question.isPinyin)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -390,23 +497,24 @@ class _QuestionCard extends StatelessWidget {
                     question.focus,
                     textAlign: TextAlign.center,
                     // 拼音的拉丁字母用文楷，保证 a/g 是教学体单层字形。
-                    style: serif(24, height: 1.6, spacing: 3, content: true),
+                    style: serif(
+                      enlarged ? 34 : 24,
+                      height: 1.6,
+                      spacing: enlarged ? 4 : 3,
+                      content: true,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: enlarged ? 16 : 12),
                 SpeakButton(
                   audioKey: PinyinAudioKeys.word(question.poem.title),
-                  size: 48,
+                  size: enlarged ? 56 : 48,
                   color: AppColors.seal,
                 ),
               ],
             )
           else
-            Text(
-              question.focus,
-              textAlign: TextAlign.center,
-              style: serif(24, height: 1.6, spacing: 3),
-            ),
+            _plainFocus(question.focus, enlarged),
         ],
       ),
     );
@@ -419,23 +527,36 @@ class _BlankPrompt extends StatelessWidget {
     required this.question,
     required this.picked,
     required this.verdict,
+    this.enlarged = false,
   });
 
   final Question question;
   final List<int> picked;
   final bool? verdict;
 
+  /// 宽屏舞台模式：字号与写字格随题干一起放大。
+  final bool enlarged;
+
   @override
   Widget build(BuildContext context) {
     final chosen = picked.map((i) => question.charPool[i]).toList();
     final showAnswer = verdict != null && verdict == false;
 
-    // 英语拼单词：挖空在单词中间，必须紧贴着显示成 `c□t`，
-    // 不能像诗句那样上下分行——分行后孩子看不出这是个词。
+    // 成语和拼单词的空格留在词中；较长的诗句保留分行布局。
+    final isPoetryBlank = question.kind == QuestionKind.blank;
     final isSpell = question.kind == QuestionKind.englishSpell;
     final textStyle = isSpell
-        ? serif(34, height: 1.4, spacing: 3, content: true)
-        : serif(22, height: 1.6, spacing: 3);
+        ? serif(
+            enlarged ? 42 : 34,
+            height: 1.4,
+            spacing: 3,
+            content: true,
+          )
+        : serif(
+            enlarged ? 28 : 22,
+            height: 1.6,
+            spacing: enlarged ? 4 : 3,
+          );
 
     final slots = <Widget>[
       for (var i = 0; i < question.answerChars.length; i++)
@@ -445,6 +566,7 @@ class _BlankPrompt extends StatelessWidget {
               ? question.answerChars[i]
               : (i < chosen.length ? chosen[i] : null),
           correct: showAnswer,
+          enlarged: enlarged,
         ),
     ];
 
@@ -454,7 +576,7 @@ class _BlankPrompt extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: <Widget>[
-        if (question.blankBefore.isNotEmpty)
+        if (!isPoetryBlank && question.blankBefore.isNotEmpty)
           Text(question.blankBefore, style: textStyle),
         ...slots,
         if (question.blankAfter.isNotEmpty)
@@ -477,7 +599,8 @@ class _BlankPrompt extends StatelessWidget {
       );
     }
 
-    // 诗句与成语：上句与下句分行，写字格单独一行，避免长句把格子挤到换行。
+    if (!isPoetryBlank) return line;
+
     return Column(
       children: <Widget>[
         Text(question.blankBefore, style: textStyle),
@@ -490,17 +613,21 @@ class _BlankPrompt extends StatelessWidget {
 
 /// 写字格：虚线方框 + 圆角，像作业本上的田字格。
 class _Slot extends StatelessWidget {
-  const _Slot({required this.char, required this.correct});
+  const _Slot({required this.char, required this.correct, this.enlarged = false});
 
   final String? char;
   final bool correct;
 
+  /// 宽屏舞台模式：写字格放大。
+  final bool enlarged;
+
   @override
   Widget build(BuildContext context) {
     final color = correct ? AppColors.jade : AppColors.seal;
+    final side = enlarged ? 72.0 : 44.0;
     return Container(
-      width: 44,
-      height: 44,
+      width: side,
+      height: side,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: char == null
@@ -516,7 +643,10 @@ class _Slot extends StatelessWidget {
       ),
       child: char == null
           ? null
-          : Text(char!, style: serif(21, spacing: 0, color: color)),
+          : Text(
+              char!,
+              style: serif(enlarged ? 30 : 21, spacing: 0, color: color),
+            ),
     );
   }
 }
@@ -527,6 +657,7 @@ class _OptionList extends StatelessWidget {
     required this.selectedIndex,
     required this.verdict,
     required this.onTap,
+    this.enlarged = false,
   });
 
   final Question question;
@@ -534,19 +665,23 @@ class _OptionList extends StatelessWidget {
   final bool? verdict;
   final ValueChanged<int> onTap;
 
+  /// 宽屏舞台模式：选项加高、字号放大。
+  final bool enlarged;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
         for (var i = 0; i < question.options.length; i++)
           Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+            padding: EdgeInsets.only(bottom: enlarged ? 12 : 10),
             child: _OptionTile(
               label: String.fromCharCode(0x41 + i),
               text: question.options[i],
               state: _stateFor(i),
               pinyin: question.isPinyin,
               onTap: verdict == null ? () => onTap(i) : null,
+              enlarged: enlarged,
             ),
           ),
       ],
@@ -572,6 +707,7 @@ class _OptionTile extends StatelessWidget {
     required this.state,
     required this.onTap,
     this.pinyin = false,
+    this.enlarged = false,
   });
 
   final String label;
@@ -581,6 +717,9 @@ class _OptionTile extends StatelessWidget {
 
   /// 拼音选项用文楷（教学体 a/g）；诗词选项维持衬线。
   final bool pinyin;
+
+  /// 宽屏舞台模式。
+  final bool enlarged;
 
   @override
   Widget build(BuildContext context) {
@@ -602,7 +741,10 @@ class _OptionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: EdgeInsets.symmetric(
+            horizontal: enlarged ? 18 : 14,
+            vertical: enlarged ? 19 : 14,
+          ),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(12),
@@ -614,8 +756,8 @@ class _OptionTile extends StatelessWidget {
           child: Row(
             children: <Widget>[
               Container(
-                width: 24,
-                height: 24,
+                width: enlarged ? 28 : 24,
+                height: enlarged ? 28 : 24,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -624,18 +766,18 @@ class _OptionTile extends StatelessWidget {
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: enlarged ? 13 : 12,
                     color: fg,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: enlarged ? 14 : 12),
               Expanded(
                 child: Text(
                   text,
                   style: serif(
-                    17,
+                    enlarged ? 19 : 17,
                     color: fg,
                     height: 1.45,
                     spacing: 1.5,
@@ -644,9 +786,17 @@ class _OptionTile extends StatelessWidget {
                 ),
               ),
               if (state == _TileState.correct)
-                const Icon(Icons.check_circle, size: 20, color: AppColors.jade)
+                Icon(
+                  Icons.check_circle,
+                  size: enlarged ? 22 : 20,
+                  color: AppColors.jade,
+                )
               else if (state == _TileState.wrong)
-                const Icon(Icons.cancel, size: 20, color: AppColors.seal),
+                Icon(
+                  Icons.cancel,
+                  size: enlarged ? 22 : 20,
+                  color: AppColors.seal,
+                ),
             ],
           ),
         ),
@@ -663,6 +813,7 @@ class _BlankAnswerArea extends StatelessWidget {
     required this.verdict,
     required this.onTap,
     required this.onUndo,
+    this.enlarged = false,
   });
 
   final Question question;
@@ -671,68 +822,110 @@ class _BlankAnswerArea extends StatelessWidget {
   final ValueChanged<int> onTap;
   final VoidCallback onUndo;
 
+  /// 宽屏舞台模式：字块放大到 64dp 高。
+  final bool enlarged;
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final n = question.charPool.length;
+        final width = constraints.maxWidth;
+        final minTile = enlarged ? 60.0 : 48.0;
+        final maxTile = enlarged ? 76.0 : 52.0;
+        // 字块压到最窄仍放不下一行时按行均分（6 块 → 3+3，8 块 → 4+4），
+        // 不出现孤行；放得下（间距可从 10 收到 6）就排一行。
+        var perRow = n;
+        var gap = 10.0;
+        if (n * minTile + (n - 1) * gap > width) {
+          gap = 6.0;
+          if (n * minTile + (n - 1) * gap > width) {
+            final unit = maxTile + 10;
+            final maxPerRow = ((width + 10) / unit).floor().clamp(1, n);
+            final rows = (n / maxPerRow).ceil();
+            perRow = (n / rows).ceil();
+            gap = 10.0;
+          }
+        }
+        final tile = ((width - (perRow - 1) * gap) / perRow)
+            .clamp(minTile, maxTile)
+            .toDouble();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Text(
-              '已选 ${picked.length}/${question.answerChars.length}',
-              style: const TextStyle(fontSize: 12, color: AppColors.inkFaint),
+            Row(
+              children: <Widget>[
+                Text(
+                  '已选 ${picked.length}/${question.answerChars.length}',
+                  style: TextStyle(
+                    fontSize: enlarged ? 13 : 12,
+                    color: AppColors.inkFaint,
+                  ),
+                ),
+                const Spacer(),
+                if (picked.isNotEmpty && verdict == null)
+                  TextButton.icon(
+                    onPressed: onUndo,
+                    icon: const Icon(Icons.backspace_outlined, size: 15),
+                    label: const Text('撤销', style: TextStyle(fontSize: 13)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.inkSoft,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                  ),
+              ],
             ),
-            const Spacer(),
-            if (picked.isNotEmpty && verdict == null)
-              TextButton.icon(
-                onPressed: onUndo,
-                icon: const Icon(Icons.backspace_outlined, size: 15),
-                label: const Text('撤销', style: TextStyle(fontSize: 13)),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.inkSoft,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(48, 48),
-                  tapTargetSize: MaterialTapTargetSize.padded,
-                ),
-              ),
+            const SizedBox(height: 8),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: gap,
+              runSpacing: 10,
+              children: <Widget>[
+                for (var i = 0; i < n; i++)
+                  _CharTile(
+                    width: tile,
+                    char: question.charPool[i],
+                    used: picked.contains(i),
+                    verdict: verdict,
+                    isAnswerChar: question.answerChars.contains(
+                      question.charPool[i],
+                    ),
+                    onTap: verdict == null ? () => onTap(i) : null,
+                    enlarged: enlarged,
+                  ),
+              ],
+            ),
           ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: <Widget>[
-            for (var i = 0; i < question.charPool.length; i++)
-              _CharTile(
-                char: question.charPool[i],
-                used: picked.contains(i),
-                verdict: verdict,
-                isAnswerChar: question.answerChars.contains(
-                  question.charPool[i],
-                ),
-                onTap: verdict == null ? () => onTap(i) : null,
-              ),
-          ],
-        ),
-      ],
+        );
+      },
     );
   }
 }
 
 class _CharTile extends StatelessWidget {
   const _CharTile({
+    required this.width,
     required this.char,
     required this.used,
     required this.verdict,
     required this.isAnswerChar,
     required this.onTap,
+    this.enlarged = false,
   });
 
+  /// 字块宽度由作答区按可用空间均分；高度 52dp（宽屏 64dp）保住触控面积。
+  final double width;
   final String char;
   final bool used;
   final bool? verdict;
   final bool isAnswerChar;
   final VoidCallback? onTap;
+
+  /// 宽屏舞台模式。
+  final bool enlarged;
 
   @override
   Widget build(BuildContext context) {
@@ -755,8 +948,8 @@ class _CharTile extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(10),
           child: Container(
-            width: 52,
-            height: 52,
+            width: width,
+            height: enlarged ? 76 : 52,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: bg,
@@ -765,7 +958,12 @@ class _CharTile extends StatelessWidget {
             ),
             child: Text(
               char,
-              style: serif(22, color: fg, spacing: 0, weight: FontWeight.w600),
+              style: serif(
+                enlarged ? 30 : 22,
+                color: fg,
+                spacing: 0,
+                weight: FontWeight.w600,
+              ),
             ),
           ),
         ),

@@ -6,6 +6,7 @@ import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
 import 'package:poem_quiz/data/topics.dart';
+import 'package:poem_quiz/models/question.dart';
 import 'package:poem_quiz/pages/home_page.dart';
 import 'package:poem_quiz/pages/quiz_page.dart';
 import 'package:poem_quiz/pages/settings_page.dart';
@@ -13,6 +14,8 @@ import 'package:poem_quiz/theme/app_theme.dart';
 import 'package:poem_quiz/widgets/adaptive.dart';
 import 'package:poem_quiz/widgets/common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'plan_helpers.dart';
 
 /// 布局回归：三种窗口宽度下各页面都要能渲染、不溢出。
 ///
@@ -92,6 +95,25 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets('数独首页平板横屏：五档关卡一行排开', (tester) async {
+      final store = await ProgressStore.load(topicId: kSudokuTopic.id);
+      final profile = await loadProfile();
+      await pumpAt(
+        tester,
+        tabletLandscape,
+        () => HomePage(
+          store: store,
+          topic: kSudokuTopic,
+          profile: profile,
+          onSwitchTopic: (_) {},
+        ),
+      );
+      expect(find.text('一星'), findsOneWidget);
+      expect(find.text('五星'), findsOneWidget);
+      expect(find.text('开始一星'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('拼音首页也按学龄推算', (tester) async {
       final store = await ProgressStore.load(topicId: kPinyinTopic.id);
@@ -225,6 +247,86 @@ void main() {
         expect(find.text(p), findsNothing, reason: '拼音科目出了诗词题型：$p');
       }
       expect(find.byIcon(Icons.volume_up_rounded), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final (name, size) in <(String, Size)>[
+      ('小屏手机', const Size(375, 667)),
+      ('平板横屏', tabletLandscape),
+    ]) {
+      testWidgets('成语答题页 $name 题干只显示一次并原位补字', (tester) async {
+        const topic = kChengyuTopic;
+        final entry = topic.entries.firstWhere((p) => p.title == '画龙点睛');
+        final session = QuizSession(
+          questions: <Question>[
+            Question(
+              kind: QuestionKind.idiomBlank,
+              poem: entry,
+              prompt: '点选字块，补全这个成语',
+              focus: '画龙□睛',
+              key: 'idiom-layout',
+              blankBefore: '画龙',
+              blankAfter: '睛',
+              answerChars: const <String>['点'],
+              charPool: const <String>['山', '河', '点', '林', '江', '海'],
+            ),
+          ],
+          total: 1,
+          topic: topic,
+          plan: planOfGrade(GradeLevel.g2, topic),
+          careerMode: false,
+        );
+        await pumpAt(
+          tester,
+          size,
+          () => QuizPage(session: session, onFinish: (_) async {}),
+        );
+        final card = find.byType(InkCard).first;
+        Finder inPrompt(String text) =>
+            find.descendant(of: card, matching: find.text(text));
+        final prefix = inPrompt('画龙');
+        final suffix = inPrompt('睛');
+        expect(prefix, findsOneWidget);
+        expect(suffix, findsOneWidget);
+        final prefixCenter = tester.getCenter(prefix);
+        final suffixCenter = tester.getCenter(suffix);
+        expect(prefixCenter.dy, closeTo(suffixCenter.dy, 1));
+        expect(prefixCenter.dx, lessThan(suffixCenter.dx));
+        expect(inPrompt('点'), findsNothing);
+
+        await tester.tap(find.text('山'));
+        await tester.pumpAndSettle();
+        expect(find.text('答错了'), findsOneWidget);
+        final answer = inPrompt('点');
+        expect(answer, findsOneWidget);
+        final answerCenter = tester.getCenter(answer);
+        expect(answerCenter.dy, closeTo(prefixCenter.dy, 1));
+        expect(
+          answerCenter.dx,
+          inExclusiveRange(prefixCenter.dx, suffixCenter.dx),
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('诗句填空的前半段只在写字格上方显示一次', (tester) async {
+      final session = buildSession(
+        engine: QuizEngine(poems: kPoetryTopic.entries),
+        topic: kPoetryTopic,
+        count: 1,
+        grade: GradeLevel.g3,
+        kinds: <QuestionKind>{QuestionKind.blank},
+      );
+      await pumpAt(
+        tester,
+        phone,
+        () => QuizPage(session: session, onFinish: (_) async {}),
+      );
+      final prefix = find.text(session.current.blankBefore);
+      final suffix = find.text(session.current.blankAfter);
+      expect(prefix, findsOneWidget);
+      expect(suffix, findsOneWidget);
+      expect(tester.getCenter(prefix).dy, lessThan(tester.getCenter(suffix).dy));
       expect(tester.takeException(), isNull);
     });
 

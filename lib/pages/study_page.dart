@@ -190,23 +190,59 @@ class _StudyPageState extends State<StudyPage> {
                             ),
                           ),
                         )
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                          itemCount: poems.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, i) => _StudyTile(
-                            name: widget.topic.displayNameOf(poems[i]),
-                            group: widget.topic.groupOf(poems[i]),
-                            pinyin: widget.topic.id == 'pinyin',
-                            meta: widget.topic.metaOf(poems[i]),
-                            detail: widget.topic.displayDetailOf(poems[i]),
-                            mastered: mastered.contains(poems[i].id),
-                            onToggleMastered: () => widget.store.markMastered(
-                              poems[i].id,
-                              mastered: !mastered.contains(poems[i].id),
-                            ),
-                          ),
+                      : AdaptiveBuilder(
+                          builder: (context, size) => size.isExpanded
+                              // 宽屏双列分摊：一屏能看到的条目翻倍，
+                              // 不再把单张卡片拉成整宽的空行。
+                              ? SingleChildScrollView(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    8,
+                                    20,
+                                    24,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: _tileColumn(poems, 0, mastered),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _tileColumn(poems, 1, mastered),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    20,
+                                    8,
+                                    20,
+                                    24,
+                                  ),
+                                  itemCount: poems.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, i) => _StudyTile(
+                                    name: widget.topic.displayNameOf(poems[i]),
+                                    group: widget.topic.groupOf(poems[i]),
+                                    pinyin: widget.topic.id == 'pinyin',
+                                    meta: widget.topic.metaOf(poems[i]),
+                                    detail: widget.topic.displayDetailOf(
+                                      poems[i],
+                                    ),
+                                    mastered: mastered.contains(poems[i].id),
+                                    onToggleMastered: () =>
+                                        widget.store.markMastered(
+                                          poems[i].id,
+                                          mastered: !mastered.contains(
+                                            poems[i].id,
+                                          ),
+                                        ),
+                                  ),
+                                ),
                         ),
                 ),
               ],
@@ -214,6 +250,33 @@ class _StudyPageState extends State<StudyPage> {
           ),
         ),
       ),
+    );
+  }
+
+  /// 宽屏双列中的一列：按奇偶下标分摊条目，列内仍是可展开卡。
+  Widget _tileColumn(List<Poem> poems, int offset, Set<String> mastered) {
+    final tiles = <Widget>[];
+    for (var i = offset; i < poems.length; i += 2) {
+      if (tiles.isNotEmpty) tiles.add(const SizedBox(height: 10));
+      tiles.add(
+        _StudyTile(
+          name: widget.topic.displayNameOf(poems[i]),
+          group: widget.topic.groupOf(poems[i]),
+          pinyin: widget.topic.id == 'pinyin',
+          meta: widget.topic.metaOf(poems[i]),
+          detail: widget.topic.displayDetailOf(poems[i]),
+          mastered: mastered.contains(poems[i].id),
+          onToggleMastered: () => widget.store.markMastered(
+            poems[i].id,
+            mastered: !mastered.contains(poems[i].id),
+          ),
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: tiles,
     );
   }
 }
@@ -245,15 +308,18 @@ class _GroupChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(24),
           child: Container(
             constraints: const BoxConstraints(minHeight: 48),
-            alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                color: selected ? Colors.white : AppColors.inkSoft,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                letterSpacing: 1,
+            child: Center(
+              widthFactor: 1,
+              heightFactor: 1,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: selected ? Colors.white : AppColors.inkSoft,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  letterSpacing: 1,
+                ),
               ),
             ),
           ),
