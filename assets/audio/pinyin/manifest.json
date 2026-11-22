@@ -1,5 +1,5 @@
 {
-  "voice": "zh-CN-XiaoxiaoNeural",
+  "voice": "qwen-audio-3.1-tts-plus/longanfengyue_v3.1",
   "count": 320,
   "files": [
     "py_72385988",
