@@ -130,16 +130,34 @@ def main() -> int:
 
     # 期望文本：与 gen_english.py 的 audio_jobs 一一对应。
     # 第三项是校验方式：`letter` 允许识别成字母名或字母本身。
+    # TEXT_OVERRIDES 与 gen_english.py 的同名表保持同步：个别音频的合成文本
+    # 与题库原文不同（egg 带冠词等），期望值也跟着改。
+    text_overrides: dict[str, str] = {
+        "letterword_egg": "The egg.",
+        "word_egg": "The egg.",
+    }
+
+    def expected_text(key: str, base: str) -> str:
+        return text_overrides.get(key, base)
+
     expectations: list[tuple[str, str, str]] = []
     if args.only in (None, "letter"):
         for item in bank["letters"]:
             expectations.append(
                 (f"letter_{item['u'].lower()}", LETTER_NAMES[item["u"]], "letter")
             )
-            expectations.append((f"letterword_{item['example']}", item["example"], "word"))
+            expectations.append((
+                f"letterword_{item['example']}",
+                expected_text(f"letterword_{item['example']}", item["example"]),
+                "word",
+            ))
     if args.only in (None, "word"):
         for item in bank["words"]:
-            expectations.append((f"word_{item['w']}", item["w"], "word"))
+            expectations.append((
+                f"word_{item['w']}",
+                expected_text(f"word_{item['w']}", item["w"]),
+                "word",
+            ))
             expectations.append((f"sent_{item['w']}", item["sentence"], "word"))
     if args.only in (None, "sentence"):
         for i, item in enumerate(bank["sentences"]):

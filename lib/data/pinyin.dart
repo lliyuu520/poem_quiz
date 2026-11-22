@@ -254,7 +254,7 @@ const List<Poem> kPinyin = <Poem>[
   Poem(title: '好奇', author: 'hào qí', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),
   Poem(title: '爱好', author: 'ài hào', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),
   Poem(title: '数学', author: 'shù xué', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),
-  Poem(title: '数一数', author: 'shù yī shù', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),
+  Poem(title: '数一数', author: 'shǔ yi shǔ', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),
   Poem(title: '中间', author: 'zhōng jiān', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),
   Poem(title: '中奖', author: 'zhòng jiǎng', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),
   Poem(title: '得到', author: 'dé dào', dynasty: '多音字·常用', grade: 5, lines: ['多音字·常用']),

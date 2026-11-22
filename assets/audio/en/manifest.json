@@ -1,5 +1,5 @@
 {
-  "voice": "en-US-JennyNeural",
+  "voice": "qwen-audio-3.1-tts-plus/longanfengyue_v3.1",
   "count": 150,
   "files": [
     "letter_a",

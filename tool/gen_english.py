@@ -2,7 +2,19 @@
 
 用法：
     python -I tool/gen_english.py            # 只生成 Dart 题库与音频清单
-    python -I tool/gen_english.py --audio    # 同时合成音频（需 edge-tts 与 ffmpeg）
+    python -I tool/gen_english.py --audio    # 同时合成音频（需 requests 与 ffmpeg）
+
+音频用阿里云百炼 qwen-audio-3.1-tts-plus（2026-11-21 起，替代 edge-tts Jenny——
+与拼音科目统一音色）。API Key 只从 stdin 读入，不落盘：
+
+    python -I tool/gen_english.py --audio <<'EOF'
+    sk-...
+    EOF
+
+字母直接喂原字母「A.」让模型读字母名（实测 10 个刁钻字母 20/20 全对），
+不再写字母名改写表——那是 edge-tts 时代「C. A. T. 丢尾字母」的绕路方案。
+上传路径带版本段（en/v2/），换音色必须顺延版本：CDN 对 .opus 缓存一年、
+手机按 key 永久缓存，同名覆盖两边都不生效。
 
 为什么用脚本生成 Dart 而不是手写：
 题库里的英文与音频文件名必须一一对应。手写 40 个词、26 个字母、14 个句子，
@@ -13,7 +25,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import os
 import shutil
@@ -21,17 +32,21 @@ import subprocess
 import sys
 from pathlib import Path
 
+import requests
+
 ROOT = Path(__file__).resolve().parent.parent
 BANK = ROOT / "tool" / "english_bank.json"
 DART_OUT = ROOT / "lib" / "data" / "english.dart"
 AUDIO_OUT = ROOT / "assets" / "audio" / "en"
 
-# 音色：Jenny 的元音最稳（实测 cat 与其自身 /æ/ 参照偏离 4.3%，
-# Aria 同样条件下偏离 55.8%，孤立单词会把 /æ/ 读成 /e/）。
-VOICE = "en-US-JennyNeural"
+TTS_MODEL = "qwen-audio-3.1-tts-plus"
+VOICE = "longanfengyue_v3.1"
+TTS_INSTRUCTION = (
+    "Speak in clear, natural American English, like a friendly teacher reading to a child. "
+    "Use a normal speaking pace. Do not exaggerate or add any words. Read only the given text."
+)
 
-# 逐字母朗读必须写字母名，不能写「C. A. T.」：
-# 后者会被切掉最后一个字母，只读两个（实测 2 个音节）。
+# 字母名改写表：edge-tts 时代合成用；Qwen 直接读原字母后仅作读音参考保留。
 LETTER_NAMES = {
     "A": "ay", "B": "bee", "C": "see", "D": "dee", "E": "ee", "F": "ef",
     "G": "jee", "H": "aitch", "I": "eye", "J": "jay", "K": "kay", "L": "el",
@@ -172,31 +187,136 @@ def emit_dart(bank: dict) -> str:
 
 
 def audio_jobs(bank: dict) -> list[tuple[str, str]]:
-    """(文件名, 要朗读的文本)。文件名同时是 App 里查音频的键。"""
+    """(文件名, 要朗读的文本)。文件名同时是 App 里查音频的键。
+
+    个别文本形态风悦读不稳（裸词 egg 被读成字母、Key/Rice/Rain 大写开头
+    元音漂移），合成时改用 TEXT_OVERRIDES 的文本——均经 ASR 逐字复验通过
+    后固化，见 verify_english_audio.py 全量校验。
+    """
     jobs: list[tuple[str, str]] = []
+
+    def text_for(name: str, text: str) -> str:
+        return TEXT_OVERRIDES.get(name, text)
+
     for item in bank["letters"]:
         u = item["u"]
-        jobs.append((f"letter_{u.lower()}", LETTER_NAMES[u] + "."))
-        jobs.append((f"letterword_{item['example']}", item["example"].capitalize() + "."))
+        # Qwen 直接读原字母就是字母名（实测 20/20 全对），不再走字母名改写。
+        # 唯一例外 N：风悦把「N.」稳定读成 /ʌn/（五个 seed 复验一致），
+        # 该条沿用旧 Jenny 音频，synth 会跳过它，见 TEXT_OVERRIDES 注释。
+        if u != "N":
+            jobs.append((f"letter_{u.lower()}", text_for(f"letter_{u.lower()}", f"{u}.")))
+        jobs.append((f"letterword_{item['example']}", text_for(
+            f"letterword_{item['example']}", item["example"].capitalize() + ".",
+        )))
     for item in bank["words"]:
-        jobs.append((f"word_{item['w']}", item["w"].capitalize() + "."))
-        jobs.append((f"sent_{item['w']}", item["sentence"]))
+        jobs.append((f"word_{item['w']}", text_for(
+            f"word_{item['w']}", item["w"].capitalize() + ".",
+        )))
+        jobs.append((f"sent_{item['w']}", text_for(f"sent_{item['w']}", item["sentence"])))
     for i, item in enumerate(bank["sentences"]):
-        jobs.append((f"sentence_{i:02d}", item["en"]))
+        jobs.append((f"sentence_{i:02d}", text_for(f"sentence_{i:02d}", item["en"])))
     return jobs
 
 
-async def synth(jobs: list[tuple[str, str]], out_dir: Path) -> None:
-    import edge_tts  # 延迟导入：只生成 Dart 时不需要它
+# 合成文本改写表：键是音频键。egg 的裸词形态（「Egg.」）该模型稳定读成
+# 字母「A-G」，带冠词的「The egg.」ASR 逐字复验通过；Key/Rice/Rain 用
+# 小写原速形式通过（大写开头会读偏）。
+TEXT_OVERRIDES = {
+    "letterword_egg": "The egg.",
+    "word_egg": "The egg.",
+    "letterword_key": "key.",
+    "word_rice": "rice.",
+    "word_rain": "rain.",
+}
 
+# 直接要服务端原生 opus 的条目（值是语速）。本地「mp3 → ffmpeg libopus 32k」
+# 转码会削掉个别浊音瞬态：sent_bread 的 b 在 32k~128k 本地转码下全读成
+# /p/（mp3 原文件正确），服务端原生 opus 用 rate 1.05 渲染才逐字通过。
+NATIVE_OPUS_RATES = {
+    "sent_bread": 1.05,
+}
+
+
+def synth(jobs: list[tuple[str, str]], out_dir: Path, api_key: str, seed: int = 42) -> None:
+    """固定音色生成英语语音；失败可续跑，不因单条超时空等整批。"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    endpoint = (
+        f"https://{WORKSPACE}.{TTS_REGION}.maas.aliyuncs.com"
+        "/api/v1/services/audio/tts/SpeechSynthesizer"
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name, text in jobs:
+    failures: list[str] = []
+
+    def one(job: tuple[str, str]) -> None:
+        name, text = job
+        # letter_n 沿用旧 Jenny 音频（风悦把「N.」稳定读成 /ʌn/，见 audio_jobs）；
+        # 文件缺失时本条被跳过，由 AGENTS.md 记录的备份流程补回。
+        if name == "letter_n":
+            return
         # 已有 opus 就跳过：合成一条要几秒，150 条全重跑是几分钟。
         # 要重新生成某条，删掉对应文件即可。
         if (out_dir / f"{name}.opus").exists() or (out_dir / f"{name}.mp3").exists():
-            continue
-        await edge_tts.Communicate(text, VOICE).save(str(out_dir / f"{name}.mp3"))
-        print(f"  synth {name}")
+            return
+        payload = {
+            "model": TTS_MODEL,
+            "input": {
+                "text": text,
+                "voice": VOICE,
+                "format": "opus" if name in NATIVE_OPUS_RATES else "mp3",
+                "sample_rate": 24000,
+                "rate": NATIVE_OPUS_RATES.get(name, 1.0),
+                "seed": seed,
+                "instruction": TTS_INSTRUCTION,
+                "language_hints": ["en"],
+            },
+        }
+        for attempt in range(3):
+            try:
+                response = requests.post(
+                    endpoint,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=(12, 65),
+                )
+                data = response.json()
+                audio = data.get("output", {}).get("audio", {})
+                if not response.ok or not audio.get("url"):
+                    raise RuntimeError(
+                        f"HTTP {response.status_code} "
+                        f'{data.get("code", "")} {data.get("message", "")}'
+                    )
+                url = audio["url"]
+                if url.startswith("http://"):
+                    url = "https://" + url[len("http://"):]
+                if name in NATIVE_OPUS_RATES:
+                    # 服务端原生 opus 直接落盘，不走 mp3 中转与本地转码。
+                    with requests.get(url, stream=True, timeout=(12, 45)) as download:
+                        download.raise_for_status()
+                        with (out_dir / f"{name}.opus").open("wb") as f:
+                            for chunk in download.iter_content(65536):
+                                f.write(chunk)
+                    print(f"  synth {name} (native opus)", flush=True)
+                    return
+                mp3_path = out_dir / f"{name}.mp3"
+                with requests.get(url, stream=True, timeout=(12, 45)) as download:
+                    download.raise_for_status()
+                    with mp3_path.open("wb") as f:
+                        for chunk in download.iter_content(65536):
+                            f.write(chunk)
+                print(f"  synth {name}", flush=True)
+                return
+            except (requests.RequestException, RuntimeError, OSError) as exc:
+                print(f"  retry {name}: {type(exc).__name__}", flush=True)
+        failures.append(name)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(one, jobs))
+    if failures:
+        print(f"合成失败 {len(failures)} 条，重跑可续传：{failures}", flush=True)
 
 
 def to_opus(src_dir: Path) -> int:
@@ -223,6 +343,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--audio", action="store_true", help="同时合成音频")
     ap.add_argument("--keep-mp3", action="store_true", help="转 opus 后保留 mp3")
+    ap.add_argument("--seed", type=int, default=42, help="合成种子；换 seed 重渲染可判别识别抖动")
     args = ap.parse_args()
 
     bank = load_bank()
@@ -242,7 +363,10 @@ def main() -> int:
     print(f"音频任务 {len(jobs)} 条（音色 {VOICE}）")
 
     if args.audio:
-        asyncio.run(synth(jobs, AUDIO_OUT))
+        api_key = sys.stdin.readline().strip()
+        if not api_key:
+            sys.exit("未从 stdin 读到 API Key")
+        synth(jobs, AUDIO_OUT, api_key, seed=args.seed)
         n = to_opus(AUDIO_OUT)
         print(f"转码 {n} 条 opus")
         if not args.keep_mp3:
@@ -252,6 +376,10 @@ def main() -> int:
     return 0
 
 
+WORKSPACE = "llm-n1xmigv57szjb64o"
+TTS_REGION = "cn-beijing"
+
+
 def write_manifest() -> None:
     """写 manifest.json：App 靠它知道云端有哪些音频（「全部下载」用）。
 
@@ -259,7 +387,7 @@ def write_manifest() -> None:
     """
     files = sorted(p.stem for p in AUDIO_OUT.glob("*.opus"))
     manifest = {
-        "voice": VOICE,
+        "voice": f"{TTS_MODEL}/{VOICE}",
         "count": len(files),
         "files": files,
     }

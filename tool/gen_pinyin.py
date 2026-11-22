@@ -8,9 +8,20 @@
 
 用法：
     python -I tool/gen_pinyin.py            # 只生成 Dart 题库
-    python -I tool/gen_pinyin.py --audio    # 同时合成音频（需 edge-tts 与 ffmpeg）
+    python -I tool/gen_pinyin.py --audio    # 同时合成音频（需 requests 与 ffmpeg）
 
 音频不打进 APK，按字词生成稳定文件名，上传 OSS 后首次播放时下载。
+
+音频用阿里云百炼 qwen-audio-3.1-tts-plus（2026-11-21 起，替代微软 edge-tts
+晓晓——听感更自然）。API Key 只从 stdin 读入，不落盘：
+
+    python -I tool/gen_pinyin.py --audio <<'EOF'
+    sk-...
+    EOF
+
+每条请求带 `hot_fix.pronunciation`，把题库算好的读音（含轻声 5）钉给模型，
+多音字不靠模型自己猜；儿化词除外，交给模型自然读。上传路径带版本段
+（pinyin/v2/），换音色必须换路径：CDN 对 .opus 缓存一年，同名覆盖不生效。
 """
 
 import argparse
@@ -22,11 +33,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+import requests
 from pypinyin import Style, pinyin
+from pypinyin.contrib.tone_convert import to_tone3
 
 ROOT = Path(__file__).resolve().parent.parent
 AUDIO_OUT = ROOT / 'assets' / 'audio' / 'pinyin'
-VOICE = 'zh-CN-XiaoxiaoNeural'
+TTS_MODEL = 'qwen-audio-3.1-tts-plus'
+VOICE = 'longanfengyue_v3.1'
 
 
 def audio_key(word: str) -> str:
@@ -60,6 +74,9 @@ OVERRIDES = {
 
     # 口语轻声：衣服的「服」读 fu，不读 fú。
     '衣服': ['yī', 'fu'],
+
+    # V一V 结构：动词「数」读 shǔ，一轻声。pypinyin 把两个数都给了名词音 shù。
+    '数一数': ['shǔ', 'yi', 'shǔ'],
 
     '算了': ['suàn', 'le'],        # 轻声
     '好了': ['hǎo', 'le'],
@@ -225,37 +242,110 @@ def build(audio: bool = False):
             print('  ', p)
 
     if audio:
-        asyncio.run(synth(entries))
+        api_key = sys.stdin.readline().strip()
+        if not api_key:
+            sys.exit('未从 stdin 读到 API Key')
+        synth(entries, api_key)
 
 
-async def synth(entries: list[dict]) -> None:
-    """固定中文音色生成字词语音；失败可续跑，不因单条超时空等整批。"""
-    import edge_tts
+WORKSPACE = 'llm-n1xmigv57szjb64o'
+TTS_REGION = 'cn-beijing'
+TTS_INSTRUCTION = (
+    '用标准普通话，以亲切、自然、清晰的老师口吻认读字词，正常语速，'
+    '不夸张，不拖长，不耳语。只朗读提供的文本，不添加任何字词。'
+)
 
+
+def _tone_number(syllable: str) -> str:
+    """带调音节转数字调号；无调号按轻声补 5（儿化的裸 r 原样保留）。"""
+    converted = to_tone3(syllable, strict=False)
+    return converted if converted[-1].isdigit() else converted + '5'
+
+
+def _pronunciation_fix(word: str) -> dict[str, str] | None:
+    """把题库算好的读音钉给模型；儿化词交给模型自然读。
+
+    觉得例外：风悦对 hot_fix 的「de5」会读成 梦/嘛（四种形态 × 多 seed 复验
+    一致），不加 hot_fix 反而稳定读对（jué de，四 seed ASR 全对）。
+    """
+    if word in HOT_FIX_SKIP:
+        return None
+    syllables = reading_of(word)
+    if any(s == 'r' for s in syllables):
+        return None
+    return {word: ' '.join(_tone_number(s) for s in syllables)}
+
+
+# hot_fix 反而带偏的词：模型自身对高频常用词的默认读音是对的。
+HOT_FIX_SKIP = {'觉得'}
+
+
+def synth(entries: list[dict], api_key: str) -> None:
+    """固定音色生成字词语音；失败可续跑，不因单条超时空等整批。"""
+    from concurrent.futures import ThreadPoolExecutor
+
+    endpoint = (
+        f'https://{WORKSPACE}.{TTS_REGION}.maas.aliyuncs.com'
+        '/api/v1/services/audio/tts/SpeechSynthesizer'
+    )
     AUDIO_OUT.mkdir(parents=True, exist_ok=True)
-    semaphore = asyncio.Semaphore(4)
     failures = []
 
-    async def one(entry: dict) -> None:
+    def one(entry: dict) -> None:
         name = audio_key(entry['word'])
         if (AUDIO_OUT / f'{name}.opus').exists() or (AUDIO_OUT / f'{name}.mp3').exists():
             return
-        async with semaphore:
-            for attempt in range(3):
-                try:
-                    await asyncio.wait_for(
-                        edge_tts.Communicate(entry['word'], VOICE, rate='-15%').save(
-                            str(AUDIO_OUT / f'{name}.mp3')
-                        ),
-                        timeout=30,
+        payload = {
+            'model': TTS_MODEL,
+            'input': {
+                'text': entry['word'],
+                'voice': VOICE,
+                'format': 'mp3',
+                'sample_rate': 24000,
+                'rate': 1.0,
+                'seed': 42,
+                'instruction': TTS_INSTRUCTION,
+                'language_hints': ['zh'],
+            },
+        }
+        fix = _pronunciation_fix(entry['word'])
+        if fix is not None:
+            payload['input']['hot_fix'] = {'pronunciation': [fix]}
+        for attempt in range(3):
+            try:
+                response = requests.post(
+                    endpoint,
+                    headers={
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json',
+                    },
+                    json=payload,
+                    timeout=(12, 65),
+                )
+                data = response.json()
+                audio = data.get('output', {}).get('audio', {})
+                if not response.ok or not audio.get('url'):
+                    raise RuntimeError(
+                        f'HTTP {response.status_code} '
+                        f'{data.get("code", "")} {data.get("message", "")}'
                     )
-                    print(f"  synth {name}: {entry['word']}", flush=True)
-                    return
-                except (TimeoutError, OSError) as exc:
-                    print(f"  retry {name}: {type(exc).__name__}", flush=True)
-            failures.append(entry['word'])
+                url = audio['url']
+                if url.startswith('http://'):
+                    url = 'https://' + url[len('http://'):]
+                mp3_path = AUDIO_OUT / f'{name}.mp3'
+                with requests.get(url, stream=True, timeout=(12, 45)) as download:
+                    download.raise_for_status()
+                    with mp3_path.open('wb') as f:
+                        for chunk in download.iter_content(65536):
+                            f.write(chunk)
+                print(f"  synth {name}: {entry['word']}", flush=True)
+                return
+            except (requests.RequestException, RuntimeError, OSError) as exc:
+                print(f"  retry {name}: {type(exc).__name__}", flush=True)
+        failures.append(entry['word'])
 
-    await asyncio.gather(*(one(entry) for entry in entries))
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(one, entries))
     if failures:
         print(f'合成失败 {len(failures)} 条，重跑可续传：{failures}', flush=True)
 
@@ -271,7 +361,7 @@ async def synth(entries: list[dict]) -> None:
                 check=True,
             )
     manifest = {
-        'voice': VOICE,
+        'voice': f'{TTS_MODEL}/{VOICE}',
         'count': len(entries),
         'files': [audio_key(entry['word']) for entry in entries],
         'words': {audio_key(entry['word']): entry['word'] for entry in entries},
@@ -283,7 +373,7 @@ async def synth(entries: list[dict]) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--audio', action='store_true', help='合成字词点读音频')
+    parser.add_argument('--audio', action='store_true', help='合成字词点读音频（Key 从 stdin 读入）')
     parser.add_argument('--keep-mp3', action='store_true', help='转码后保留 mp3')
     args = parser.parse_args()
     build(audio=args.audio)

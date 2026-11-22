@@ -22,11 +22,13 @@ class SpeechAudio {
   final ValueNotifier<String?> playing = ValueNotifier<String?>(null);
 
   static String _cacheDir(String key) =>
-      key.startsWith('py_') ? 'pinyin_audio' : 'en_audio';
+      key.startsWith('py_') ? 'pinyin_audio_v2' : 'en_audio_v2';
 
-  /// 拼音音频与英语分目录；英语保持原有 URL 与缓存键不变。
+  /// 拼音与英语分目录，各自带版本段（2026-11-21 全部换百炼 Qwen 风悦）：
+  /// CDN 对 .opus 缓存一年、本机也按 key 永久缓存，同名覆盖两边都不会更新。
+  /// 以后再换音色时把 v2 顺延成 v3，并同步 OSS 上传路径（pinyin/v3、en/v3）。
   static String _remoteKey(String key) =>
-      key.startsWith('py_') ? 'pinyin/$key' : key;
+      key.startsWith('py_') ? 'pinyin/v2/$key' : 'en/v2/$key';
 
   Future<Directory> _cacheDirectory(String key) async {
     final cached = _dirs[key];
