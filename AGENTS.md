@@ -75,7 +75,8 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
 - **棋盘玩法科目（数独）**：`Topic.mode = TopicMode.sudoku`，`entries` 与 `kinds` 为空。盘面由 `Sudoku.open(difficulty)` 按难度档现生成，不走 `QuizEngine`。这类科目 `graded` 恒为 true（空题库推导），首页把练习范围卡换成**难度关卡列表**（一星~五星），并隐藏玩法卡、学习模式与错题本——它们都建立在题库之上。新增棋盘类玩法时复用 `TopicMode` 与首页的 `isBoardGame` 分支，不要再往题库抽象里塞。
 - **数独与年级无关，靠逐级解锁推进**：`SudokuDifficulty` 五档，一星恒开，其余档要上一档完成 `unlockAfter` 局才开（3/3/4/4）。一星是 **4×4** 小盘面，其余为 9×9。完成数存 `ProgressStore.stageCleared`（键是枚举名 `one`~`five`），走 `recordSudokuClear()`，**不写最高分/正确率**——数独没有对错率，混进问答科目的统计会互相干扰。另有 `stageBestSeconds` 记录单局最快用时。解锁门槛与判据都在 `SudokuDifficulty.unlockedBy()` 里，首页与页面都只调它，不要在 UI 里重算。
-- **数独盘面必须唯一解**：`lib/data/sudoku.dart` 挖空时每挖一格都跑一次回溯计数（上限 2），不唯一就补回去。`test/sudoku_test.dart` 会独立重算解数校验。改挖空策略后必须重跑该用例，否则多解盘面上「填满即算对」会把另一种正确填法判成冲突。
+- **数独盘面必须唯一解**：`lib/data/sudoku.dart` 挖空时每挖一格都跑一次回溯计数（上限 2），不唯一就补回去。`test/sudoku_test.dart` 会独立重算解数校验。改挖空策略后必须重跑该用例——运行时校验是与终盘逐格比对（`sudoku_page.dart` 的 `_validate`），多解盘面会让另一种正确填法被判成错格。
+- **数独平时不提示对错**（2026-11-22 改）：无实时红字冲突、数字键不显示剩余数——实时提示等于逐格报答案。填满最后一格才统一校验：全对结算，有错把错格标红（SnackBar 提示），改对红格自动再校验，**没有显式提交按钮，填满即校验**。顶栏「错 N」是当前红格数，不实时计每步错填；结算弹窗的「填错 N 次」才按总账。不要加回实时提示或剩余计数。
 - **`detailOf` 不能省**：`Poem.fullText` 是 `lines.join()`，对拼音（逐字组词）、数学（算式 + 思路）、英语（例句两行）会挤成一行，所以这几种科目的展开正文各自 `join('\n')`。
 - `QuizEngine` 的 `poems` 是必填参数——故意不给默认值，避免新科目忘记传题库时静默出成诗词题。
 - `ProgressStore.load(topicId:)` 必须显式传科目 id。**没有旧存档迁移逻辑**（开发阶段，不兼容无前缀的历史键）。
@@ -83,16 +84,16 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 ### 拼音语音
 
 - 两种题型、学习页与错题本都有喇叭，朗读当前字词，不新增听音题型；音频失败不挡作答。
-- `tool/gen_pinyin.py --audio` 用 `zh-CN-XiaoxiaoNeural`、语速 -15% 生成 320 条 Opus，上传至 `lliyuu-shi` 的 `shi-private/pinyin/`；文件名按字词 UTF-16 编码，不依赖列表位置。
+- `tool/gen_pinyin.py --audio` 用百炼 `qwen-audio-3.1-tts-plus`、音色 `longanfengyue_v3.1` 生成 320 条 Opus（API Key 只走 stdin，`hot_fix.pronunciation` 按题库读音钉死多音字与轻声，儿化交给模型），上传至 `lliyuu-shi` 的 `shi-private/pinyin/v2/`；文件名按字词 UTF-16 编码，不依赖列表位置。**换音色必须顺延版本段**（v2→v3）：CDN 对 .opus 缓存一年、手机按 key 永久缓存，同名覆盖两边都不生效——**修正类同名覆盖也一样，必须刷对应 URL 的 CDN**。`hot_fix` 不是万能：觉得的 `de5` 标注反而把模型带偏成「觉梦/觉嘛」（四形态 × 多 seed 复验一致），该词在 `HOT_FIX_SKIP` 里跳过 hot_fix、靠模型默认读音（四 seed ASR 全对）；遇到 hot_fix 后读错的高频词，先试去掉 hot_fix。
 - `python -I tool/verify_pinyin_audio.py` 全量检查文件与解码；可选 `--asr --model <本地目录>` 辅助列疑点。**短单字 ASR 误报多、不能可靠区分声调**，多音字与轻声要结合题库标注试听，损坏音频不上传。
 - 音频仍不入 APK；`lib/data/speech_audio.dart` 与英语共用缓存和下载逻辑，英语 URL、缓存目录与 `files/en_audio_trace.log` 保持不变。
 
 ### 英语科目
 
-- **以听为主**：听音选词（`englishListen`）与听句选义（`englishSentence`）的 `Question.focus` 为空串，答题页只渲染喇叭按钮，判题后才露出原文。改答题页时不要假设 `focus` 非空。
-- **音频不在 APK 里**：英语全靠听，设备自带 TTS 在中文 ROM 上常缺英文音色或读错元音（实测 Aria 孤立朗读 `cat` 时 /æ/ 偏离自身参照 56%，接近 /e/），所以音频用固定音色 `en-US-JennyNeural` 预生成、放 OSS（`EnglishAudio.baseUrl = https://oss.lliyuu520.cn/en-audio`），首次播放时按条目下载到本地缓存，之后离线。
+- **以听为主**：听音选词（`englishListen`）与听句选义（`englishSentence`）的 `Question.focus` 为空串，答题页只渲染喇叭按钮。判题后题干**仍只留喇叭**（文案变「再听一遍」），原文与释义由反馈卡和高亮选项负责，不重复露出（2026-11-21 改，AGENTS.md 旧句「判题后才露出原文」已过期）。改答题页时不要假设 `focus` 非空。
+- **音频不在 APK 里**：英语全靠听，设备自带 TTS 在中文 ROM 上常缺英文音色或读错元音（实测 Aria 孤立朗读 `cat` 时 /æ/ 偏离自身参照 56%，接近 /e/），所以音频用百炼 `qwen-audio-3.1-tts-plus`、音色 `longanfengyue_v3.1` 预生成（2026-11-21 起，与拼音统一音色），放 OSS `lliyuu-shi` 的 `shi-private/en/v2/`（CDN `media.lliyuu520.cn`），首次播放时按条目下载到本地缓存，之后离线。**换音色必须顺延版本段**（v2→v3，拼音同理）：CDN 对 .opus 缓存一年、手机按 key 永久缓存，同名覆盖两边都不生效。
 - `pubspec.yaml` **逐个声明**三个音效 wav，不写目录——目录写法会把 `assets/audio/en/` 一起收进包（Flutter 的目录声明是递归的，早期注释写的「不递归」是错的）。本地 `assets/audio/en/` 只是上传 OSS 前的源文件，不该进包。
-- 加了新词之后要跑：`python -I tool/gen_english.py --audio` → `python -I tool/verify_english_audio.py`（ASR 全量校验）→ 上传 OSS。校验不通过就别上传，一个错读音就是给孩子的错误输入。
+- 加了新词之后要跑：`python -I tool/gen_english.py --audio`（API Key 只走 stdin）→ `python -I tool/verify_english_audio.py`（ASR 全量校验）→ 上传 `shi-private/en/v2/`。校验不通过就别上传，一个错读音就是给孩子的错误输入。字母合成直接喂原字母「A.」，Qwen 自己读对字母名；**唯一例外 N**——风悦把「N.」稳定读成 /ʌn/（五种 seed 复验一致），`letter_n.opus` 沿用旧 Jenny 音频，重新生成后若缺失要从备份补回（`.wip_backup/english_jenny_opus/letter_n.opus`）。个别裸词形态读不稳的在 `gen_english.py` 的 `TEXT_OVERRIDES` 里改写（egg 带冠词、Key/Rice/Rain 用小写），改写文本都经 ASR 逐字复验后才固化。**sent_bread 必须走服务端原生 opus**（`NATIVE_OPUS_RATES`，rate 1.05）：本地「mp3 → ffmpeg libopus」转码会把 is bread 的 /b/ 浊音瞬态削成 /p/，32k~128k 全中，服务端编码器没这个问题。
 - `QuizEngine._tryMake` 的 switch 必须覆盖 `QuestionKind` 全部成员（含 5 个 `english*`），否则 switch 不穷尽会让**整个测试套件编译不过**，表现为「loading ...」后直接失败，而不是某条用例红。
 - **英语干扰项要排除字母条目**：字母也是纯小写英文，混进「听音选词」会变成「听 cat 选 H」。`_englishListen` 的 `excludePoem` 里已排除 `_isEnglishLetter`。
 - 拼单词（`englishSpell`）属于填空题：`Question.isBlank` 包含它，`_BlankPrompt` 对它走「单行紧贴显示」（`c□t`）而不是诗句的上下分行，否则看不出是个词。
@@ -120,7 +121,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - 诗词年级分布：一 8 / 二 11 / 三 13 / 四 12 / 五 15 / 六 12 / 七 8 / 八 7 / 九 5 / 拓展 18。单年级池小是正常的，一局题数自适应（`total` 取实际题数）。
 - **拼音题库由脚本生成，不要手改 `pinyin.dart`**：`python -I tool/gen_pinyin.py` 用 pypinyin 按词组算声调（多音字取词内读音，如「长大 zhǎng」「银行 háng」「倔强 jiàng」），儿化与轻声在脚本的 `OVERRIDES` 里定向修正。手写 300+ 条必然出现声调错误，一个错调就是一道错题。
 - **pypinyin 不保证轻声**：亲属叠词「爸爸/妈妈/哥哥/姐姐/妹妹」它给原调，「衣服」给 fú，只有「弟弟/伯伯/婆婆」给对了。这些已写进 `OVERRIDES`。测试分两层——白名单查「有没有调号」，`亲属叠词与常见轻声词读音符合规范` 逐条钉死「调号对不对」，只靠白名单会把轻声错误放过去。
-- **英语题库同样由脚本生成**：`tool/english_bank.json` 是源，`tool/gen_english.py` 生成 `lib/data/english.dart`；音频用 `tool/check_english_audio.py` / `tool/verify_english_audio.py` 校验。字母要读字母名（`C` 写 `see`），直接读 `C. A. T.` 会被引擎切掉尾字母。
+- **英语题库同样由脚本生成**：`tool/english_bank.json` 是源，`tool/gen_english.py` 生成 `lib/data/english.dart`；音频用 `tool/check_english_audio.py` / `tool/verify_english_audio.py` 校验。字母合成直接喂原字母「C.」，Qwen 会读出字母名（edge-tts 时代「C. A. T. 丢尾字母」才需要改写成 `see`，方案已淘汰）。
 - 拼音题库**字词与读音都必须唯一**：同音字（如「木/目」都是 mù）会让「选字词」题出现两个正确选项，测试会拦。
 - 干扰项必须来自**别的条目**，且作者题排除同作者、标题题排除同名、拼音「选读音」排除同读音、「选字词」排除同字词，否则选项里会出现重复正确答案。拼音接入时漏掉这一条，诗词题库下会抽出两个「李白」。
 - 填空题：字池需能精确拼出答案（同一字出现几次就放几次），干扰字不得与答案字重复；`_plain()` 的正则负责去标点，长度计算、挖空、字池都依赖它——改正则要同时检查 `_minLineLength` 与 `blankLen` 分支。
@@ -141,15 +142,16 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - 仅 Android。`minSdk`/`targetSdk` 走 `flutter.*` 默认值，未额外指定。
 - **正式签名**：release 用 `D:/tools/keys/poem_quiz.keystore`（30 年有效期），配置在 `android/keystore.properties`（不入库，缺失时回落 debug 签名）。**keystore 或密码丢失 = 无法覆盖安装，只能卸载重装丢全部存档**，务必异地备份。
 - **分发：单一来源，只用自有 OSS**（`oss://lliyuu520/apk/`，CDN `oss.lliyuu520.cn`）。曾用 `poem_quiz-dist` 仓库 + jsDelivr 兜底，已弃用——jsDelivr 对同名文件的缓存极其顽固，长期返回两三个版本之前的旧清单，刷新也不生效，维护成本高于收益。`UpdateService.manifestUrl` 是单个常量，不要加回多源回退。改清单后必须刷新 CDN 缓存。
-- **App 内检查更新**：设置页「关于」区。安装走 `PackageInstaller`（新版系统不允许直接 `ACTION_VIEW` 拉起 APK）。三个已踩的坑：
+- **App 内检查更新**：设置页「关于」区。安装走 `PackageInstaller`（新版系统不允许直接 `ACTION_VIEW` 拉起 APK）。四个已踩的坑：
   - commit 的 `PendingIntent` **必须 MUTABLE**。用 `FLAG_IMMUTABLE` 会报「The commit() status receiver should come from a mutable PendingIntent」，装不上。
   - Manifest 必须声明 `REQUEST_INSTALL_PACKAGES`，否则 commit 之后系统不弹安装框。
   - 该权限还要用户在系统设置里单独开启。**未开启时 commit() 不报错、系统静默丢弃请求**，用户永远等不到弹窗（vivo 实测：APK 已下载进 cache，界面却停在「请在系统弹窗中确认安装」）。所以安装前必须 `UpdateService.canInstall()` 先查，未授权就显示「去开启授权」按钮（`openInstallSettings`）。
+  - **`STATUS_PENDING_USER_ACTION` 是 -1，不是失败**——`STATUS_FAILURE` 实际是 1。commit 成功后系统先发 -1，确认弹窗的 Intent 在 `EXTRA_INTENT` 里，receiver 必须 `startActivity` 拉起它；漏掉这个分支会误报「安装失败（-1）」且永远看不到确认页（0.4.1 上实测）。通用失败时把 `EXTRA_STATUS_MESSAGE` 一并展示，那才是真实原因。
   - 排障时看 `cache/` 有没有 `poem_quiz_<code>.apk`：有就说明下载成功、问题在安装授权那一步。
 - **应用名「拾」**（2026-11-20 由「日知」改）：`android:label`、`MaterialApp.title`、设置页版本前缀、`pubspec.yaml` description 四处要同步。包名 `com.lyu.poem_quiz` 与仓库名 `poem_quiz` 未改。
 - **图标由 `tool/gen_icon.py` 生成，改图标重跑脚本而不是手改 png**。`CHAR = "拾"` 是唯一的字面变量，换名字只改这一处。脚本同时产出：旧式 `ic_launcher.png` / `ic_launcher_round.png` 五档，以及自适应图标（`mipmap-anydpi-v26/` + `ic_launcher_foreground.png` + `drawable/ic_launcher_background.xml`）。**自适应前景必须按 66dp 安全圆的内接正方形算字号**（`s*33/108/√2`），按画布比例直接铺会让圆形蒙版切掉字角。
-- 字号仍硬编码（`serif(32)` 之类），**不做等比缩放**；响应式只用于「限宽」与「横屏分栏」，见下条。
-- **平板适配**：断点集中在 `lib/widgets/adaptive.dart`（compact <600 / medium 600~839 / expanded ≥840）。页面用 `ContentFrame` 限宽居中，答题页在 expanded 下走左右双栏（左题干、右作答 + 常驻按钮）。新增页面套 `ContentFrame` 即可，不要另写断点。
+- 字号仍硬编码（`serif(32)` 之类），**不做随窗口等比缩放**；响应式用于「限宽、分栏与各页的宽屏布局」，宽屏档的放大字号（题干 34pt、提示 19pt 等）是写死的固定值，不是缩放系数。
+- **平板适配**（2026-11-22 重设计）：断点集中在 `lib/widgets/adaptive.dart`（compact <600 / medium 600~839 / expanded ≥840）。窄屏一律单列 + `ContentFrame` 限宽居中；宽屏各页有专属布局——答题页双栏舞台（题干左栏垂直居中、选项右栏居中、反馈卡+主按钮收右栏底部走 AnimatedSize，判题前后题干纹丝不动）、首页标题页签钉顶+玩法簇垂直居中（超高竖屏切 roomy 变体放大玩法卡）、学习页/错题本双列分摊、设置/结算双栏、数独关卡一行横排+盘面 560dp。题干卡的提示语（「出自哪一首诗？」）是 16/19pt 墨色加粗正文，不是辅助小字——拼音/英语题干只有一个字或一个词，提示语是孩子唯一能读懂的任务说明；算式题 focus 里的 □ 由 `_plainFocus` 渲染成写字格，不是纯字符。新增页面：窄屏套 `ContentFrame` 即可，宽屏要专门排布局，且 **AdaptiveBuilder 必须放在 ContentFrame 外侧**（内侧量到的是限宽减边距后的宽度，会把 840+ 的窗口误判成 medium）。三个渲染坑：含 `LayoutBuilder` 的子树不能进 `IntrinsicHeight`（用 `ConstrainedBox(minHeight)`+`Center` 模式居中）；松约束里的 `Row(crossAxisAlignment: stretch)` 必须包 `IntrinsicHeight`；宽屏首页的主区域不要用 scroll 包 Expanded。
 - 方向锁在平板上**无效**：`targetSdk = 36`，Android 16 对 smallestWidth ≥600dp 的设备忽略 `screenOrientation`。横竖屏必须靠真布局适配，不要试图用 manifest 锁方向。
 - 触控目标保持 ≥48dp，**不要用 `VisualDensity.compact`**（会把 48 压到 40）。
 - `kSerifFallback` 依赖设备上的思源/宋体字体；Android 上一般能命中 Noto Serif CJK，缺失时会退到系统默认衬线。内容正文用内置 `WenKai`（霞鹜文楷子集），拉丁部分是单层 ɑ/ɡ，与教材拼音一致。
@@ -160,5 +162,5 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 - **全科目统一朱红**：tab 选中线、主按钮、chip 都用 `AppColors.seal`，不按科目换色——切科目换整套配色会让人觉得换了另一个 App。
 - `AppColors` 里仍有科目色（`pinyin` 青 / `math` 赭 / `sudoku` 靛 / `chengyu` 绛紫 / `english` 靛青），以及 `Topic.accent` / `Topic.accentSoft` / `Topic.seal` 字段。**这些当前不接 UI**，保留兼容；新增科目不用管它们。
-- **首页整页不滚动**：`Column + Expanded + Spacer`，玩法是横排三个紧凑 `_ModeChip`（约 68dp），没有「关卡/练习范围/玩法」分隔标题。加区块前先确认整页放得下，优先压缩而不是改成滚动。
+- **首页整页不滚动**：窄屏 `Column + Expanded + Spacer`，玩法是横排三个紧凑 `_ModeChip`（约 68dp）；宽屏标题与页签钉顶、玩法簇整体垂直居中（`_wideHomeBody`，玩法簇内部才允许滚动），超高竖屏切 roomy 变体。没有「关卡/练习范围/玩法」分隔标题。加区块前先确认整页放得下，优先压缩而不是改成滚动。
 - 首页右上角是书本图标 `Icons.auto_stories_outlined`，不再有印章文案。
