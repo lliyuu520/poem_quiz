@@ -12,7 +12,8 @@ import '../widgets/common.dart';
 /// 数独：九宫格填数。
 ///
 /// 与问答页不同，这里没有题目列表也没有进度条——一局就是一整块盘面。
-/// 填错的格子立刻标红（同行/列/宫重复），可以撤销，填满且无冲突即算完成。
+/// 平时不做任何对错提示（实时红字等于逐格报答案），填满后统一校验：
+/// 与终盘比对，全对结算，有错把错格标红，改对红格自动再次校验。
 class SudokuPage extends StatefulWidget {
   const SudokuPage({
     super.key,
@@ -41,7 +42,7 @@ class SudokuPage extends StatefulWidget {
       values: List<int>.of(page._values),
       history: List<(int, int)>.of(page._history),
       selected: page._selected,
-      conflicts: page._conflicts,
+      wrongCells: Set<int>.of(page._wrongCells),
     );
   }
 }
@@ -54,14 +55,16 @@ class SudokuPageDebugState {
     required this.values,
     required this.history,
     required this.selected,
-    required this.conflicts,
+    required this.wrongCells,
   });
 
   final Sudoku puzzle;
   final List<int> values;
   final List<(int, int)> history;
   final int? selected;
-  final Set<int> conflicts;
+
+  /// 最近一次校验（填满触发）判为填错的格子。
+  final Set<int> wrongCells;
 }
 
 class _SudokuPageState extends State<SudokuPage> {
@@ -75,7 +78,11 @@ class _SudokuPageState extends State<SudokuPage> {
 
   int? _selected;
 
-  /// 用时（秒）与落错次数。落错指填的数字与终盘不符。
+  /// 最近一次校验判为填错的格子。只在填满触发校验时更新；
+  /// 改动其中一格就撤掉那格的标记，等下一次校验重新判定。
+  Set<int> _wrongCells = <int>{};
+
+  /// 用时（秒）与落错次数。落错指填的数字与终盘不符，只在结算弹窗里报总账。
   int _seconds = 0;
   int _mistakes = 0;
   Timer? _timer;
@@ -105,6 +112,7 @@ class _SudokuPageState extends State<SudokuPage> {
     _puzzle = Sudoku.open(_difficulty, widget.random);
     _values = List<int>.from(_puzzle.given);
     _history.clear();
+    _wrongCells = <int>{};
     _selected = _puzzle.blanks.isEmpty
         ? null
         : _puzzle.blanks.first.$1 * _puzzle.size + _puzzle.blanks.first.$2;
@@ -116,44 +124,6 @@ class _SudokuPageState extends State<SudokuPage> {
       if (!mounted) return;
       setState(() => _seconds++);
     });
-  }
-
-  /// 冲突格：同行、同列或同宫出现相同数字的格子。
-  ///
-  /// 只标冲突不禁止落子——孩子写错了看得到红，比弹窗打断更接近纸面练习。
-  Set<int> get _conflicts {
-    final bad = <int>{};
-    void scan(Iterable<int> unit) {
-      final seen = <int, List<int>>{};
-      for (final i in unit) {
-        final v = _values[i];
-        if (v == 0) continue;
-        (seen[v] ??= <int>[]).add(i);
-      }
-      for (final group in seen.values) {
-        if (group.length > 1) bad.addAll(group);
-      }
-    }
-
-    final size = _puzzle.size;
-    final box = _puzzle.boxDim;
-    for (var r = 0; r < size; r++) {
-      scan(<int>[for (var c = 0; c < size; c++) r * size + c]);
-    }
-    for (var c = 0; c < size; c++) {
-      scan(<int>[for (var r = 0; r < size; r++) r * size + c]);
-    }
-    for (var br = 0; br < box; br++) {
-      for (var bc = 0; bc < box; bc++) {
-        final r0 = br * box;
-        final c0 = bc * box;
-        scan(<int>[
-          for (var r = r0; r < r0 + box; r++)
-            for (var c = c0; c < c0 + box; c++) r * size + c,
-        ]);
-      }
-    }
-    return bad;
   }
 
   bool get _filled => _values.every((v) => v != 0);
@@ -177,8 +147,9 @@ class _SudokuPageState extends State<SudokuPage> {
       if (digit != 0 && digit != _puzzle.solutionAt(r, c)) {
         _mistakes++;
       }
+      _wrongCells.remove(index);
     });
-    _checkWin();
+    _validate();
   }
 
   void _erase() {
@@ -190,6 +161,7 @@ class _SudokuPageState extends State<SudokuPage> {
     setState(() {
       _history.add((index, _values[index]));
       _values[index] = 0;
+      _wrongCells.remove(index);
     });
   }
 
@@ -198,12 +170,35 @@ class _SudokuPageState extends State<SudokuPage> {
     setState(() {
       final (index, previous) = _history.removeLast();
       _values[index] = previous;
+      _wrongCells.remove(index);
       _selected = index;
     });
+    // 撤销可能把盘面重新填满（撤销了擦除），满盘就再校验一次。
+    _validate();
   }
 
-  void _checkWin() {
-    if (!_filled || _conflicts.isNotEmpty) return;
+  /// 填满后的统一校验：与终盘逐格比对。
+  ///
+  /// 全对才结算；有错就把错格标红等孩子改——改动满盘上的任意一格
+  /// 都会再次触发校验，改对最后一处时自动完成。
+  void _validate() {
+    if (!_filled) return;
+    final size = _puzzle.size;
+    final wrong = <int>{
+      for (var i = 0; i < _values.length; i++)
+        if (_values[i] != _puzzle.solutionAt(i ~/ size, i % size)) i,
+    };
+    if (wrong.isEmpty) {
+      _settle();
+      return;
+    }
+    setState(() => _wrongCells = wrong);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('有 ${wrong.length} 格不对，改一改红格')),
+    );
+  }
+
+  void _settle() {
     _settled = true;
     _timer?.cancel();
 
@@ -248,7 +243,7 @@ class _SudokuPageState extends State<SudokuPage> {
           children: <Widget>[
             Text(
               '${_difficulty.title} · 用时 ${_formatDuration(_seconds)}，填错 $_mistakes 次。\n'
-              '${_mistakes == 0 ? '一次没错，很稳。' : '错的地方已经能自己看出来了。'}',
+              '${_mistakes == 0 ? '一次没错，很稳。' : '填错的地方都改对了，很棒。'}',
               style: serif(14, color: AppColors.inkSoft, height: 1.7),
             ),
             if (_unlockedNext && next != null) ...<Widget>[
@@ -346,10 +341,14 @@ class _SudokuPageState extends State<SudokuPage> {
                     icon: Icons.timer_outlined,
                     text: _formatDuration(_seconds),
                   ),
+                  // 只显示最近一次校验发现的错格数（与红格一致），
+                  // 不实时泄漏每一步的对错。
                   _Stat(
                     icon: Icons.edit_note_outlined,
-                    text: '错 $_mistakes',
-                    color: _mistakes > 0 ? AppColors.seal : AppColors.inkSoft,
+                    text: '错 ${_wrongCells.length}',
+                    color: _wrongCells.isNotEmpty
+                        ? AppColors.seal
+                        : AppColors.inkSoft,
                   ),
                 ],
               ),
@@ -361,16 +360,30 @@ class _SudokuPageState extends State<SudokuPage> {
   }
 
   /// 宽屏（平板横屏）：盘面在左，数字键在右，视线不用来回移动。
+  /// 键盘在右栏垂直居中，盘面放大到 560dp，吃满平板的横竖空间。
   Widget _wideLayout() {
     return ContentFrame(
-      maxWidth: 1000,
+      maxWidth: 1100,
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Expanded(flex: 3, child: _boardArea()),
+          Expanded(flex: 3, child: _boardArea(maxSide: 560)),
           const SizedBox(width: 28),
-          Expanded(flex: 2, child: SingleChildScrollView(child: _keypadArea())),
+          Expanded(
+            flex: 2,
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  // Center 不走 intrinsic，键垫区里有 Wrap 也能安全居中。
+                  child: Center(
+                    child: _keypadArea(),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -393,10 +406,10 @@ class _SudokuPageState extends State<SudokuPage> {
     );
   }
 
-  Widget _boardArea() {
+  Widget _boardArea({double maxSide = 460}) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
+        constraints: BoxConstraints(maxWidth: maxSide),
         child: AspectRatio(
           aspectRatio: 1,
           child: _Board(
@@ -404,7 +417,7 @@ class _SudokuPageState extends State<SudokuPage> {
             given: _puzzle.given,
             size: _puzzle.size,
             boxDim: _puzzle.boxDim,
-            conflicts: _conflicts,
+            wrong: _wrongCells,
             selected: _selected,
             onTap: _select,
           ),
@@ -427,7 +440,6 @@ class _SudokuPageState extends State<SudokuPage> {
             for (var d = 1; d <= _puzzle.size; d++)
               _NumberKey(
                 digit: d,
-                remaining: _remainingOf(d),
                 enabled: editable,
                 onTap: () => _input(d),
               ),
@@ -472,10 +484,6 @@ class _SudokuPageState extends State<SudokuPage> {
   bool get _isSelectedGiven =>
       _selected != null &&
       _puzzle.isGiven(_selected! ~/ _puzzle.size, _selected! % _puzzle.size);
-
-  /// 这个数字还差几个没填（满额减去盘面上已有的个数）。
-  int _remainingOf(int digit) =>
-      _puzzle.size - _values.where((v) => v == digit).length;
 }
 
 class _Stat extends StatelessWidget {
@@ -507,15 +515,16 @@ class _Stat extends StatelessWidget {
 
 /// 数独盘面（4×4 或 9×9）。
 ///
-/// 宫线画粗、格线画细；选中格用金边，同行/列/宫淡底，
+/// 宫线画粗、格线画细；选中格金框 + 淡底，同行/列/宫淡底，
 /// 与选中格数字相同的格子也淡底，方便一眼扫出还能填哪。
+/// 错格只在填满校验后出现，红底红字。
 class _Board extends StatelessWidget {
   const _Board({
     required this.values,
     required this.given,
     required this.size,
     required this.boxDim,
-    required this.conflicts,
+    required this.wrong,
     required this.selected,
     required this.onTap,
   });
@@ -524,7 +533,9 @@ class _Board extends StatelessWidget {
   final List<int> given;
   final int size;
   final int boxDim;
-  final Set<int> conflicts;
+
+  /// 最近一次填满校验判错的格子。
+  final Set<int> wrong;
   final int? selected;
   final ValueChanged<int> onTap;
 
@@ -554,7 +565,7 @@ class _Board extends StatelessWidget {
                         column: c,
                         value: values[r * size + c],
                         isGiven: given[r * size + c] != 0,
-                        conflict: conflicts.contains(r * size + c),
+                        wrong: wrong.contains(r * size + c),
                         selected: selected == r * size + c,
                         related: _isRelated(r, c),
                         sameValue:
@@ -593,7 +604,7 @@ class _Cell extends StatelessWidget {
     required this.column,
     required this.value,
     required this.isGiven,
-    required this.conflict,
+    required this.wrong,
     required this.selected,
     required this.related,
     required this.sameValue,
@@ -608,7 +619,9 @@ class _Cell extends StatelessWidget {
   final int column;
   final int value;
   final bool isGiven;
-  final bool conflict;
+
+  /// 最近一次填满校验判错（红底红字）。
+  final bool wrong;
   final bool selected;
   final bool related;
   final bool sameValue;
@@ -623,7 +636,7 @@ class _Cell extends StatelessWidget {
       '第 ${row + 1} 行第 ${column + 1} 列',
       value == 0 ? '空格' : '$value',
       isGiven ? '题面数字，不可编辑' : '玩家填写',
-      if (conflict) '有冲突',
+      if (wrong) '填错了',
     ];
     return parts.join('，');
   }
@@ -633,7 +646,7 @@ class _Cell extends StatelessWidget {
     Color bg = Colors.transparent;
     if (selected) {
       bg = AppColors.sealSoft;
-    } else if (conflict) {
+    } else if (wrong) {
       bg = AppColors.sealSoft;
     } else if (sameValue) {
       bg = AppColors.paperDeep;
@@ -641,7 +654,7 @@ class _Cell extends StatelessWidget {
       bg = AppColors.paperDeep.withValues(alpha: 0.55);
     }
 
-    final fg = conflict
+    final fg = wrong
         ? AppColors.seal
         : isGiven
         ? AppColors.ink
@@ -685,6 +698,13 @@ class _Cell extends StatelessWidget {
             ),
           ),
           alignment: Alignment.center,
+          // 选中格：金色内框压在格线上，纸面「圈出这一格」的观感，
+          // 比单独一层淡底醒目得多。
+          foregroundDecoration: selected
+              ? BoxDecoration(
+                  border: Border.all(color: AppColors.gold, width: 3),
+                )
+              : null,
           child: value == 0
               ? null
               : Padding(
@@ -710,20 +730,17 @@ class _Cell extends StatelessWidget {
   }
 }
 
-/// 数字键。只随当前格是否可编辑启停；剩余数量是辅助信息，
-/// 不据此禁用——它是改写玩家格的工具，错填和同值改写都必须可用。
+/// 数字键。只随当前格是否可编辑启停，不显示剩余数量——
+/// 剩几个就是给逐格报答案留后门；它是改写玩家格的工具，
+/// 错填和同值改写都必须可用。
 class _NumberKey extends StatelessWidget {
   const _NumberKey({
     required this.digit,
-    required this.remaining,
     required this.enabled,
     required this.onTap,
   });
 
   final int digit;
-
-  /// 盘面上还差几个这个数字；仅用于展示。
-  final int remaining;
   final bool enabled;
   final VoidCallback onTap;
 
@@ -733,7 +750,7 @@ class _NumberKey extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: enabled,
-      label: '数字 $digit，还可填 $remaining 个',
+      label: '数字 $digit',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -749,39 +766,22 @@ class _NumberKey extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.line, width: 1.2),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '$digit',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w600,
-                        color: fg,
-                        fontFeatures: const <FontFeature>[
-                          FontFeature.tabularFigures(),
-                        ],
-                      ),
-                    ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text(
+                  '$digit',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                    fontFeatures: const <FontFeature>[
+                      FontFeature.tabularFigures(),
+                    ],
                   ),
                 ),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '剩 $remaining',
-                      style: const TextStyle(
-                        fontSize: 8,
-                        color: AppColors.inkFaint,
-                        height: 1.1,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

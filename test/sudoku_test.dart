@@ -644,8 +644,8 @@ void main() {
       await tester.pumpAndSettle();
       probe = probeOf(tester);
 
-      // 满额数字仍可用来改写玩家格；剩余数量只是辅助展示。
-      expect(find.text('剩 0'), findsWidgets);
+      // 满额数字不显示剩余数，但仍可用来改写玩家格。
+      expect(find.textContaining('剩'), findsNothing);
       expect(digitKey(tester, nearFullDigit).onTap, isNotNull);
       await tester.tap(
         find.byKey(ValueKey<String>('sudoku-digit-$nearFullDigit')),
@@ -655,7 +655,7 @@ void main() {
       expect(
         probe.values[anotherIndex],
         nearFullDigit,
-        reason: '即使显示剩 0，数字键仍能改写另一个玩家格',
+        reason: '数字键不显示剩余数，但仍是可改写玩家格的工具',
       );
 
       final givenRow = List<int>.generate(
@@ -672,6 +672,70 @@ void main() {
       }
       expect(probe.values[givenRow * probe.puzzle.size], isNonZero);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('填满后统一校验：有错标红不结算，改对红格即完成', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpSudoku(tester, phone, random: Random(23));
+      var probe = probeOf(tester);
+      final blanks = probe.puzzle.blanks.toList();
+      expect(blanks, isNotEmpty);
+
+      // 除最后一格外全部按终盘填对；期间不满盘，不应有任何提示。
+      final last = blanks.last;
+      for (final (r, c) in blanks.take(blanks.length - 1)) {
+        await tester.tap(cellFinder(probe.labelOf(r, c)), warnIfMissed: false);
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            ValueKey<String>('sudoku-digit-${probe.puzzle.solutionAt(r, c)}'),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+      probe = probeOf(tester);
+      expect(probe.wrongCells, isEmpty, reason: '没填满就不该有对错提示');
+
+      // 最后一格故意填错：满盘触发校验，错格标红、不弹结算。
+      final wrongDigit =
+          probe.puzzle.solutionAt(last.$1, last.$2) % probe.puzzle.size + 1;
+      await tester.tap(
+        cellFinder(probe.labelOf(last.$1, last.$2)),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ValueKey<String>('sudoku-digit-$wrongDigit')),
+      );
+      await tester.pumpAndSettle();
+      probe = probeOf(tester);
+      final wrongIndex = last.$1 * probe.puzzle.size + last.$2;
+      expect(probe.wrongCells, {wrongIndex}, reason: '填满后应把错格标红');
+      expect(find.text('填满了'), findsNothing, reason: '有错不该结算');
+      // 语义标签同步带上「填错了」，读屏能听见错在哪格。
+      expect(
+        find.bySemanticsLabel('第 ${last.$1 + 1} 行第 ${last.$2 + 1} 列，'
+            '$wrongDigit，玩家填写，填错了'),
+        findsOneWidget,
+      );
+
+      // 改对红格：满盘再次校验，全部正确即结算。
+      await tester.tap(
+        cellFinder(probe.labelOf(last.$1, last.$2)),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(
+          ValueKey<String>(
+            'sudoku-digit-${probe.puzzle.solutionAt(last.$1, last.$2)}',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('填满了'), findsOneWidget, reason: '改对红格应自动结算');
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
     });
 
     testWidgets('81 格都有行列、值、来源、选中与点击语义', (tester) async {
@@ -739,6 +803,7 @@ class _SudokuPageProbe {
   List<int> get values => _state.values;
   List<(int, int)> get history => _state.history;
   int? get selected => _state.selected;
+  Set<int> get wrongCells => _state.wrongCells;
 
   String labelOf(int row, int column) {
     final value = values[row * puzzle.size + column];
@@ -746,7 +811,7 @@ class _SudokuPageProbe {
       '第 ${row + 1} 行第 ${column + 1} 列',
       value == 0 ? '空格' : '$value',
       puzzle.isGiven(row, column) ? '题面数字，不可编辑' : '玩家填写',
-      if (_state.conflicts.contains(row * puzzle.size + column)) '有冲突',
+      if (_state.wrongCells.contains(row * puzzle.size + column)) '填错了',
     ].join('，');
   }
 }
