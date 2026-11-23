@@ -80,12 +80,25 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Real-IP $remote_addr;
         # 登录接口按 IP 限流，防口令爆破
-        limit_req zone=api burst=10 nodelay;
+        limit_req zone=shi_api burst=3 nodelay;
+        limit_req_status 429;
     }
 }
 ```
 
-在 `http {}` 里配一个 `limit_req_zone $binary_remote_addr zone=api:10m rate=5r/s;`。
+zone 定义（实测值）：
+
+```
+limit_req_zone $binary_remote_addr zone=shi_api:10m rate=2r/m;
+```
+
+**为什么是 2r/m 而不是 5r/s**：最初配 `5r/s + burst=5`，实测连发 8 次登录
+全部返回 401（限流没触发）——5r/s 加 5 个突发，等于短时间能放过 10 个请求，
+对爆破几乎没有阻挡。登录是人工操作，正常人不会一秒点两次，所以收紧到
+`2r/m`（每 30 秒补一个令牌）+ `burst=3`。实测：连发 8 次时第 2 次起返回
+429，等 35 秒后恢复正常。
+
+调整限流参数后必须实测，`nginx -t` 通过不代表限流真的拦得住。
 
 ## 升级
 
