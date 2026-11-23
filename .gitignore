@@ -54,3 +54,8 @@ android/build/
 .env
 .env.*
 !.env.example
+
+# Go 账号服务构建产物
+server/shi-account
+server/shi-account.exe
+server/*.test
