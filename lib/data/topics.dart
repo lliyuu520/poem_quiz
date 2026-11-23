@@ -203,7 +203,7 @@ const Topic kSudokuTopic = Topic(
   intro: '九宫格每行、每列、每宫 1~9 各一次。填错会标红，可以撤销重来。',
 );
 
-/// 成语科目：选字补全成语，按学龄分档。
+/// 成语科目：选字补全、看释义猜成语、按拼音认成语，按学龄分档。
 const Topic kChengyuTopic = Topic(
   id: 'chengyu',
   name: '成语',
@@ -213,11 +213,15 @@ const Topic kChengyuTopic = Topic(
   entries: kChengyu,
   groupOf: _chengyuGroupOf,
   metaOf: _chengyuMeta,
-  kinds: <QuestionKind>{QuestionKind.idiomBlank},
+  kinds: <QuestionKind>{
+    QuestionKind.idiomBlank,
+    QuestionKind.idiomMeaning,
+    QuestionKind.idiomPinyin,
+  },
   nameOf: _chengyuName,
   summaryOf: _chengyuSummary,
-  tagline: '四字成语，选字补全',
-  intro: '点选字块补全成语，按学龄分档练习常用成语。',
+  tagline: '四字成语，读准也懂义',
+  intro: '选字补全成语、看释义猜成语、按拼音认成语，按学龄分档练习常用成语。',
   seal: '语\nquiz',
   accent: AppColors.chengyu,
   accentSoft: AppColors.chengyuSoft,

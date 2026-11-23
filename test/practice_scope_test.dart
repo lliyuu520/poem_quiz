@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poem_quiz/data/grade.dart';
 import 'package:poem_quiz/models/question.dart';
@@ -53,7 +55,9 @@ void main() {
         rec: const GradeRecommendation.aboveSchool(),
       );
       expect(p.weights.keys.toSet(), <int>{1, 2, 3, 4, 5, 6, 7, 8, 9});
-      final engine = QuizEngine(poems: kPoetryTopic.entries);
+      // 固定 seed：全覆盖下 12 题全落在 1~6 年级的概率约 5%，不固定会让用例
+      // 偶发变红（题库扩容前就有，不是新增内容引入的）。
+      final engine = QuizEngine(poems: kPoetryTopic.entries, random: Random(7));
       final session = buildSession(
         engine: engine,
         topic: kPoetryTopic,
@@ -70,7 +74,7 @@ void main() {
     test('升档挑战：选六年级能出到六、七年级题', () {
       final p = plan(PracticeScope.grade(6));
       expect(p.targetGrade, 6);
-      final engine = QuizEngine(poems: kPoetryTopic.entries);
+      final engine = QuizEngine(poems: kPoetryTopic.entries, random: Random(11));
       final session = buildSession(
         engine: engine,
         topic: kPoetryTopic,

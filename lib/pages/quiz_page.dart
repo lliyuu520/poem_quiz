@@ -488,7 +488,18 @@ class _QuestionCard extends StatelessWidget {
               verdict: verdict,
               enlarged: enlarged,
             )
-          else if (question.isPinyin)
+          else if (question.isLongPrompt)
+            // 成语释义是一整句话（13~25 字），用单个词的大字号会挤成一坨。
+            Text(
+              question.focus,
+              textAlign: TextAlign.center,
+              style: serif(
+                enlarged ? 24 : 19,
+                height: 1.7,
+                spacing: 1.5,
+              ),
+            )
+          else if (question.isPinyin || question.kind == QuestionKind.idiomPinyin)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
@@ -505,12 +516,15 @@ class _QuestionCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(width: enlarged ? 16 : 12),
-                SpeakButton(
-                  audioKey: PinyinAudioKeys.word(question.poem.title),
-                  size: enlarged ? 56 : 48,
-                  color: AppColors.seal,
-                ),
+                // 成语没有点读音频，只有拼音科目挂喇叭。
+                if (question.isPinyin) ...<Widget>[
+                  SizedBox(width: enlarged ? 16 : 12),
+                  SpeakButton(
+                    audioKey: PinyinAudioKeys.word(question.poem.title),
+                    size: enlarged ? 56 : 48,
+                    color: AppColors.seal,
+                  ),
+                ],
               ],
             )
           else

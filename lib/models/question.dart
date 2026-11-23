@@ -1,7 +1,7 @@
 import 'poem.dart';
 
 /// 题型。前四种针对诗句，中间两种针对拼音读音，后三种针对算式，
-/// 成语选字针对成语，最后五种针对英语（以听为主）。
+/// 成语三型针对成语，最后五种针对英语（以听为主）。
 ///
 /// 一个科目只会用到其中一部分（见 `Topic.kinds`），引擎按题型分派。
 enum QuestionKind {
@@ -15,6 +15,8 @@ enum QuestionKind {
   mathBlank,
   mathCompare,
   idiomBlank,
+  idiomMeaning,
+  idiomPinyin,
   englishListen,
   englishMeaning,
   englishCase,
@@ -34,6 +36,8 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.mathBlank => '填数',
         QuestionKind.mathCompare => '比大小',
         QuestionKind.idiomBlank => '选字',
+        QuestionKind.idiomMeaning => '知词义',
+        QuestionKind.idiomPinyin => '读成语',
         QuestionKind.englishListen => '听音选词',
         QuestionKind.englishMeaning => '认词义',
         QuestionKind.englishCase => '大小写',
@@ -45,6 +49,20 @@ extension QuestionKindLabel on QuestionKind {
 /// 是否为拼音类题型（答案是拼音串而非汉字）。
 bool isPinyinKind(QuestionKind kind) =>
     kind == QuestionKind.pinyinOf || kind == QuestionKind.wordOf;
+
+/// 是否为成语类题型。
+bool isIdiomKind(QuestionKind kind) =>
+    kind == QuestionKind.idiomBlank ||
+    kind == QuestionKind.idiomMeaning ||
+    kind == QuestionKind.idiomPinyin;
+
+/// 题干或选项是拼音串的题型。这类文字要用文楷（教学体单层 a/g），
+/// 衬线字体的双层 a 与教材拼音对不上。成语的「读成语」也算。
+///
+/// 注意与 [isPinyinKind] 的区别：后者还决定题干旁要不要挂拼音播放按钮，
+/// 成语没有点读音频，不能混用。
+bool usesLatinText(QuestionKind kind) =>
+    isPinyinKind(kind) || kind == QuestionKind.idiomPinyin;
 
 /// 是否为英语题型（拉丁字母内容，朗读是主要输入通道）。
 bool isEnglishKind(QuestionKind kind) =>
@@ -114,6 +132,9 @@ class Question {
 
   /// 拼音题同样用 [focus] 展示题干、[options] 展示候选，只是文字是拼音。
   bool get isPinyin => isPinyinKind(kind);
+
+  /// 题干是长释义（成语「知词义」），不能按单个词/短语的大字号渲染。
+  bool get isLongPrompt => kind == QuestionKind.idiomMeaning;
 
   String get answerText => isBlank ? answerChars.join() : options[answerIndex];
 }

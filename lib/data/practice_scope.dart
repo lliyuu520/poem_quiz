@@ -383,8 +383,9 @@ Map<int, double> _clampToPresent(Map<int, double> weights, Set<int> present) {
 
 /// 各策略下的题型权重。空映射表示等权（引擎内部按等权处理）。
 ///
-/// 识别题（选作者/标题/读音/得数）认知负荷低；回忆/产出题（接句/补句/补全成语）
-/// 需要主动提取。轻松策略压低产出题占比，挑战策略抬高。
+/// 识别题（选作者/标题/读音/得数/按拼音认成语）认知负荷低；回忆/产出题
+/// （接句/补句/补全成语）需要主动提取。轻松策略压低产出题占比，挑战策略抬高。
+/// 「看释义猜成语」居中——释义要看懂，但不必从记忆里凭空写出成语。
 Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
   switch (tier) {
     case ChallengeTier.standard:
@@ -401,6 +402,8 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.nextLine: 0.6,
         QuestionKind.blank: 0.6,
         QuestionKind.idiomBlank: 0.6,
+        QuestionKind.idiomMeaning: 1.4,
+        QuestionKind.idiomPinyin: 2.0,
         // 英语：轻松策略多出「听音选词 / 认词义 / 大小写」这类认读题，
         // 少出拼写与听句（需要更强的主动提取）。
         QuestionKind.englishListen: 2.2,
@@ -421,6 +424,8 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.nextLine: 2.2,
         QuestionKind.blank: 2.2,
         QuestionKind.idiomBlank: 2.2,
+        QuestionKind.idiomMeaning: 1.2,
+        QuestionKind.idiomPinyin: 0.6,
         // 英语：挑战策略反过来，多出拼写与听句。
         QuestionKind.englishListen: 0.8,
         QuestionKind.englishMeaning: 0.8,

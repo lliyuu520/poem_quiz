@@ -31,7 +31,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：358 条规则生成（一年级 196 / 二年级 162）；`MathExpr` 解析算式 |
-| `lib/data/chengyu.dart` | 成语题库 `kChengyu`：87 条，年级 1-6 分档，选字补全 |
+| `lib/data/chengyu.dart` | 成语题库 `kChengyu`：87 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
 | `lib/data/english.dart` | 英语题库 `kEnglish`：82 条（字母 26 / 主题词 / 短句），年级 1-2（**由 `tool/gen_english.py` 生成，不要手改**） |
 | `lib/data/english_audio.dart` | 英语音频键与缓存入口；共用 `speech_audio.dart` 的下载与播放 |
 | `lib/data/pinyin_audio.dart` | 拼音点读音频键：按字词 UTF-16 编码生成稳定文件名 |
@@ -39,12 +39,12 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：113 首，唐 67 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位 + `gradeForBirth()` 推算 + **题池加权** `cumulativeWeights()` / `rangeWeights()` / `fullCurriculumWeights()`；`ReviewMode`（off / standard 1/3 / reinforced 1/2） |
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
-| `lib/data/quiz_engine.dart` | 出题：15 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/quiz_engine.dart` | 出题：17 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>` |
 | `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
-| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 15 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 1 / 英语 5） |
+| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 17 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 3 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/widgets/english_art.dart` | 英语内置矢量插图（`EnglishArt`），不引外部图片资源 |
@@ -56,6 +56,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `test/layout_test.dart` | 三种窗口宽度下的渲染与横屏分栏（布局改动必跑） |
 | `test/pinyin_test.dart` | 拼音题库完整性、声调标注、分年级题池、两种拼音题型 |
 | `test/math_test.dart` | 数学题库、算式解析、三种算式题型、评语与摘要格式 |
+| `test/chengyu_test.dart` | 成语题库完整性、三种题型（选字/知词义/读成语）、干扰项与题池容量 |
 | `test/sudoku_test.dart` | 数独终盘合法性、题面唯一解、档位映射、首页与盘面渲染 |
 | `tool/` | 一次性辅助脚本（图标、拼音题库、英语题库与音频校验、adb 驱动答题），不参与构建 |
 
@@ -133,7 +134,12 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 - **算式题（数学科目）**：`Poem.title` 是「3 + 4」、`author` 是得数，由 `MathExpr.of()` 解析；解析不出的条目出不了算式题（返回 null 而不是崩）。干扰项按数值接近程度取（7 的邻居比 90 更有迷惑性）。
 - **`_pickFromOthers` 先去重再截窗口**：算式题里同一得数被几十条共用（整十数只有 10 种得数），若先按距离截窗口再去重，会凑不齐选项而整类题退化成另一种问法。`test/math_test.dart` 里有对应用例。
-- **成语题（`idiomBlank`）**：挖掉四字中的一字，从字池选字补全。字池需能拼出原成语，干扰字不得与正确字重复。
+- **成语三型（`idiomBlank` / `idiomMeaning` / `idiomPinyin`）**：
+  - `idiomBlank` 挖掉四字中的一字，从字池选字补全。字池需能拼出原成语，干扰字不得与正确字重复。
+  - `idiomMeaning` 题干是 `lines.first`（释义），选项是四条成语。**干扰项必须排除释义里提到的成语**——题库里有 5 条释义直接引用了别的成语（如「专心致志」释为「形容一心一意，聚精会神」），不排除会一题两个正确答案。反向也要排除（它的释义提到本条）。
+  - `idiomPinyin` 题干是拼音（`author`），选项是成语。干扰项排除同音条目。
+  - **成语的拼音题干用文楷但不挂喇叭**：`usesLatinText()` 管字形（教学体单层 a/g），`isPinyinKind()` 管要不要喇叭按钮。成语没有点读音频，两个判断不能混用。
+  - 释义是整句（13~25 字），答题页走 `Question.isLongPrompt` 分支用正文字号，不能按单词的 24pt 大字渲染。
 - 题库或出题逻辑改动后，`flutter test` 必须全绿——测试断言了「每档都能出满实际题池容量」与「每个年级都有篇目」，把某年级的篇目清空或收紧干扰项条件会导致失败。
 - 诗词原文与作者、标题需准确；这是内容产品，错字比 UI 瑕疵严重。
 - 新增诗词顺延 `// ── 唐 · 李白 ──` 这样的分组注释，保持文件可按朝代作者浏览。

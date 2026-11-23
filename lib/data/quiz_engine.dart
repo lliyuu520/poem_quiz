@@ -153,6 +153,10 @@ class QuizEngine {
         return _mathCompare(poem, optionCount);
       case QuestionKind.idiomBlank:
         return _idiomBlank(poem);
+      case QuestionKind.idiomMeaning:
+        return _idiomMeaning(poem, optionCount, bias);
+      case QuestionKind.idiomPinyin:
+        return _idiomPinyin(poem, optionCount, bias);
       case QuestionKind.englishListen:
         return _englishListen(poem, optionCount, bias);
       case QuestionKind.englishMeaning:
@@ -548,6 +552,81 @@ class QuizEngine {
       answerChars: <String>[answerChar],
       charPool: pool,
     );
+  }
+
+  /// 看释义选成语：题干是这条成语的释义（`lines` 首行），选项是四条成语。
+  ///
+  /// 干扰项必须排除「释义里提到了它」的成语——题库里有几条释义直接引用了
+  /// 别的成语（如「专心致志」释为「形容一心一意，聚精会神」），若把被引用的
+  /// 那条当干扰项，一道题就有两个说得通的答案。
+  Question? _idiomMeaning(Poem entry, int optionCount, _Bias bias) {
+    final meaning = _idiomMeaningOf(entry);
+    if (meaning == null) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) =>
+          p.id == entry.id ||
+          // 本条的释义提到了它 → 它也算正确答案，不能当干扰项。
+          meaning.contains(p.title) ||
+          // 它的释义提到了本条 → 两条意思相近，同样会歧义。
+          (_idiomMeaningOf(p)?.contains(entry.title) ?? false),
+      pool: (p) => <String>[p.title],
+      bias: bias,
+      // 干扰项取同类别（寓言故事 / 自然景物……），比跨类别更容易混。
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.title, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.idiomMeaning,
+      poem: entry,
+      prompt: '这个意思说的是哪个成语？',
+      focus: meaning,
+      key: '${entry.id}|idiomMeaning',
+      options: options,
+      answerIndex: options.indexOf(entry.title),
+    );
+  }
+
+  /// 看拼音选成语：题干是拼音串，选项是四条成语。
+  ///
+  /// 干扰项排除同音成语（题库目前拼音全唯一，但加条目时可能撞音），
+  /// 否则会出现两个都读对的选项。
+  Question? _idiomPinyin(Poem entry, int optionCount, _Bias bias) {
+    if (entry.author.trim().isEmpty) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => p.id == entry.id || p.author == entry.author,
+      pool: (p) => p.author.trim().isEmpty ? const <String>[] : <String>[p.title],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.title, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.idiomPinyin,
+      poem: entry,
+      prompt: '这个读音是哪个成语？',
+      focus: entry.author,
+      key: '${entry.id}|idiomPinyin',
+      options: options,
+      answerIndex: options.indexOf(entry.title),
+    );
+  }
+
+  /// 成语释义：取 `lines` 首行，空则视为无法出「知词义」题。
+  String? _idiomMeaningOf(Poem p) {
+    if (p.lines.isEmpty) return null;
+    final s = p.lines.first.trim();
+    return s.isEmpty ? null : s;
   }
 
   String? _randomLine(Poem poem) {
