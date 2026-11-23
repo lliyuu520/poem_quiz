@@ -53,6 +53,12 @@ const List<Poem> kChengyu = <Poem>[
   Poem(title: '鸡飞狗跳', author: 'jī fēi gǒu tiào', dynasty: '动物成语', grade: 2, lines: ['形容惊慌得乱成一团。']),
   Poem(title: '闻鸡起舞', author: 'wén jī qǐ wǔ', dynasty: '动物成语', grade: 2, lines: ['比喻有志报国的人及时奋起。']),
   Poem(title: '画龙点睛', author: 'huà lóng diǎn jīng', dynasty: '动物成语', grade: 2, lines: ['比喻在关键处用一两句话点明要旨。']),
+  Poem(title: '守口如瓶', author: 'shǒu kǒu rú píng', dynasty: '寓言故事', grade: 2, lines: ['形容说话谨慎，严守秘密。']),
+  Poem(title: '鼠目寸光', author: 'shǔ mù cùn guāng', dynasty: '动物成语', grade: 2, lines: ['形容目光短浅，只看眼前。']),
+  Poem(title: '如鱼得水', author: 'rú yú dé shuǐ', dynasty: '动物成语', grade: 2, lines: ['比喻得到跟自己很投合的人或很合适的环境。']),
+  Poem(title: '鹤立鸡群', author: 'hè lì jī qún', dynasty: '动物成语', grade: 2, lines: ['比喻一个人的仪表或才能在一群人里显得突出。']),
+  Poem(title: '狼吞虎咽', author: 'láng tūn hǔ yàn', dynasty: '动物成语', grade: 2, lines: ['形容吃东西又猛又急。']),
+  Poem(title: '鸦雀无声', author: 'yā què wú shēng', dynasty: '动物成语', grade: 2, lines: ['形容非常安静，一点声音也没有。']),
 
   // ── 3 年级：品质与学习 ──
   Poem(title: '全神贯注', author: 'quán shén guàn zhù', dynasty: '学习勤奋', grade: 3, lines: ['形容注意力高度集中。']),
@@ -67,6 +73,12 @@ const List<Poem> kChengyu = <Poem>[
   Poem(title: '助人为乐', author: 'zhù rén wéi lè', dynasty: '人物品质', grade: 3, lines: ['把帮助别人当作快乐的事。']),
   Poem(title: '舍己为人', author: 'shě jǐ wèi rén', dynasty: '人物品质', grade: 3, lines: ['为了别人而牺牲自己的利益。']),
   Poem(title: '见义勇为', author: 'jiàn yì yǒng wéi', dynasty: '人物品质', grade: 3, lines: ['看到正义的事就勇敢地去做。']),
+  Poem(title: '名列前茅', author: 'míng liè qián máo', dynasty: '学习勤奋', grade: 3, lines: ['名次排在前面。']),
+  Poem(title: '一丝不苟', author: 'yì sī bù gǒu', dynasty: '学习勤奋', grade: 3, lines: ['形容做事认真细致，一点也不马虎。']),
+  Poem(title: '不耻下问', author: 'bù chǐ xià wèn', dynasty: '学习勤奋', grade: 3, lines: ['向比自己地位低或不如自己的人请教也不觉得丢脸。']),
+  Poem(title: '三思而行', author: 'sān sī ér xíng', dynasty: '学习勤奋', grade: 3, lines: ['反复考虑之后再去做。']),
+  Poem(title: '温故知新', author: 'wēn gù zhī xīn', dynasty: '学习勤奋', grade: 3, lines: ['复习学过的内容，能得到新的体会。']),
+  Poem(title: '循序渐进', author: 'xún xù jiàn jìn', dynasty: '学习勤奋', grade: 3, lines: ['按照一定次序、步骤逐渐深入。']),
 
   // ── 4 年级：景物与情感 ──
   Poem(title: '春暖花开', author: 'chūn nuǎn huā kāi', dynasty: '自然景物', grade: 4, lines: ['春天气候温暖，百花盛开，景色优美。']),
@@ -81,6 +93,14 @@ const List<Poem> kChengyu = <Poem>[
   Poem(title: '垂头丧气', author: 'chuí tóu sàng qì', dynasty: '情感表达', grade: 4, lines: ['形容情绪低落、失望懊丧的样子。']),
   Poem(title: '心平气和', author: 'xīn píng qì hé', dynasty: '情感表达', grade: 4, lines: ['心情平静，态度温和。']),
   Poem(title: '眉开眼笑', author: 'méi kāi yǎn xiào', dynasty: '情感表达', grade: 4, lines: ['眉头舒展，眼含笑意，形容高兴愉快。']),
+  Poem(title: '月明星稀', author: 'yuè míng xīng xī', dynasty: '自然景物', grade: 4, lines: ['月亮明亮时星星显得稀疏。']),
+  Poem(title: '湖光山色', author: 'hú guāng shān sè', dynasty: '自然景物', grade: 4, lines: ['湖上的风光和山间的景色，形容风景优美。']),
+  Poem(title: '层峦叠嶂', author: 'céng luán dié zhàng', dynasty: '自然景物', grade: 4, lines: ['形容山峰重重叠叠，连绵不断。']),
+  Poem(title: '波光粼粼', author: 'bō guāng lín lín', dynasty: '自然景物', grade: 4, lines: ['形容水面被阳光照射，波光闪闪。']),
+  Poem(title: '落英缤纷', author: 'luò yīng bīn fēn', dynasty: '自然景物', grade: 4, lines: ['形容花瓣纷纷飘落的样子。']),
+  Poem(title: '银装素裹', author: 'yín zhuāng sù guǒ', dynasty: '自然景物', grade: 4, lines: ['形容雪后一片洁白的景象。']),
+  Poem(title: '枯木逢春', author: 'kū mù féng chūn', dynasty: '自然景物', grade: 4, lines: ['枯树遇到春天又发新芽，比喻重新获得生机。']),
+  Poem(title: '心旷神怡', author: 'xīn kuàng shén yí', dynasty: '情感表达', grade: 4, lines: ['心情开阔，精神愉快。']),
 
   // ── 5 年级：历史典故与思辨 ──
   Poem(title: '卧薪尝胆', author: 'wò xīn cháng dǎn', dynasty: '历史典故', grade: 5, lines: ['形容人刻苦自励，发愤图强。']),
@@ -95,6 +115,13 @@ const List<Poem> kChengyu = <Poem>[
   Poem(title: '杯弓蛇影', author: 'bēi gōng shé yǐng', dynasty: '思辨智慧', grade: 5, lines: ['比喻疑神疑鬼，妄自惊慌。']),
   Poem(title: '叶公好龙', author: 'yè gōng hào lóng', dynasty: '思辨智慧', grade: 5, lines: ['比喻表面上爱好某事物，实际上并不真爱好。']),
   Poem(title: '塞翁失马', author: 'sài wēng shī mǎ', dynasty: '思辨智慧', grade: 5, lines: ['比喻坏事在一定条件下可以变为好事。']),
+  Poem(title: '草木皆兵', author: 'cǎo mù jiē bīng', dynasty: '历史典故', grade: 5, lines: ['形容人在惊慌时疑神疑鬼。']),
+  Poem(title: '三顾茅庐', author: 'sān gù máo lú', dynasty: '历史典故', grade: 5, lines: ['比喻真心诚意地一再邀请、拜访有才能的人。']),
+  Poem(title: '四面楚歌', author: 'sì miàn chǔ gē', dynasty: '历史典故', grade: 5, lines: ['比喻陷入四面受敌、孤立无援的境地。']),
+  Poem(title: '破釜沉舟', author: 'pò fǔ chén zhōu', dynasty: '历史典故', grade: 5, lines: ['比喻下决心不顾一切地干到底。']),
+  Poem(title: '指鹿为马', author: 'zhǐ lù wéi mǎ', dynasty: '历史典故', grade: 5, lines: ['比喻故意颠倒黑白，混淆是非。']),
+  Poem(title: '望梅止渴', author: 'wàng méi zhǐ kě', dynasty: '历史典故', grade: 5, lines: ['比喻用空想安慰自己。']),
+  Poem(title: '图穷匕见', author: 'tú qióng bǐ xiàn', dynasty: '历史典故', grade: 5, lines: ['比喻事情发展到最后，真相或本意显露出来。']),
 
   // ── 6 年级：综合运用 ──
   Poem(title: '一马当先', author: 'yì mǎ dāng xiān', dynasty: '常用成语', grade: 6, lines: ['比喻领先或带头。']),
@@ -109,4 +136,12 @@ const List<Poem> kChengyu = <Poem>[
   Poem(title: '一望无际', author: 'yí wàng wú jì', dynasty: '自然景物', grade: 6, lines: ['一眼望不到边，形容辽阔。']),
   Poem(title: '波澜壮阔', author: 'bō lán zhuàng kuò', dynasty: '自然景物', grade: 6, lines: ['比喻声势雄壮或规模宏大。']),
   Poem(title: '锦上添花', author: 'jǐn shàng tiān huā', dynasty: '常用成语', grade: 6, lines: ['比喻好上加好，美上添美。']),
+  Poem(title: '不假思索', author: 'bù jiǎ sī suǒ', dynasty: '思辨智慧', grade: 6, lines: ['用不着想，形容说话做事迅速。']),
+  Poem(title: '相辅相成', author: 'xiāng fǔ xiāng chéng', dynasty: '思辨智慧', grade: 6, lines: ['互相补充，互相配合。']),
+  Poem(title: '见微知著', author: 'jiàn wēi zhī zhù', dynasty: '思辨智慧', grade: 6, lines: ['看到细微的迹象就能知道事物发展的趋势。']),
+  Poem(title: '各抒己见', author: 'gè shū jǐ jiàn', dynasty: '思辨智慧', grade: 6, lines: ['各人充分发表自己的意见。']),
+  Poem(title: '推陈出新', author: 'tuī chén chū xīn', dynasty: '思辨智慧', grade: 6, lines: ['去掉旧事物的糟粕，取其精华并使它向新方向发展。']),
+  Poem(title: '水到渠成', author: 'shuǐ dào qú chéng', dynasty: '思辨智慧', grade: 6, lines: ['比喻条件成熟，事情自然成功。']),
+  Poem(title: '有的放矢', author: 'yǒu dì fàng shǐ', dynasty: '思辨智慧', grade: 6, lines: ['比喻说话做事有明确的目的和针对性。']),
+  Poem(title: '独树一帜', author: 'dú shù yī zhì', dynasty: '思辨智慧', grade: 6, lines: ['比喻自成一家，独自树立旗帜。']),
 ];

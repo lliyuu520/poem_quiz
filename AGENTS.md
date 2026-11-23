@@ -30,8 +30,8 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/topics.dart` | `kTopics`（诗词、拼音、数学、英语、成语、数独）、`kDefaultTopic`；新增科目在这里加一条 |
 | `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
-| `lib/data/math.dart` | 数学题库 `kMath`：358 条规则生成（一年级 196 / 二年级 162）；`MathExpr` 解析算式 |
-| `lib/data/chengyu.dart` | 成语题库 `kChengyu`：87 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
+| `lib/data/math.dart` | 数学题库 `kMath`：488 条规则生成（一年级 196 / 二年级 162 / 三年级 130）；`MathExpr` 解析算式 |
+| `lib/data/chengyu.dart` | 成语题库 `kChengyu`：122 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
 | `lib/data/english.dart` | 英语题库 `kEnglish`：82 条（字母 26 / 主题词 / 短句），年级 1-2（**由 `tool/gen_english.py` 生成，不要手改**） |
 | `lib/data/english_audio.dart` | 英语音频键与缓存入口；共用 `speech_audio.dart` 的下载与播放 |
 | `lib/data/pinyin_audio.dart` | 拼音点读音频键：按字词 UTF-16 编码生成稳定文件名 |
@@ -71,7 +71,8 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - **学龄分档**：诗词、拼音、数学、成语都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
 - **学龄由出生年月推算，不是用户选择的**（2026-11-19 改）：`gradeForBirth(birthYear, birthMonth)` 按 9 月 1 日入学分界推出在读年级，九年级以上与未入学都落拓展档。出生年月存 `UserProfile`（裸键 `birth_year` / `birth_month`，全局一份，不属于任何科目），设置页修改。**首页没有 `_GradeCard` 了**——推算结果只作为练习范围的默认值。
 - **练习范围与难度策略是两个正交维度**（2026-11-20 改）：`PracticeScope` 决定「出哪些年级的条目」（跟随推荐 / 指定年级 / 年级区间 / 教材全覆盖 / 仅拓展 / 全库），`ChallengeTier` 决定「怎么考」（轻松 / 标准 / 挑战，三档均为 A、B、C、D 四个选项；轻松多认读 / 挑战多回忆）。两者按科目存在 `ProgressStore` 的 `practice_scope` / `challenge_tier` 键，由 `resolvePracticePlan()` 解析成 `PracticePlan`（`weights` + `optionCount` + `kindWeights` + 干扰项偏好），再喂给 `QuizEngine.generate`。**不要在 UI 里重算计划**，首页只调 `resolvePracticePlan()`。
-- **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库含一、二年级条目（`graded` 自动为 true），推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
+- **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库含一~三年级条目（`graded` 自动为 true），推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
+- **数学三年级不全穷举**：三位数加减若全组合近百万条，会把低年级题池彻底淹没。`_addSubWithin1000()` 只收整百±整百、整百+整十、整千-整百这类能在脑子里算的形态；`_twoDigitMul()` 只收 11~34 × 2~5。**有余数除法暂时进不来**——`MathExpr` 只支持单个得数，表达不了「7 ÷ 2 = 3 余 1」，要加得先扩解析器。
 - **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」，成语是「一心一意」与「一心一意 · yì xīn yí yì」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
 - **棋盘玩法科目（数独）**：`Topic.mode = TopicMode.sudoku`，`entries` 与 `kinds` 为空。盘面由 `Sudoku.open(difficulty)` 按难度档现生成，不走 `QuizEngine`。这类科目 `graded` 恒为 true（空题库推导），首页把练习范围卡换成**难度关卡列表**（一星~五星），并隐藏玩法卡、学习模式与错题本——它们都建立在题库之上。新增棋盘类玩法时复用 `TopicMode` 与首页的 `isBoardGame` 分支，不要再往题库抽象里塞。
@@ -120,7 +121,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - `grade`：1~9 对应一年级~九年级（成都现行统编版教材），**0 = 拓展**（教材未收的课外名篇与高中篇目），默认 0。漏标时宁可落进拓展档，也不混进低年级题池。
 - 题池**累加 + 加权**，实现在 `grade.dart`：选 N 年级时池为 1..N，本年级权重 1、低一档 1/3、再低 1/9（`ReviewMode.standard`）；`reinforced` 改用 1/2，`off` 只留目标年级。衰减取 1/3 而非 1/2，是因为低年级条目本来就多（一年级 12 首对六年级累计 76 首），1/2 会让低年级题反超本年级。拓展档不参与年级累加，按顶层权重的 1/3 叠加。
 - 诗词年级分布：一 12 / 二 11 / 三 13 / 四 12 / 五 15 / 六 12 / 七 8 / 八 7 / 九 5 / 拓展 18。单年级池小是正常的，一局题数自适应（`total` 取实际题数）。
-- **`grade` 是教材事实，不是可调的难度旋钮**：统编版一年级两册只收 13 首（一上 6 / 一下 7，其中仅 4 首是正文课文，其余在语文园地「日积月累」），所以一年级池天然小。不要为了让池子变大把二年级篇目降标成一年级，那会毁掉整份年级标注的可信度——2026-11-23 核过一次完整篇目，缺的 5 首（江南、画、古朗月行节选、风、画鸡）已补齐。**《画》教材不署作者**（署名王维属流传说法，《全唐诗》无此诗），若要收录请标「佚名」或不标作者。
+- **`grade` 是教材事实，不是可调的难度旋钮**：统编版一年级两册只收 13 首（一上 6 / 一下 7，其中仅 4 首是正文课文，其余在语文园地「日积月累」），所以一年级池天然小。不要为了让池子变大把二年级篇目降标成一年级，那会毁掉整份年级标注的可信度——2026-11-23 核过一次完整篇目，缺的 5 首里已补 4 首（江南、古朗月行节选、风、画鸡），一年级池 8 → 12 首。**《画》未收录**：教材不署作者，署名王维属流传说法（《全唐诗》王维名下无此诗），另有说是道川禅师偈语；给孩子用宁可缺这一首，要收请标「佚名」或不标作者。
 - **拼音题库由脚本生成，不要手改 `pinyin.dart`**：`python -I tool/gen_pinyin.py` 用 pypinyin 按词组算声调（多音字取词内读音，如「长大 zhǎng」「银行 háng」「倔强 jiàng」），儿化与轻声在脚本的 `OVERRIDES` 里定向修正。手写 300+ 条必然出现声调错误，一个错调就是一道错题。
 - **pypinyin 不保证轻声**：亲属叠词「爸爸/妈妈/哥哥/姐姐/妹妹」它给原调，「衣服」给 fú，只有「弟弟/伯伯/婆婆」给对了。这些已写进 `OVERRIDES`。测试分两层——白名单查「有没有调号」，`亲属叠词与常见轻声词读音符合规范` 逐条钉死「调号对不对」，只靠白名单会把轻声错误放过去。
 - **英语题库同样由脚本生成**：`tool/english_bank.json` 是源，`tool/gen_english.py` 生成 `lib/data/english.dart`；音频用 `tool/check_english_audio.py` / `tool/verify_english_audio.py` 校验。字母合成直接喂原字母「C.」，Qwen 会读出字母名（edge-tts 时代「C. A. T. 丢尾字母」才需要改写成 `see`，方案已淘汰）。

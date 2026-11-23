@@ -12,7 +12,7 @@ import 'package:poem_quiz/models/question.dart';
 QuizEngine mathEngine(int seed) => QuizEngine(poems: kMath, random: Random(seed));
 
 /// 覆盖数学题库全部年级的题池权重（用于不限制年级的生成测试）。
-const Map<int, double> allMathGrades = <int, double>{1: 1, 2: 1};
+const Map<int, double> allMathGrades = <int, double>{1: 1, 2: 1, 3: 1};
 
 /// 按条目 id 建索引，便于把题目还原成算式。
 Map<String, Poem> get byId => <String, Poem>{for (final e in kMath) e.id: e};
@@ -57,8 +57,10 @@ void main() {
           '整十数加减',
           '表内乘法',
           '表内除法',
+          '万以内加减',
+          '两位数乘一位数',
         },
-        reason: '分组应包含一二年级全部口算类型：$groups',
+        reason: '分组应包含一到三年级全部口算类型：$groups',
       );
       for (final entry in groups.entries) {
         expect(entry.value, greaterThanOrEqualTo(10),
@@ -83,23 +85,25 @@ void main() {
       expect(ids.length, kMath.length);
     });
 
-    test('按学龄标注年级，一年级与二年级都有内容', () {
-      expect(kMath.map((e) => e.grade).toSet(), <int>{1, 2});
+    test('按学龄标注年级，一到三年级都有内容', () {
+      expect(kMath.map((e) => e.grade).toSet(), <int>{1, 2, 3});
       final g1 = kMath.where((e) => e.grade == 1).length;
       final g2 = kMath.where((e) => e.grade == 2).length;
+      final g3 = kMath.where((e) => e.grade == 3).length;
       expect(g1, greaterThanOrEqualTo(100));
       expect(g2, greaterThanOrEqualTo(100));
+      expect(g3, greaterThanOrEqualTo(100));
     });
   });
 
   group('数学科目', () {
     test('题库跨年级，graded 推导为 true 且按学龄计数', () {
-      expect(kMath.map((e) => e.grade).toSet(), <int>{1, 2});
+      expect(kMath.map((e) => e.grade).toSet(), <int>{1, 2, 3});
       expect(kMathTopic.graded, isTrue);
       final g1Count = kMath.where((e) => e.grade == 1).length;
       expect(kMathTopic.countForGrade(GradeLevel.g1), g1Count);
-      expect(kMathTopic.countForGrade(GradeLevel.g2), kMath.length);
-      // 更高年级的累加池包含已实现的 1、2 年级内容。
+      expect(kMathTopic.countForGrade(GradeLevel.g3), kMath.length);
+      // 更高年级的累加池包含已实现的 1~3 年级内容。
       expect(kMathTopic.countForGrade(GradeLevel.g6), kMath.length);
       expect(kPoetryTopic.graded, isTrue);
       expect(kPinyinTopic.graded, isTrue);

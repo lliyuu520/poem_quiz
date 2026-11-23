@@ -21,6 +21,8 @@ final List<Poem> kMath = <Poem>[
   ..._tensAddSub(),
   ..._mulTable(),
   ..._divTable(),
+  ..._addSubWithin1000(),
+  ..._twoDigitMul(),
 ];
 
 const String _gAdd10 = '10以内加法';
@@ -30,6 +32,8 @@ const String _gBorrow = '20以内退位减';
 const String _gTens = '整十数加减';
 const String _gMul = '表内乘法';
 const String _gDiv = '表内除法';
+const String _gAddSub1000 = '万以内加减';
+const String _gMulTwoDigit = '两位数乘一位数';
 
 /// 「3 + 4」「6 × 7」形式的算式拆解。格式知识只留在本文件，引擎按它出题。
 class MathExpr {
@@ -176,4 +180,72 @@ List<Poem> _divTable() => <Poem>[
             '想：$a 和几相乘得 ${a * b}？$a×$b=${a * b}，所以 ${a * b}÷$a=$b',
             grade: 2,
           ),
+    ];
+
+/// 万以内加减（三年级）：三位数加减。
+///
+/// 不全穷举——三位数组合近百万条，会把低年级题池彻底淹没。这里只取
+/// **整百加整十/整百**、**整千减整百** 这类能在脑子里算的形态，配合
+/// 「万以内数的认识」这一单元的直觉，而不是练竖式硬算。
+///
+/// 只收 a ≤ b 的加法和结果为正的减法，避免「300 + 400」与「400 + 300」
+/// 各占一条。
+List<Poem> _addSubWithin1000() => <Poem>[
+      // 整百 + 整百：200 + 300
+      for (var a = 1; a <= 4; a++)
+        for (var b = a; b <= 9 - a; b++)
+          _entry(
+            _gAddSub1000,
+            '${a * 100} + ${b * 100}',
+            (a + b) * 100,
+            '$a 个百加 $b 个百是 ${a + b} 个百，就是 ${(a + b) * 100}',
+            grade: 3,
+          ),
+      // 整百 - 整百：800 - 300
+      for (var a = 2; a <= 9; a++)
+        for (var b = 1; b < a; b++)
+          _entry(
+            _gAddSub1000,
+            '${a * 100} - ${b * 100}',
+            (a - b) * 100,
+            '$a 个百去掉 $b 个百，剩 ${a - b} 个百，就是 ${(a - b) * 100}',
+            grade: 3,
+          ),
+      // 整百 + 整十：300 + 40
+      for (var a = 1; a <= 3; a++)
+        for (var b = 1; b <= 4; b++)
+          _entry(
+            _gAddSub1000,
+            '${a * 100} + ${b * 10}',
+            a * 100 + b * 10,
+            '${a}00 再加 ${b * 10}，百位不变，十位加 $b，得 ${a * 100 + b * 10}',
+            grade: 3,
+          ),
+      // 整千 - 整百：2000 - 300
+      for (var a = 1; a <= 2; a++)
+        for (var b = 3; b <= 9; b++)
+          _entry(
+            _gAddSub1000,
+            '${a * 1000} - ${b * 100}',
+            a * 1000 - b * 100,
+            '$a 个千是 ${a * 10} 个百，去掉 $b 个百剩 ${a * 10 - b} 个百，就是 ${a * 1000 - b * 100}',
+            grade: 3,
+          ),
+    ];
+
+/// 两位数乘一位数（三年级）：不进位与进位两类各取一批。
+///
+/// 只收 11~19 与 21~29 这类小两位数乘 2~5，结果控制在一百多到一百几十，
+/// 孩子能用「先算整十、再算个位」的口算方法推出来，不必列竖式。
+List<Poem> _twoDigitMul() => <Poem>[
+      for (var tens = 1; tens <= 3; tens++)
+        for (var ones = 1; ones <= 4; ones++)
+          for (var k = 2; k <= 5; k++)
+            _entry(
+              _gMulTwoDigit,
+              '${tens * 10 + ones} × $k',
+              (tens * 10 + ones) * k,
+              '先算 ${tens * 10} 乘 $k 得 ${tens * 10 * k}，再算 $ones 乘 $k 得 ${ones * k}，合起来是 ${(tens * 10 + ones) * k}',
+              grade: 3,
+            ),
     ];

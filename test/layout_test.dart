@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poem_quiz/data/grade.dart';
@@ -311,7 +313,9 @@ void main() {
 
     testWidgets('诗句填空的前半段只在写字格上方显示一次', (tester) async {
       final session = buildSession(
-        engine: QuizEngine(poems: kPoetryTopic.entries),
+        // 固定 seed：不固定时抽到的诗句可能让挖空前半段与某个字块/选项同字，
+        // `find.text` 会匹配到多个，用例随机变红。
+        engine: QuizEngine(poems: kPoetryTopic.entries, random: Random(5)),
         topic: kPoetryTopic,
         count: 1,
         grade: GradeLevel.g3,
@@ -322,8 +326,10 @@ void main() {
         phone,
         () => QuizPage(session: session, onFinish: (_) async {}),
       );
-      final prefix = find.text(session.current.blankBefore);
-      final suffix = find.text(session.current.blankAfter);
+      // 只在题干卡里找：整页查找会把字池里同字的方块也算进来。
+      final card = find.byType(InkCard).first;
+      final prefix = find.descendant(of: card, matching: find.text(session.current.blankBefore));
+      final suffix = find.descendant(of: card, matching: find.text(session.current.blankAfter));
       expect(prefix, findsOneWidget);
       expect(suffix, findsOneWidget);
       expect(tester.getCenter(prefix).dy, lessThan(tester.getCenter(suffix).dy));
