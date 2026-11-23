@@ -99,6 +99,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - `QuizEngine._tryMake` 的 switch 必须覆盖 `QuestionKind` 全部成员（含 5 个 `english*`），否则 switch 不穷尽会让**整个测试套件编译不过**，表现为「loading ...」后直接失败，而不是某条用例红。
 - **英语干扰项要排除字母条目**：字母也是纯小写英文，混进「听音选词」会变成「听 cat 选 H」。`_englishListen` 的 `excludePoem` 里已排除 `_isEnglishLetter`。
 - 拼单词（`englishSpell`）属于填空题：`Question.isBlank` 包含它，`_BlankPrompt` 对它走「单行紧贴显示」（`c□t`）而不是诗句的上下分行，否则看不出是个词。
+- **插画只在「学」与「判完题」出现，不进考前题干**（2026-11-23 改）：`EnglishPrompt` 不再画图——认词义题的选项就是中文释义，题干旁画一只猫等于把答案说出来了。图改在三处出现：`_Feedback`（判题后，把「听到的音 / 拼出的词 / 释义 / 图形」对齐）、学习页与错题本词条（44dp 缩略图）、拼单词题（图里没有字母，只帮回忆整词，不泄题）。62 张图全是 `CustomPainter` 手绘，**新增单词必须补画法**（`test/english_test.dart` 的「每个单词都配了插画」会拦）；题干不给图这条由 `test/layout_test.dart` 的「认词义题答题时题干不给插画，判题后反馈卡补上」钉住。
 - **下载不能用 `HttpClient`**：两个已踩的坑——① 它的 `connectionFactory` 在 HTTPS 下会把 SNI 退化成 IP，CDN 直接回 400；② 默认路径在无 IPv6 出口的网络（模拟器、部分移动网络）会先试 AAAA 记录并长时间挂起。`_httpsGet()` 因此手写：IPv4 建 TCP + 域名做 SNI，再自己拼 HTTP。改这块时两者都要保住。
 - **不要给下载做 in-flight 去重**：`_inflight[key] ??= fetch().whenComplete(...)` 会让调用方的 `await` 在下载完成后仍不返回（表现为「下载成功但播放不触发」，trace 只到 done 就断）。连点重复下载的代价可接受。
 - **`SpeakButton` 用 `GestureDetector` 而不是只靠 `InkWell`**：它会被放进不在 Material 上下文里的父级（填空题干、列表项），InkWell 会静默失效。
