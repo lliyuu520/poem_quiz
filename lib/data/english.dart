@@ -82,6 +82,26 @@ const List<Poem> kEnglishWords = <Poem>[
   Poem(title: 'bus', author: '公交车', dynasty: '物品', grade: 2, lines: <String>['I go by bus.', '我坐公交车。']),
   Poem(title: 'cup', author: '杯子', dynasty: '物品', grade: 1, lines: <String>['This is a cup.', '这是一个杯子。']),
   Poem(title: 'hat', author: '帽子', dynasty: '物品', grade: 2, lines: <String>['I wear a hat.', '我戴帽子。']),
+  Poem(title: 'school', author: '学校', dynasty: '学校', grade: 3, lines: <String>['We go to school.', '我们去上学。']),
+  Poem(title: 'teacher', author: '老师', dynasty: '学校', grade: 3, lines: <String>['My teacher is kind.', '我的老师很和善。']),
+  Poem(title: 'pencil', author: '铅笔', dynasty: '学校', grade: 3, lines: <String>['This is my pencil.', '这是我的铅笔。']),
+  Poem(title: 'ruler', author: '尺子', dynasty: '学校', grade: 3, lines: <String>['I need a ruler.', '我需要一把尺子。']),
+  Poem(title: 'window', author: '窗户', dynasty: '学校', grade: 3, lines: <String>['Open the window.', '打开窗户。']),
+  Poem(title: 'cloudy', author: '多云的', dynasty: '天气', grade: 3, lines: <String>['It is cloudy today.', '今天多云。']),
+  Poem(title: 'windy', author: '有风的', dynasty: '天气', grade: 3, lines: <String>['It is windy outside.', '外面有风。']),
+  Poem(title: 'snowy', author: '下雪的', dynasty: '天气', grade: 3, lines: <String>['It is snowy in winter.', '冬天下雪。']),
+  Poem(title: 'morning', author: '早上', dynasty: '时间', grade: 3, lines: <String>['Good morning to you.', '祝你早上好。']),
+  Poem(title: 'afternoon', author: '下午', dynasty: '时间', grade: 3, lines: <String>['Good afternoon, mom.', '妈妈，下午好。']),
+  Poem(title: 'jump', author: '跳', dynasty: '动作', grade: 3, lines: <String>['I can jump high.', '我能跳得很高。']),
+  Poem(title: 'climb', author: '爬', dynasty: '动作', grade: 3, lines: <String>['I can climb a tree.', '我会爬树。']),
+  Poem(title: 'write', author: '写', dynasty: '动作', grade: 3, lines: <String>['I can write my name.', '我会写我的名字。']),
+  Poem(title: 'sing', author: '唱歌', dynasty: '动作', grade: 3, lines: <String>['We sing a song.', '我们唱一首歌。']),
+  Poem(title: 'dance', author: '跳舞', dynasty: '动作', grade: 3, lines: <String>['I like to dance.', '我喜欢跳舞。']),
+  Poem(title: 'draw', author: '画画', dynasty: '动作', grade: 3, lines: <String>['I draw a cat.', '我画了一只猫。']),
+  Poem(title: 'happy', author: '快乐的', dynasty: '感受', grade: 3, lines: <String>['I am happy today.', '我今天很快乐。']),
+  Poem(title: 'quiet', author: '安静的', dynasty: '感受', grade: 3, lines: <String>['Please be quiet.', '请安静。']),
+  Poem(title: 'busy', author: '忙的', dynasty: '感受', grade: 3, lines: <String>['My dad is busy.', '我爸爸很忙。']),
+  Poem(title: 'early', author: '早的', dynasty: '时间', grade: 3, lines: <String>['I get up early.', '我起得很早。']),
 ];
 
 /// 句子条目：`title` 是英文句子，`author` 是中文，`dynasty` 是主题分组。
@@ -101,6 +121,16 @@ const List<Poem> kEnglishSentences = <Poem>[
   Poem(title: 'The flower is red.', author: '这朵花是红色的。', dynasty: '描述', grade: 2, lines: <String>['这朵花是红色的。']),
   Poem(title: 'Good morning!', author: '早上好！', dynasty: '问候', grade: 2, lines: <String>['早上好！']),
   Poem(title: 'Thank you.', author: '谢谢你。', dynasty: '问候', grade: 2, lines: <String>['谢谢你。']),
+  Poem(title: 'Where is my pencil?', author: '我的铅笔在哪里？', dynasty: '学校', grade: 3, lines: <String>['我的铅笔在哪里？']),
+  Poem(title: 'It is sunny today.', author: '今天晴天。', dynasty: '天气', grade: 3, lines: <String>['今天晴天。']),
+  Poem(title: 'I can jump and run.', author: '我会跳也会跑。', dynasty: '动作', grade: 3, lines: <String>['我会跳也会跑。']),
+  Poem(title: 'She is my teacher.', author: '她是我的老师。', dynasty: '学校', grade: 3, lines: <String>['她是我的老师。']),
+  Poem(title: 'We read books together.', author: '我们一起读书。', dynasty: '日常用语', grade: 3, lines: <String>['我们一起读书。']),
+  Poem(title: 'The sky is blue today.', author: '今天天空是蓝的。', dynasty: '天气', grade: 3, lines: <String>['今天天空是蓝的。']),
+  Poem(title: 'I go to bed early.', author: '我很早就睡觉。', dynasty: '日常用语', grade: 3, lines: <String>['我很早就睡觉。']),
+  Poem(title: 'Can you help me?', author: '你能帮我吗？', dynasty: '日常用语', grade: 3, lines: <String>['你能帮我吗？']),
+  Poem(title: 'I have a happy family.', author: '我有一个快乐的家。', dynasty: '家人', grade: 3, lines: <String>['我有一个快乐的家。']),
+  Poem(title: 'Let us sing a song.', author: '我们唱首歌吧。', dynasty: '动作', grade: 3, lines: <String>['我们唱首歌吧。']),
 ];
 
 /// 英语题库全集。三个层按学龄递进：字母与自然拼读 → 主题词 → 日常短句。
@@ -142,3 +172,35 @@ const Map<String, String> kLetterNames = <String, String>{
   'Y': 'why',
   'Z': 'zee',
 };
+
+/// 句子条目的英文文本，按题库顺序。**由生成器产出，不要手改**。
+///
+/// 句子音频键是 `sentence_00`、`sentence_01`……，靠位置对应：这张表与
+/// `kEnglishSentences` 的顺序必须完全一致，否则播放会串到别的句子。
+/// 新增句子只能追加到末尾，插中间会让其后所有句子的音频全部错位。
+const List<String> kEnglishSentenceTexts = <String>[
+  'I like apples.',
+  'This is my book.',
+  'The cat is black.',
+  'I have two hands.',
+  'Look at the sun.',
+  'My mom is kind.',
+  'The dog can run.',
+  'I drink milk.',
+  'We go to school.',
+  'It is raining.',
+  'I see a bird.',
+  'The flower is red.',
+  'Good morning!',
+  'Thank you.',
+  'Where is my pencil?',
+  'It is sunny today.',
+  'I can jump and run.',
+  'She is my teacher.',
+  'We read books together.',
+  'The sky is blue today.',
+  'I go to bed early.',
+  'Can you help me?',
+  'I have a happy family.',
+  'Let us sing a song.',
+];

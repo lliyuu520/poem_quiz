@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/english.dart';
 import '../data/english_audio.dart';
 import '../data/speech_audio.dart';
 import '../data/topic.dart';
@@ -211,27 +212,6 @@ class EnglishPrompt extends StatelessWidget {
     return EnglishAudioKeys.sentence(i);
   }
 }
-
-/// 句子条目的英文文本，按题库顺序。生成器保证下标与音频文件名一致。
-///
-/// 单独抽出来是为了让「文本 → 下标」只在这里定义一次：句子音频键是
-/// `sentence_00`、`sentence_01`……，靠位置对应，改题库顺序必须同步。
-const List<String> kEnglishSentenceTexts = <String>[
-  'I like apples.',
-  'This is my book.',
-  'The cat is black.',
-  'I have two hands.',
-  'Look at the sun.',
-  'My mom is kind.',
-  'The dog can run.',
-  'I drink milk.',
-  'We go to school.',
-  'It is raining.',
-  'I see a bird.',
-  'The flower is red.',
-  'Good morning!',
-  'Thank you.',
-];
 
 /// 学习页 / 错题本里给英语条目加的喇叭。
 ///

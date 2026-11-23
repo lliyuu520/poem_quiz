@@ -55,6 +55,10 @@ HOMOPHONES: dict[str, set[str]] = {
     # `ay`（A 的字母名）与 `eye`（I 的字母名）在美音里都是 /eɪ/，
     # 实测三者互比 DTW 完全相同（0.620），识别成哪个都对。
     "ay": {"eye", "i", "a"},
+    # 完全同音词：write/right 美音都是 /raɪt/，识别器会挑更常见的 right。
+    # 这不是读音错误，任何 ASR 都分不出来。
+    "write": {"right"},
+    "right": {"write"},
 }
 
 

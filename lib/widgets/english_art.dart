@@ -99,6 +99,26 @@ class _ArtPainter extends CustomPainter {
     'bus': _bus,
     'cup': _cup,
     'hat': _hat,
+    'school': _school,
+    'teacher': _teacher,
+    'pencil': _pencil,
+    'ruler': _ruler,
+    'window': _window,
+    'cloudy': _cloudy,
+    'windy': _windy,
+    'snowy': _snowy,
+    'morning': _morning,
+    'afternoon': _afternoon,
+    'jump': _jump,
+    'climb': _climb,
+    'write': _write,
+    'sing': _sing,
+    'dance': _dance,
+    'draw': _draw,
+    'happy': _happy,
+    'quiet': _quiet,
+    'busy': _busy,
+    'early': _early,
   };
 
   @override
@@ -685,4 +705,310 @@ void _hat(Canvas c, Paint f, Paint s, Color col) {
       ..quadraticBezierTo(66, 30, 68, 68),
     s,
   );
+}
+
+// ── 三年级新词 ────────────────────────────────────────
+
+void _school(Canvas c, Paint f, Paint s, Color col) {
+  // 校舍：屋顶三角 + 楼身 + 门 + 窗
+  c.drawPath(
+    Path()
+      ..moveTo(18, 46)
+      ..lineTo(50, 22)
+      ..lineTo(82, 46)
+      ..close(),
+    f,
+  );
+  c.drawPath(
+    Path()
+      ..moveTo(18, 46)
+      ..lineTo(50, 22)
+      ..lineTo(82, 46)
+      ..close(),
+    s,
+  );
+  c.drawRect(const Rect.fromLTRB(26, 46, 74, 82), f);
+  c.drawRect(const Rect.fromLTRB(26, 46, 74, 82), s);
+  c.drawRect(const Rect.fromLTRB(44, 60, 56, 82), s);
+  c.drawRect(const Rect.fromLTRB(31, 53, 41, 63), s);
+  c.drawRect(const Rect.fromLTRB(59, 53, 69, 63), s);
+}
+
+void _teacher(Canvas c, Paint f, Paint s, Color col) {
+  // 讲台前的人：头 + 身体 + 举起的教鞭
+  c.drawCircle(const Offset(50, 32), 13, f);
+  c.drawCircle(const Offset(50, 32), 13, s);
+  c.drawPath(
+    Path()
+      ..moveTo(30, 82)
+      ..quadraticBezierTo(32, 48, 50, 48)
+      ..quadraticBezierTo(68, 48, 70, 82),
+    f,
+  );
+  c.drawPath(
+    Path()
+      ..moveTo(30, 82)
+      ..quadraticBezierTo(32, 48, 50, 48)
+      ..quadraticBezierTo(68, 48, 70, 82),
+    s,
+  );
+  c.drawLine(const Offset(66, 56), const Offset(84, 40), s);
+}
+
+void _pencil(Canvas c, Paint f, Paint s, Color col) {
+  // 笔杆 + 笔尖
+  c.drawPath(
+    Path()
+      ..moveTo(24, 76)
+      ..lineTo(66, 34)
+      ..lineTo(76, 44)
+      ..lineTo(34, 86)
+      ..close(),
+    f,
+  );
+  c.drawPath(
+    Path()
+      ..moveTo(24, 76)
+      ..lineTo(66, 34)
+      ..lineTo(76, 44)
+      ..lineTo(34, 86)
+      ..close(),
+    s,
+  );
+  c.drawPath(
+    Path()
+      ..moveTo(24, 76)
+      ..lineTo(34, 86)
+      ..lineTo(20, 90)
+      ..close(),
+    s,
+  );
+}
+
+void _ruler(Canvas c, Paint f, Paint s, Color col) {
+  // 斜放的长尺 + 刻度
+  c.save();
+  c.translate(50, 50);
+  c.rotate(-0.42);
+  final body = Rect.fromCenter(center: Offset.zero, width: 16, height: 68);
+  c.drawRect(body, f);
+  c.drawRect(body, s);
+  for (var i = -3; i <= 3; i++) {
+    final y = i * 9.0;
+    final len = i.isEven ? 6.0 : 4.0;
+    c.drawLine(Offset(-8, y), Offset(-8 + len, y), s);
+  }
+  c.restore();
+}
+
+void _window(Canvas c, Paint f, Paint s, Color col) {
+  // 方窗 + 十字窗棂 + 窗台
+  c.drawRect(const Rect.fromLTRB(26, 26, 74, 74), f);
+  c.drawRect(const Rect.fromLTRB(26, 26, 74, 74), s);
+  c.drawLine(const Offset(50, 26), const Offset(50, 74), s);
+  c.drawLine(const Offset(26, 50), const Offset(74, 50), s);
+  c.drawLine(const Offset(22, 78), const Offset(78, 78), s);
+}
+
+void _cloudy(Canvas c, Paint f, Paint s, Color col) {
+  // 云：三段圆弧连成的轮廓
+  final path = Path()
+    ..moveTo(26, 62)
+    ..arcToPoint(const Offset(38, 44), radius: const Radius.circular(12))
+    ..arcToPoint(const Offset(56, 42), radius: const Radius.circular(14))
+    ..arcToPoint(const Offset(72, 62), radius: const Radius.circular(12))
+    ..close();
+  c.drawPath(path, f);
+  c.drawPath(path, s);
+}
+
+void _windy(Canvas c, Paint f, Paint s, Color col) {
+  // 三道带卷的风线
+  for (final row in <List<double>>[
+    <double>[36, 24, 66],
+    <double>[50, 30, 76],
+    <double>[64, 24, 60],
+  ]) {
+    final y = row[0], x0 = row[1], x1 = row[2];
+    c.drawPath(
+      Path()
+        ..moveTo(x0, y)
+        ..quadraticBezierTo((x0 + x1) / 2, y - 6, x1, y),
+      s,
+    );
+  }
+  c.drawArc(const Rect.fromLTWH(56, 28, 14, 14), 3.1, 3.4, false, s);
+}
+
+void _snowy(Canvas c, Paint f, Paint s, Color col) {
+  // 六角雪花
+  c.save();
+  c.translate(50, 50);
+  for (var i = 0; i < 6; i++) {
+    c.drawLine(Offset.zero, const Offset(0, -28), s);
+    c.rotate(1.0472);
+  }
+  c.drawCircle(Offset.zero, 5, f);
+  c.drawCircle(Offset.zero, 5, s);
+  c.restore();
+}
+
+void _morning(Canvas c, Paint f, Paint s, Color col) {
+  // 地平线上刚升起的太阳
+  c.drawLine(const Offset(18, 68), const Offset(82, 68), s);
+  c.save();
+  c.clipRect(const Rect.fromLTRB(0, 0, 100, 68));
+  c.drawCircle(const Offset(50, 68), 20, f);
+  c.drawCircle(const Offset(50, 68), 20, s);
+  c.restore();
+  for (var i = 0; i < 5; i++) {
+    c.drawLine(
+      Offset(50 + 26 * math.cos(3.1416 + i * 0.7854), 68 + 26 * math.sin(3.1416 + i * 0.7854)),
+      Offset(50 + 34 * math.cos(3.1416 + i * 0.7854), 68 + 34 * math.sin(3.1416 + i * 0.7854)),
+      s,
+    );
+  }
+}
+
+void _afternoon(Canvas c, Paint f, Paint s, Color col) {
+  // 高悬的太阳 + 八道光芒
+  c.drawCircle(const Offset(50, 46), 18, f);
+  c.drawCircle(const Offset(50, 46), 18, s);
+  for (var i = 0; i < 8; i++) {
+    final a = i * 0.7854;
+    c.drawLine(
+      Offset(50 + 23 * math.cos(a), 46 + 23 * math.sin(a)),
+      Offset(50 + 30 * math.cos(a), 46 + 30 * math.sin(a)),
+      s,
+    );
+  }
+}
+
+void _jump(Canvas c, Paint f, Paint s, Color col) {
+  // 起跳的小人 + 上跳箭头
+  c.drawCircle(const Offset(50, 34), 10, f);
+  c.drawCircle(const Offset(50, 34), 10, s);
+  c.drawLine(const Offset(50, 44), const Offset(50, 62), s);
+  c.drawLine(const Offset(50, 48), const Offset(34, 38), s);
+  c.drawLine(const Offset(50, 48), const Offset(66, 38), s);
+  c.drawLine(const Offset(50, 62), const Offset(38, 78), s);
+  c.drawLine(const Offset(50, 62), const Offset(62, 78), s);
+  c.drawLine(const Offset(50, 20), const Offset(50, 12), s);
+  c.drawLine(const Offset(44, 18), const Offset(50, 12), s);
+  c.drawLine(const Offset(56, 18), const Offset(50, 12), s);
+}
+
+void _climb(Canvas c, Paint f, Paint s, Color col) {
+  // 台阶 + 向上箭头
+  c.drawPath(
+    Path()
+      ..moveTo(16, 80)
+      ..lineTo(16, 62)
+      ..lineTo(40, 62)
+      ..lineTo(40, 44)
+      ..lineTo(64, 44)
+      ..lineTo(64, 26)
+      ..lineTo(84, 26),
+    s,
+  );
+  c.drawLine(const Offset(26, 72), const Offset(26, 36), s);
+  c.drawLine(const Offset(19, 43), const Offset(26, 36), s);
+  c.drawLine(const Offset(33, 43), const Offset(26, 36), s);
+}
+
+void _write(Canvas c, Paint f, Paint s, Color col) {
+  // 纸上三道字 + 一支笔
+  c.drawRect(const Rect.fromLTRB(22, 24, 70, 76), f);
+  c.drawRect(const Rect.fromLTRB(22, 24, 70, 76), s);
+  for (var i = 0; i < 3; i++) {
+    final y = 38.0 + i * 12;
+    c.drawLine(Offset(30, y), Offset(62, y), s);
+  }
+  c.drawLine(const Offset(62, 70), const Offset(82, 50), s);
+  c.drawLine(const Offset(58, 66), const Offset(62, 70), s);
+}
+
+void _sing(Canvas c, Paint f, Paint s, Color col) {
+  // 音符：符头 + 符干 + 符尾
+  final head = Rect.fromCenter(center: const Offset(40, 68), width: 20, height: 15);
+  c.drawOval(head, f);
+  c.drawOval(head, s);
+  c.drawLine(const Offset(49, 64), const Offset(49, 30), s);
+  c.drawPath(
+    Path()
+      ..moveTo(49, 30)
+      ..quadraticBezierTo(66, 34, 62, 48),
+    s,
+  );
+}
+
+void _dance(Canvas c, Paint f, Paint s, Color col) {
+  // 展开手臂的舞者 + 裙摆
+  c.drawCircle(const Offset(50, 28), 9, f);
+  c.drawCircle(const Offset(50, 28), 9, s);
+  c.drawLine(const Offset(50, 37), const Offset(50, 52), s);
+  c.drawLine(const Offset(50, 40), const Offset(28, 32), s);
+  c.drawLine(const Offset(50, 40), const Offset(74, 52), s);
+  final skirt = Path()
+    ..moveTo(50, 50)
+    ..lineTo(28, 76)
+    ..quadraticBezierTo(50, 70, 72, 76)
+    ..close();
+  c.drawPath(skirt, f);
+  c.drawPath(skirt, s);
+}
+
+void _draw(Canvas c, Paint f, Paint s, Color col) {
+  // 画板 + 涂鸦 + 画笔
+  c.drawRect(const Rect.fromLTRB(20, 26, 74, 74), f);
+  c.drawRect(const Rect.fromLTRB(20, 26, 74, 74), s);
+  c.drawCircle(const Offset(38, 44), 7, s);
+  c.drawPath(
+    Path()
+      ..moveTo(28, 66)
+      ..quadraticBezierTo(44, 48, 66, 64),
+    s,
+  );
+  c.drawLine(const Offset(70, 74), const Offset(86, 88), s);
+}
+
+void _happy(Canvas c, Paint f, Paint s, Color col) {
+  // 笑脸：圆脸 + 弯眼 + 笑嘴
+  c.drawCircle(const Offset(50, 50), 30, f);
+  c.drawCircle(const Offset(50, 50), 30, s);
+  c.drawArc(const Rect.fromLTWH(34, 38, 12, 10), 3.3, 2.8, false, s);
+  c.drawArc(const Rect.fromLTWH(54, 38, 12, 10), 3.3, 2.8, false, s);
+  c.drawArc(const Rect.fromLTWH(36, 52, 28, 22), 0.3, 2.5, false, s);
+}
+
+void _quiet(Canvas c, Paint f, Paint s, Color col) {
+  // 圆脸 + 竖起的食指 + 闭合的唇线（「嘘」）
+  c.drawCircle(const Offset(50, 50), 30, f);
+  c.drawCircle(const Offset(50, 50), 30, s);
+  c.drawLine(const Offset(50, 62), const Offset(50, 30), s);
+  c.drawCircle(const Offset(50, 26), 4, s);
+  c.drawLine(const Offset(38, 58), const Offset(62, 58), s);
+}
+
+void _busy(Canvas c, Paint f, Paint s, Color col) {
+  // 堆积的文件 + 时钟
+  c.drawRect(const Rect.fromLTRB(20, 46, 60, 76), f);
+  c.drawRect(const Rect.fromLTRB(20, 46, 60, 76), s);
+  c.drawRect(const Rect.fromLTRB(28, 38, 68, 60), s);
+  c.drawCircle(const Offset(68, 40), 16, f);
+  c.drawCircle(const Offset(68, 40), 16, s);
+  c.drawLine(const Offset(68, 40), const Offset(68, 31), s);
+  c.drawLine(const Offset(68, 40), const Offset(75, 44), s);
+}
+
+void _early(Canvas c, Paint f, Paint s, Color col) {
+  // 闹钟：表盘 + 两只铃 + 指针 + 支脚
+  c.drawCircle(const Offset(50, 54), 24, f);
+  c.drawCircle(const Offset(50, 54), 24, s);
+  c.drawArc(const Rect.fromLTWH(26, 22, 18, 14), 3.4, 2.6, false, s);
+  c.drawArc(const Rect.fromLTWH(56, 22, 18, 14), 3.4, 2.6, false, s);
+  c.drawLine(const Offset(50, 54), const Offset(50, 40), s);
+  c.drawLine(const Offset(50, 54), const Offset(60, 58), s);
+  c.drawLine(const Offset(36, 78), const Offset(30, 86), s);
+  c.drawLine(const Offset(64, 78), const Offset(70, 86), s);
 }

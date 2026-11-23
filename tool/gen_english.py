@@ -159,10 +159,11 @@ def emit_dart(bank: dict) -> str:
     add("/// `lines` 重复放一份中文，让学习页展开时与其它科目结构一致。")
     add("const List<Poem> kEnglishSentences = <Poem>[")
     for item in bank["sentences"]:
+        # grade 从 JSON 取（缺省 2，兼容早期只收二年级句子的题库）。
         add(
-            "  Poem(title: {}, author: {}, dynasty: {}, grade: 2, lines: <String>[{}]),".format(
+            "  Poem(title: {}, author: {}, dynasty: {}, grade: {}, lines: <String>[{}]),".format(
                 dart_str(item["en"]), dart_str(item["zh"]), dart_str(item["theme"]),
-                dart_str(item["zh"]),
+                item.get("grade", 2), dart_str(item["zh"]),
             )
         )
     add("];")
@@ -182,6 +183,16 @@ def emit_dart(bank: dict) -> str:
     for u, name in LETTER_NAMES.items():
         add("  {}: {},".format(dart_str(u), dart_str(name)))
     add("};")
+    add("")
+    add("/// 句子条目的英文文本，按题库顺序。**由生成器产出，不要手改**。")
+    add("///")
+    add("/// 句子音频键是 `sentence_00`、`sentence_01`……，靠位置对应：这张表与")
+    add("/// `kEnglishSentences` 的顺序必须完全一致，否则播放会串到别的句子。")
+    add("/// 新增句子只能追加到末尾，插中间会让其后所有句子的音频全部错位。")
+    add("const List<String> kEnglishSentenceTexts = <String>[")
+    for item in bank["sentences"]:
+        add("  {},".format(dart_str(item["en"])))
+    add("];")
     add("")
     return "\n".join(lines)
 
@@ -227,6 +238,10 @@ TEXT_OVERRIDES = {
     "letterword_key": "key.",
     "word_rice": "rice.",
     "word_rain": "rain.",
+    # 三年级词：大写开头读偏（与 key/rice/rain 同一类），改小写原形。
+    "word_windy": "windy.",
+    "word_sing": "sing.",
+    "word_busy": "busy.",
 }
 
 # 直接要服务端原生 opus 的条目（值是语速）。本地「mp3 → ffmpeg libopus 32k」
