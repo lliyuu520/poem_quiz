@@ -8,6 +8,7 @@ import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
 import 'package:poem_quiz/data/topics.dart';
+import 'package:poem_quiz/models/poem.dart';
 import 'package:poem_quiz/models/question.dart';
 import 'package:poem_quiz/pages/home_page.dart';
 import 'package:poem_quiz/pages/quiz_page.dart';
@@ -15,6 +16,7 @@ import 'package:poem_quiz/pages/settings_page.dart';
 import 'package:poem_quiz/theme/app_theme.dart';
 import 'package:poem_quiz/widgets/adaptive.dart';
 import 'package:poem_quiz/widgets/common.dart';
+import 'package:poem_quiz/widgets/english_art.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'plan_helpers.dart';
@@ -336,7 +338,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    // 英语题型的题干可能是「只有喇叭」，且带插画；这类布局与其它科目差别最大，
+    // 英语题型的题干可能是「只有喇叭」，这类布局与其它科目差别最大，
     for (final (name, size) in <(String, Size)>[
       ('手机', phone),
       ('平板竖屏', tabletPortrait),
@@ -363,6 +365,80 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    /// 插画的位置是内容决定，不只是样式：放在题干里会泄题。
+    Question englishQuestion(QuestionKind kind, Poem entry) {
+      switch (kind) {
+        case QuestionKind.englishMeaning:
+          return Question(
+            kind: kind,
+            poem: entry,
+            prompt: '这个单词是什么意思？',
+            focus: entry.title,
+            key: 'en-meaning-art',
+            options: const <String>['猫', '狗', '猪', '鱼'],
+            answerIndex: 0,
+          );
+        case QuestionKind.englishSpell:
+          return Question(
+            kind: kind,
+            poem: entry,
+            prompt: '补上缺的字母',
+            focus: 'c□t',
+            key: 'en-spell-art',
+            blankBefore: 'c',
+            blankAfter: 't',
+            answerChars: const <String>['a'],
+            charPool: const <String>['a', 'e', 'o', 'i', 'u'],
+          );
+        default:
+          throw ArgumentError('用例只覆盖这两类题：$kind');
+      }
+    }
+
+    QuizSession singleEnglish(QuestionKind kind, Poem entry) => QuizSession(
+          questions: <Question>[englishQuestion(kind, entry)],
+          total: 1,
+          topic: kEnglishTopic,
+          plan: planOfGrade(GradeLevel.g1, kEnglishTopic),
+          careerMode: false,
+        );
+
+    testWidgets('认词义题答题时题干不给插画，判题后反馈卡补上', (tester) async {
+      final entry = kEnglishTopic.entries.firstWhere((p) => p.title == 'cat');
+      await pumpAt(
+        tester,
+        phone,
+        () => QuizPage(
+          session: singleEnglish(QuestionKind.englishMeaning, entry),
+          onFinish: (_) async {},
+        ),
+      );
+      // 选项就是中文释义，题干旁边画一只猫等于直接给答案。
+      expect(find.byType(EnglishArt), findsNothing, reason: '答题时题干不能出现插画');
+      expect(find.text('cat'), findsOneWidget);
+
+      await tester.tap(find.text('猫'));
+      await tester.pumpAndSettle();
+      expect(find.text('答对了'), findsOneWidget);
+      // 判完题再补图，把「听到的音 / 拼出的词 / 中文释义 / 图形」对齐。
+      expect(find.byType(EnglishArt), findsOneWidget, reason: '判题后反馈卡应有插画');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('拼单词题给插画：图里没有字母，只帮回忆整词', (tester) async {
+      final entry = kEnglishTopic.entries.firstWhere((p) => p.title == 'cat');
+      await pumpAt(
+        tester,
+        phone,
+        () => QuizPage(
+          session: singleEnglish(QuestionKind.englishSpell, entry),
+          onFinish: (_) async {},
+        ),
+      );
+      expect(find.byType(EnglishArt), findsOneWidget, reason: '拼单词题应配插画');
+      expect(tester.takeException(), isNull);
+    });
 
     for (final (name, size) in <(String, Size)>[
       ('手机', phone),

@@ -6,9 +6,8 @@ import '../data/speech_audio.dart';
 import '../data/topic.dart';
 import '../models/question.dart';
 import '../theme/app_theme.dart';
-import '../widgets/english_art.dart';
 
-/// 答题页里的英语语音与插画。
+/// 答题页里的英语语音。
 ///
 /// 单独成文件是因为它引入 `audioplayers` 与网络下载，而其它科目完全用不到；
 /// 放在 `quiz_page.dart` 里会让诗词科目的构建路径也拖上这套依赖。
@@ -123,6 +122,10 @@ class _SpeakButtonState extends State<SpeakButton> {
 /// 听音类题判题后题干只留喇叭（可以再听一遍对照）；原文与释义由答题页
 /// 底部的反馈卡给出，正确选项也会高亮，题干里不再重复一份——判题后
 /// 题干、选项、反馈叠起来本来就长，能省一段是一段。
+///
+/// **题干不画插画**：认词义题的选项就是中文释义，旁边画一只猫等于直接把
+/// 「cat = 猫」告诉孩子，考不出词汇。插画改在判题后的反馈卡里出现
+/// （见 `quiz_page.dart` 的 `_Feedback`），那时是复习而不是答题。
 class EnglishPrompt extends StatelessWidget {
   const EnglishPrompt({
     super.key,
@@ -141,7 +144,6 @@ class EnglishPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entry = question.poem;
     final key = _audioKeyFor(question);
     // 听音类题的题干留空，屏幕只给喇叭。
     final audioOnly = question.focus.isEmpty;
@@ -155,12 +157,7 @@ class EnglishPrompt extends StatelessWidget {
             label: verdict == null ? '点这里听' : '再听一遍',
           ),
         ] else ...<Widget>[
-          // 词 / 字母：插画在上，词在下，喇叭在右。
-          if (hasEnglishArt(entry.title))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: EnglishArt(name: entry.title, size: enlarged ? 128 : 96),
-            ),
+          // 词 / 字母：只给词与喇叭，不给插画（认词义题画图等于给答案）。
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[

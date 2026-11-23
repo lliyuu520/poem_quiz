@@ -7,6 +7,7 @@ import '../models/poem.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
+import '../widgets/english_art.dart';
 import '../widgets/speech.dart';
 
 /// 错题本：列出本科目答错过的条目，可展开看全文、手动移除。
@@ -248,6 +249,11 @@ class _PoemTileState extends State<_PoemTile> {
                 padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
                 child: Row(
                   children: <Widget>[
+                    // 英语词条配缩略插画，错题本是复习场景，露图不涉及作答。
+                    if (hasEnglishArt(widget.name)) ...<Widget>[
+                      EnglishArt(name: widget.name, size: 44),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

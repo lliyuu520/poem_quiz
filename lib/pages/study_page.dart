@@ -7,6 +7,7 @@ import '../models/poem.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
+import '../widgets/english_art.dart';
 import '../widgets/speech.dart';
 
 /// 学习模式：浏览本科目全部条目，按科目定义的分组筛选，可标记已掌握。
@@ -385,6 +386,12 @@ class _StudyTileState extends State<_StudyTile> {
                 padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
                 child: Row(
                   children: <Widget>[
+                    // 英语词条配缩略插画：浏览词表本身就是「认图 + 认词」的时机，
+                    // 与答题页不同，这里露图不涉及作答。
+                    if (hasEnglishArt(widget.name)) ...<Widget>[
+                      EnglishArt(name: widget.name, size: 44),
+                      const SizedBox(width: 12),
+                    ],
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

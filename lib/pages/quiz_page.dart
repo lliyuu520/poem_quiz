@@ -8,6 +8,7 @@ import '../models/question.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
+import '../widgets/english_art.dart';
 import '../widgets/speech.dart';
 import 'result_page.dart';
 
@@ -599,9 +600,15 @@ class _BlankPrompt extends StatelessWidget {
     );
 
     if (isSpell) {
-      // 拼写题配喇叭：先听清整词再拼，否则纯靠猜。
+      // 拼写题配喇叭 + 插画：先听清整词、看清是什么东西再拼，否则纯靠猜。
+      // 插画里没有字母，只帮回忆整个词，不会把答案漏出去。
+      final hasArt = hasEnglishArt(question.poem.title);
       return Column(
         children: <Widget>[
+          if (hasArt) ...<Widget>[
+            EnglishArt(name: question.poem.title, size: enlarged ? 104 : 80),
+            const SizedBox(height: 12),
+          ],
           SpeakButton(
             audioKey: EnglishAudioKeys.word(question.poem.title),
             size: 56,
@@ -1050,19 +1057,57 @@ class _Feedback extends StatelessWidget {
           const SizedBox(height: 10),
           Divider(color: color.withValues(alpha: 0.2), height: 1),
           const SizedBox(height: 10),
-          Text(
-            topic.displaySummaryOf(question.poem),
-            style: TextStyle(
-              fontSize: 12,
-              color: color.withValues(alpha: 0.85),
+          // 英语单词判题后配插画：答题时题干不给图（认词义画图等于给答案），
+          // 判完再补上，让「听到的音 / 拼出的词 / 中文释义 / 图形」在这里对齐。
+          if (hasEnglishArt(question.poem.title))
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                EnglishArt(name: question.poem.title, size: 64),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        topic.displaySummaryOf(question.poem),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: color.withValues(alpha: 0.85),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        question.note.isNotEmpty
+                            ? question.note
+                            : question.poem.fullText,
+                        style: serif(
+                          15,
+                          color: AppColors.ink,
+                          height: 1.7,
+                          spacing: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          else ...<Widget>[
+            Text(
+              topic.displaySummaryOf(question.poem),
+              style: TextStyle(
+                fontSize: 12,
+                color: color.withValues(alpha: 0.85),
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            // 算式题的正文就是算式本身，重复展示没有意义，改显示解题思路。
-            question.note.isNotEmpty ? question.note : question.poem.fullText,
-            style: serif(15, color: AppColors.ink, height: 1.7, spacing: 1.5),
-          ),
+            const SizedBox(height: 6),
+            Text(
+              // 算式题的正文就是算式本身，重复展示没有意义，改显示解题思路。
+              question.note.isNotEmpty ? question.note : question.poem.fullText,
+              style: serif(15, color: AppColors.ink, height: 1.7, spacing: 1.5),
+            ),
+          ],
         ],
       ),
     );
