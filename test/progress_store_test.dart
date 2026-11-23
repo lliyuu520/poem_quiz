@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poem_quiz/data/grade.dart';
+import 'package:poem_quiz/data/practice_scope.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/topics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -155,6 +156,78 @@ void main() {
 
       await store.resetCareer();
       expect(store.masteredPoemIds, isEmpty);
+    });
+  });
+
+  group('云存档 JSON 序列化', () {
+    test('完整往返：所有 11 个字段都能原样还原', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      await store.recordSession(
+        score: 88,
+        answered: 10,
+        correct: 7,
+        wrongIds: const <String>['唐|李白|静夜思', '唐|杜甫|春望'],
+        clearedIds: const <String>['宋|苏轼|水调歌头'],
+        practicedIds: const <String>['唐|李白|静夜思', '唐|杜甫|春望', '宋|苏轼|水调歌头'],
+        careerMode: true,
+      );
+      await store.setPracticeScope(PracticeScope.grade(3));
+      await store.setChallengeTier(ChallengeTier.challenge);
+      await store.recordSudokuClear(stage: 'one', seconds: 42);
+
+      final snapshot = store.toJson();
+      expect(snapshot['v'], ProgressStore.snapshotVersion);
+      expect(snapshot['best_score'], 88);
+      expect(snapshot['total_answered'], 10);
+      expect(snapshot['total_correct'], 7);
+      expect(snapshot['wrong_poems'], ['唐|李白|静夜思', '唐|杜甫|春望']);
+      expect(snapshot['stage_cleared'], {'one': 1});
+      expect(snapshot['stage_best_seconds'], {'one': 42});
+      expect(snapshot['challenge_tier'], 'challenge');
+
+      final restored = await ProgressStore.load(topicId: 'pinyin');
+      await restored.applySnapshot(snapshot);
+      expect(restored.bestScore, 88);
+      expect(restored.totalAnswered, 10);
+      expect(restored.totalCorrect, 7);
+      expect(restored.sessions, 2); // 一次答题 + 一次数独
+      expect(restored.wrongPoemIds, ['唐|李白|静夜思', '唐|杜甫|春望']);
+      expect(restored.masteredPoemIds, contains('宋|苏轼|水调歌头'));
+      expect(restored.practicedEntryIds, contains('唐|李白|静夜思'));
+      expect(restored.clearedOf('one'), 1);
+      expect(restored.bestSecondsOf('one'), 42);
+      expect(restored.practiceScope, PracticeScope.grade(3));
+      expect(restored.challengeTier, ChallengeTier.challenge);
+
+      // 再次 load 能读回，证明落盘键与现有 mutator 完全一致。
+      final reloaded = await ProgressStore.load(topicId: 'pinyin');
+      expect(reloaded.bestScore, 88);
+      expect(reloaded.practiceScope, PracticeScope.grade(3));
+    });
+
+    test('脏数据逐字段回落默认值，不让一份坏 payload 毁掉整份存档', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      await store.recordSession(
+        score: 50,
+        answered: 4,
+        correct: 3,
+        wrongIds: const <String>['唐|李白|静夜思'],
+        clearedIds: const <String>[],
+      );
+      await store.applySnapshot(<String, dynamic>{
+        'best_score': 'not-an-int',
+        'total_answered': 9,
+        'wrong_poems': <Object?>['唐|杜甫|春望', 123, null],
+        'stage_cleared': <String, Object?>{'one': 2, 'two': 'bad'},
+        'challenge_tier': 'nonexistent',
+        'practice_scope': '{bad json',
+      });
+      expect(store.bestScore, 0, reason: '类型错的分数字段回落为 0');
+      expect(store.totalAnswered, 9, reason: '合法字段照常应用');
+      expect(store.wrongPoemIds, ['唐|杜甫|春望'], reason: '非字符串元素被丢弃');
+      expect(store.stageCleared, {'one': 2}, reason: '非整数字段被丢弃');
+      expect(store.challengeTier, ChallengeTier.standard);
+      expect(store.practiceScope, PracticeScope.recommended);
     });
   });
 

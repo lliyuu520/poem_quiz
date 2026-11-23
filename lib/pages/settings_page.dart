@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../data/account_service.dart';
 import '../data/grade.dart';
 import '../data/practice_scope.dart';
 import '../data/profile.dart';
@@ -12,21 +13,33 @@ import '../data/update_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
+import 'login_page.dart';
+import 'sync_page.dart';
 
 /// 设置页：出生年月、生涯进度重置与检查更新。
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({
+  SettingsPage({
     super.key,
     required this.store,
     required this.topic,
     required this.profile,
-  });
+    AccountService? account,
+    Map<String, ProgressStore>? stores,
+    List<Topic>? topics,
+  })  : account = account ?? AccountService(),
+        stores = stores ?? <String, ProgressStore>{},
+        topics = topics ?? const <Topic>[];
 
   final ProgressStore store;
   final Topic topic;
 
   /// 全局个人档案。改出生年月后监听它的界面（首页推算卡）随之刷新。
   final UserProfile profile;
+
+  /// 账号会话与全部科目存档（云同步页用）。
+  final AccountService account;
+  final Map<String, ProgressStore> stores;
+  final List<Topic> topics;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -107,11 +120,70 @@ class _SettingsPageState extends State<SettingsPage> {
         .showSnackBar(const SnackBar(content: Text('生涯进度已重置')));
   }
 
+  /// 去登录/注册页。返回 true 表示登录成功，需要刷新账号区。
+  Future<void> _openLogin() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => LoginPage(account: widget.account),
+      ),
+    );
+    if (changed == true && mounted) setState(() {});
+  }
+
+  /// 云同步页。token 过期时它 pop(true)，这里转去登录。
+  Future<void> _openSync() async {
+    final relogin = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => SyncPage(
+          account: widget.account,
+          stores: widget.stores,
+          topics: widget.topics,
+          profile: widget.profile,
+        ),
+      ),
+    );
+    if (relogin == true && mounted) _openLogin();
+  }
+
+  Future<void> _logout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card,
+        title: Text('退出登录？', style: serif(18)),
+        content: Text(
+          '退出后本机进度保留，但不再同步到云端。',
+          style: serif(14, color: AppColors.inkSoft),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('退出', style: TextStyle(color: AppColors.seal)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await widget.account.logout();
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('已退出登录')));
+  }
+
   @override
   Widget build(BuildContext context) {
     // store 与 profile 都是 ChangeNotifier：重置进度、改出生年月后界面靠它们刷新。
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[widget.store, widget.profile]),
+      animation: Listenable.merge(<Listenable>[
+        widget.store,
+        widget.profile,
+        widget.account,
+      ]),
       builder: (context, _) => _buildPage(context),
     );
   }
@@ -264,6 +336,96 @@ class _SettingsPageState extends State<SettingsPage> {
       ],
     );
 
+    final account = widget.account;
+    final accountSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const SizedBox(height: 16),
+        const Padding(
+          padding: EdgeInsets.only(left: 12),
+          child: RuleDivider(label: '账号与同步'),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: InkCard(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Icon(
+                      account.isLoggedIn
+                          ? Icons.cloud_done_outlined
+                          : Icons.cloud_off_outlined,
+                      size: 18,
+                      color: account.isLoggedIn
+                          ? AppColors.jade
+                          : AppColors.inkFaint,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        account.isLoggedIn
+                            ? '已登录 · ${account.username ?? ''}'
+                            : '未登录 · 进度仅存本机',
+                        style: serif(15,
+                            weight: FontWeight.w600, spacing: 1),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  account.isLoggedIn
+                      ? '进度不会自动上传，进入云同步手动选择科目上传或下载。'
+                      : '登录可在多台设备间同步进度；不登录也能照常离线使用。',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.inkSoft,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: account.isLoggedIn
+              ? Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '云同步',
+                        icon: Icons.sync,
+                        filled: false,
+                        onPressed: _openSync,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: PrimaryButton(
+                        label: '退出登录',
+                        icon: Icons.logout,
+                        filled: false,
+                        onPressed: _logout,
+                      ),
+                    ),
+                  ],
+                )
+              : PrimaryButton(
+                  label: '登录 / 注册',
+                  icon: Icons.login,
+                  filled: false,
+                  onPressed: _openLogin,
+                ),
+        ),
+      ],
+    );
+
     final aboutSection = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -321,7 +483,11 @@ class _SettingsPageState extends State<SettingsPage> {
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: <Widget>[birthSection, scopeSection],
+                                children: <Widget>[
+                                  birthSection,
+                                  scopeSection,
+                                  accountSection,
+                                ],
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -339,6 +505,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           children: <Widget>[
                             birthSection,
                             scopeSection,
+                            accountSection,
                             careerSection,
                             aboutSection,
                           ],

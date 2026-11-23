@@ -6,7 +6,7 @@
 
 - 交付形态：**只有 Android APK**，自用。web 平台已于 2026-11-18 移除（`web/`、`build/web/`、`analysis_options` 的 exclude 一并清理）。
 - 不做微信小程序 / 小游戏：微信按注册形态判类目，个人主体没有能承载交互式答题的类目，小游戏需换 Cocos/Canvas 重写。不要再提议 Taro/uni-app/小游戏迁移，也不要重新加 web 平台。
-- 默认纯离线：题库内置、进度存本地、无账号体系。**联网点只有两类**，都由用户主动触发：设置页「检查更新」（下载版本清单与新 APK），英语与拼音音频首次播放时按条目懒下载（之后离线）。不做后台轮询、不发统计数据。新增功能默认保持离线。
+- 默认离线优先：题库内置、进度存本地。**联网点只有三类**，都由用户主动触发：设置页「检查更新」（下载版本清单与新 APK），英语与拼音音频首次播放时按条目懒下载（之后离线），设置页「账号与同步」里的登录/注册/手动上传下载（2026-11-23 接入，未登录时完全离线）。不做后台轮询、不发统计数据。新增功能默认保持离线。
 
 ## 常用命令
 
@@ -115,6 +115,15 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 **不再用 `ValueKey(topic.id)` 强制整树重建**——那会让切换卡顿。`HomePage` 在 `didUpdateWidget` 里自行同步引擎、难度档、练习范围、难度策略与玩法。
 
 `ProgressStore`、`UserProfile` 和 `Topic` 通过构造函数一路传给页面，页面用 `setState` + `AnimatedBuilder(animation: store)` 刷新，**没有 Provider/Riverpod/GetX**，不要为此引入状态管理库。
+
+## 账号与云同步
+
+服务端 `https://shi-api.lliyuu520.cn`（`server/`，Go + Redis，不透明 token + `If-Match` 版本号，详见 `docs/development-progress.md`）。App 端 2026-11-23 接入，入口在设置页「账号与同步」区。
+
+- **`AccountService` 是唯一的 HTTP + 凭据入口**：UI 不直接拼请求。token 裸键 `account_token`/`account_username`/`account_expires_at`；每科云端版本 `cloud_version_<topicId>`。用 `ApiTransport` 窄接口发包，测试注入假 transport，**不要 mock `dart:io HttpClient`**（那套类继承极难 fake）。JSON API 不像音频下载踩 SNI/IPv6 坑，用标准 `HttpClient` 即可，音频下载的 `_httpsGet` 那套不要动。
+- **同步全手动**：没有自动同步、没有后台轮询，所有网络请求由按钮触发；未登录时与纯离线时行为完全一致。
+- **`ProgressStore.toJson()` / `applySnapshot()` 是存档格式边界**：11 个字段完整往返，`snapshotVersion` 标记格式。新增存档字段要同时改这两个方法与序列化测试。`applySnapshot` 逐字段校验、脏数据回落默认值，不让一份坏 payload 毁掉整份本地存档。
+- **409 冲突绝不静默覆盖**：弹窗让用户选「用云端 / 保留本地 / 取消」，用云端前还要确认本地非空时会被替换。上传的 `If-Match` 用本地记下的云端版本（无存档用 0），成功后写回新版本。401 自动清会话并跳登录；429（登录/注册限流）给友好文案。
 
 ## 数据与算法约束（改代码前必读）
 

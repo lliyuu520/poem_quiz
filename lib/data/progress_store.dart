@@ -136,12 +136,98 @@ class ProgressStore extends ChangeNotifier {
     }
 
     practiceScope = PracticeScope.decode(_prefs.getString(_key(_kScope)));
-    final tierName = _prefs.getString(_key(_kTier));
-    challengeTier = ChallengeTier.values.firstWhere(
-      (t) => t.name == tierName,
-      orElse: () => ChallengeTier.standard,
-    );
+    challengeTier = _decodeTier(_prefs.getString(_key(_kTier)));
   }
+
+  /// 云存档格式版本。结构变动时递增；读取时不严格校验，缺字段按默认值处理。
+  static const int snapshotVersion = 1;
+
+  /// 导出整份存档，作为云同步 payload 的 JSON 源。
+  ///
+  /// 键名复用本地存储字段，外加版本标记便于日后演进。服务端不解析 payload，
+  /// 结构完全由客户端掌握。
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        'v': snapshotVersion,
+        _kBestScore: bestScore,
+        _kAnswered: totalAnswered,
+        _kCorrect: totalCorrect,
+        _kSessions: sessions,
+        _kWrong: wrongPoemIds.toList(),
+        _kMastered: masteredPoemIds.toList(),
+        _kPracticed: practicedEntryIds.toList(),
+        _kStages: Map<String, int>.from(stageCleared),
+        _kStageBest: Map<String, int>.from(stageBestSeconds),
+        _kScope: practiceScope.encode(),
+        _kTier: challengeTier.name,
+      };
+
+  /// 用云端存档覆盖本地：逐字段校验后落盘并刷新内存。
+  ///
+  /// 只在用户明确选择「用云端」时调用。脏数据逐字段回落默认值，不让一份坏
+  /// payload 毁掉整份存档；落盘键与现有 mutator 完全一致，下次 load 能读回。
+  Future<void> applySnapshot(Map<String, dynamic> snapshot) async {
+    bestScore = _asInt(snapshot[_kBestScore]);
+    totalAnswered = _asInt(snapshot[_kAnswered]);
+    totalCorrect = _asInt(snapshot[_kCorrect]);
+    sessions = _asInt(snapshot[_kSessions]);
+
+    wrongPoemIds
+      ..clear()
+      ..addAll(_asStringList(snapshot[_kWrong]).take(200));
+    masteredPoemIds
+      ..clear()
+      ..addAll(_asStringList(snapshot[_kMastered]));
+    practicedEntryIds
+      ..clear()
+      ..addAll(_asStringList(snapshot[_kPracticed]));
+    stageCleared
+      ..clear()
+      ..addAll(_asIntMap(snapshot[_kStages]));
+    stageBestSeconds
+      ..clear()
+      ..addAll(_asIntMap(snapshot[_kStageBest]));
+
+    final rawScope = snapshot[_kScope];
+    practiceScope = PracticeScope.decode(
+      rawScope is String ? rawScope : null,
+    );
+    challengeTier = _decodeTier(snapshot[_kTier]);
+
+    await Future.wait(<Future<void>>[
+      _prefs.setInt(_key(_kBestScore), bestScore),
+      _prefs.setInt(_key(_kAnswered), totalAnswered),
+      _prefs.setInt(_key(_kCorrect), totalCorrect),
+      _prefs.setInt(_key(_kSessions), sessions),
+      _prefs.setString(_key(_kWrong), jsonEncode(wrongPoemIds)),
+      _prefs.setString(_key(_kMastered), jsonEncode(masteredPoemIds.toList())),
+      _prefs.setString(
+          _key(_kPracticed), jsonEncode(practicedEntryIds.toList())),
+      _prefs.setString(_key(_kStages), jsonEncode(stageCleared)),
+      _prefs.setString(_key(_kStageBest), jsonEncode(stageBestSeconds)),
+      _prefs.setString(_key(_kScope), practiceScope.encode()),
+      _prefs.setString(_key(_kTier), challengeTier.name),
+    ]);
+    notifyListeners();
+  }
+
+  static int _asInt(Object? value) => value is int ? value : 0;
+
+  static List<String> _asStringList(Object? value) {
+    if (value is! List) return const <String>[];
+    return value.whereType<String>().toList();
+  }
+
+  static Map<String, int> _asIntMap(Object? value) {
+    if (value is! Map) return const <String, int>{};
+    return <String, int>{
+      for (final entry in value.entries)
+        if (entry.key is String && entry.value is int)
+          entry.key as String: entry.value as int,
+    };
+  }
+
+  static ChallengeTier _decodeTier(Object? name) => ChallengeTier.values
+      .firstWhere((t) => t.name == name, orElse: () => ChallengeTier.standard);
 
   /// 更新练习范围。缺省「跟随推荐」，不写入也可以——读回时同样缺省。
   Future<void> setPracticeScope(PracticeScope scope) async {

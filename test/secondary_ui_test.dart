@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poem_quiz/data/account_service.dart';
 import 'package:poem_quiz/data/grade.dart';
 import 'package:poem_quiz/data/practice_scope.dart';
 import 'package:poem_quiz/data/profile.dart';
@@ -67,6 +68,48 @@ void main() {
       expect(find.byType(SingleChildScrollView), findsOneWidget);
       expect(find.text('学龄'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('账号区未登录显示登录入口，登录后显示云同步与退出', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final profile = await UserProfile.load();
+      final account = AccountService();
+      await account.load();
+      await pumpAt(
+        tester,
+        SettingsPage(
+          store: store,
+          topic: kPoetryTopic,
+          profile: profile,
+          account: account,
+        ),
+      );
+
+      expect(find.text('账号与同步'), findsOneWidget);
+      expect(find.text('登录 / 注册'), findsOneWidget);
+      expect(find.text('未登录 · 进度仅存本机'), findsOneWidget);
+
+      // 模拟已登录：用全新实例读新的 mock 值，再重新 pump 设置页。
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'account_token': 't',
+        'account_username': 'kid',
+        'account_expires_at':
+            DateTime.now().millisecondsSinceEpoch + 3600000,
+      });
+      final loggedIn = AccountService();
+      await loggedIn.load();
+      await pumpAt(
+        tester,
+        SettingsPage(
+          store: store,
+          topic: kPoetryTopic,
+          profile: profile,
+          account: loggedIn,
+        ),
+      );
+      expect(find.text('云同步'), findsOneWidget);
+      expect(find.text('退出登录'), findsOneWidget);
+      expect(find.text('已登录 · kid'), findsOneWidget);
     });
 
     testWidgets('年月滚轮行高随系统字号增长且不低于 40dp', (tester) async {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'data/account_service.dart';
 import 'data/profile.dart';
 import 'data/progress_store.dart';
 import 'data/topic.dart';
@@ -27,10 +28,13 @@ Future<void> main() async {
     for (final t in kTopics) t.id: await ProgressStore.load(topicId: t.id),
   };
   final profile = await UserProfile.load();
+  final account = AccountService();
+  await account.load(); // 读本地 token；过期会就地清除，界面不会误显示已登录
   runApp(PoemQuizApp(
     initialTopic: topic,
     stores: stores,
     initialProfile: profile,
+    account: account,
   ));
 }
 
@@ -44,11 +48,15 @@ class PoemQuizApp extends StatefulWidget {
     required this.initialTopic,
     required this.stores,
     required this.initialProfile,
+    required this.account,
   });
 
   final Topic initialTopic;
   final Map<String, ProgressStore> stores;
   final UserProfile initialProfile;
+
+  /// 账号会话。未登录时也是同一个实例，登录/登出后由它通知界面刷新。
+  final AccountService account;
 
   @override
   State<PoemQuizApp> createState() => _PoemQuizAppState();
@@ -88,6 +96,9 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
         store: _store,
         topic: _topic,
         profile: _profile,
+        account: widget.account,
+        stores: widget.stores,
+        topics: kTopics,
         onSwitchTopic: switchTopic,
       ),
     );

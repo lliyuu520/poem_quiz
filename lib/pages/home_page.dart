@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/account_service.dart';
 import '../data/grade.dart';
 import '../data/practice_scope.dart';
 import '../data/profile.dart';
@@ -25,6 +26,9 @@ class HomePage extends StatefulWidget {
     required this.store,
     required this.topic,
     required this.profile,
+    this.account,
+    this.stores,
+    this.topics,
     required this.onSwitchTopic,
   });
 
@@ -33,6 +37,11 @@ class HomePage extends StatefulWidget {
 
   /// 全局个人档案（出生年月）。学龄由它推算，改动后根壳整树重建。
   final UserProfile profile;
+
+  /// 账号会话；与全部存档一起透传给设置页的云同步入口。
+  final AccountService? account;
+  final Map<String, ProgressStore>? stores;
+  final List<Topic>? topics;
 
   /// 切换科目。由根壳重建存档与页面树。
   final void Function(Topic topic) onSwitchTopic;
@@ -150,6 +159,7 @@ class _HomePageState extends State<HomePage> {
       excludePoemIds: _mode.isCareer
           ? _store.masteredPoemIds
           : const <String>{},
+      practicedIds: _store.practicedEntryIds,
       careerMode: _mode.isCareer,
     );
 
@@ -184,12 +194,17 @@ class _HomePageState extends State<HomePage> {
 
   /// 设置页：出生年月与生涯重置都收在这里。
   Future<void> _openSettings() async {
+    // 账号入口由根壳注入；独立构造的测试页面没有 account，仍可离线打开设置。
+    final account = widget.account;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => SettingsPage(
           store: _store,
           topic: widget.topic,
           profile: widget.profile,
+          account: account ?? AccountService(),
+          stores: widget.stores ?? <String, ProgressStore>{},
+          topics: widget.topics ?? kTopics,
         ),
       ),
     );
