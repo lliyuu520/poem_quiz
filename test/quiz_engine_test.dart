@@ -163,6 +163,69 @@ void main() {
     });
   });
 
+  group('未练优先', () {
+    test('已练过的条目排在后面，先出没练过的', () {
+      // 一年级诗词池只有十几首，练掉前 8 首后，剩下的题应优先落在那 8 首之外。
+      final g1Ids = kPoetryTopic.entries
+          .where((e) => GradeLevel.g1.weights.containsKey(e.grade))
+          .map((e) => e.id)
+          .toList();
+      expect(g1Ids.length, greaterThanOrEqualTo(10),
+          reason: '一年级池应足够出满一局');
+
+      final practiced = g1Ids.take(3).toSet();
+      final qs = engineWithSeed(7).generate(
+        count: 8,
+        gradeWeights: GradeLevel.g1.weights,
+        practicedIds: practiced,
+      );
+      // 前 6 题里不该出现已练过的那 3 条——池子还够，没理由回头。
+      final head = qs.take(6).map((q) => q.poem.id).toList();
+      expect(head.any(practiced.contains), isFalse,
+          reason: '还有没练过的条目，却提前出了已练的：$head');
+    });
+
+    test('全部练完后仍能出题，不会空局', () {
+      final g1Ids = kPoetryTopic.entries
+          .where((e) => GradeLevel.g1.weights.containsKey(e.grade))
+          .map((e) => e.id)
+          .toSet();
+      final qs = engineWithSeed(11).generate(
+        count: 5,
+        gradeWeights: GradeLevel.g1.weights,
+        practicedIds: g1Ids,
+      );
+      // 全练完了要回落到原来的抽样，而不是出 0 题。
+      expect(qs, isNotEmpty, reason: '全练完后出不了题');
+      expect(qs.length, greaterThanOrEqualTo(3));
+    });
+
+    test('未练优先不影响年级权重：没练过的条目仍按年级加权', () {
+      // 三年级池里，练掉所有二年级条目后，出的题仍应集中在三年级。
+      final weights = GradeLevel.g3.weights;
+      final g2Ids = kPoetryTopic.entries
+          .where((e) => e.grade == 2)
+          .map((e) => e.id)
+          .toSet();
+      var g3Count = 0;
+      var total = 0;
+      for (var seed = 0; seed < 12; seed++) {
+        final qs = QuizEngine(poems: kPoems, random: Random(seed + 3)).generate(
+          count: 8,
+          gradeWeights: weights,
+          practicedIds: g2Ids,
+        );
+        for (final q in qs) {
+          total++;
+          if (q.poem.grade == 3) g3Count++;
+        }
+      }
+      // 二年级被标为已练、三年级未练，所以三年级占比应明显更高。
+      expect(g3Count / total, greaterThan(0.5),
+          reason: '三年级占比过低：$g3Count/$total');
+    });
+  });
+
   group('对局计分', () {
     test('答对加分，答错记入错题本', () {
       final engine = engineWithSeed(29);

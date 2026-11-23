@@ -89,6 +89,9 @@ class QuizSession extends ChangeNotifier {
 /// [kinds] 为空时用科目自己的题型（[Topic.kinds]），不跨科目混题。
 /// 出题配置二选一：完整 [plan]（生产路径）或便捷 [grade]（以单一年级为主力、
 /// 标准难度，测试与简单场景用）。两者都传时以 [plan] 为准。
+///
+/// [practicedIds] 是本科目已练过的条目（[ProgressStore.practicedEntryIds]），
+/// 引擎会优先出没练过的，让大题库的推进可见。
 QuizSession buildSession({
   required QuizEngine engine,
   required Topic topic,
@@ -98,6 +101,7 @@ QuizSession buildSession({
   Set<QuestionKind>? kinds,
   List<String> preferPoemIds = const <String>[],
   Set<String> excludePoemIds = const <String>{},
+  Set<String> practicedIds = const <String>{},
   bool careerMode = false,
   Random? random,
 }) {
@@ -117,6 +121,7 @@ QuizSession buildSession({
     kinds: kinds ?? topic.kinds,
     preferPoemIds: preferPoemIds,
     excludePoemIds: excludePoemIds,
+    practicedIds: practicedIds,
     optionCount: effectivePlan.optionCount,
     gradeWeights: effectivePlan.weights,
     kindWeights: effectivePlan.kindWeights,

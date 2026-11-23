@@ -90,6 +90,45 @@ void main() {
         expect(hasEnglishArt(e.title), isTrue, reason: '${e.title} 没有插画');
       }
     });
+
+    test('一年级有日常用语与问候句，低龄优先', () {
+      final g1 = kEnglishSentences.where((s) => s.grade == 1).toList();
+      expect(g1.length, greaterThanOrEqualTo(20),
+          reason: '一年级句子池太小，听句选义出不来：${g1.length} 条');
+
+      // 低龄该先学的是问候与课堂指令，不是语法结构。
+      final themes = g1.map((s) => s.dynasty).toSet();
+      for (final t in <String>['问候', '礼貌', '指令']) {
+        expect(themes.contains(t), isTrue, reason: '一年级缺少「$t」类句子');
+      }
+
+      // 具体句式抽查：这些是一年级最先要用到的。
+      final texts = g1.map((s) => s.title).toSet();
+      for (final t in <String>[
+        'Hello!',
+        'Goodbye!',
+        'Thank you very much.',
+        'Sit down.',
+        'I am hungry.',
+        'What is this?',
+      ]) {
+        expect(texts.contains(t), isTrue, reason: '一年级缺少「$t」');
+      }
+    });
+
+    test('一年级能出满听句选义', () {
+      // 曾经一年级句子池为空，这类题在一年级一道都出不来。
+      final engine = englishEngine(41);
+      var produced = 0;
+      for (var round = 0; round < 8; round++) {
+        produced += engine.generate(
+          count: 6,
+          kinds: <QuestionKind>{QuestionKind.englishSentence},
+          gradeWeights: const <int, double>{1: 1.0},
+        ).length;
+      }
+      expect(produced, greaterThan(0), reason: '一年级听句选义一道都出不来');
+    });
   });
 
   group('英语出题', () {

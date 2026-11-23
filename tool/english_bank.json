@@ -787,12 +787,14 @@
     {
       "en": "Good morning!",
       "zh": "早上好！",
-      "theme": "问候"
+      "theme": "问候",
+      "grade": 1
     },
     {
       "en": "Thank you.",
       "zh": "谢谢你。",
-      "theme": "问候"
+      "theme": "问候",
+      "grade": 1
     },
     {
       "en": "Where is my pencil?",
@@ -853,6 +855,144 @@
       "zh": "我们唱首歌吧。",
       "theme": "动作",
       "grade": 3
+    },
+    {
+      "en": "Hello!",
+      "zh": "你好！",
+      "theme": "问候",
+      "grade": 1
+    },
+    {
+      "en": "Hi!",
+      "zh": "嗨！",
+      "theme": "问候",
+      "grade": 1
+    },
+    {
+      "en": "Goodbye!",
+      "zh": "再见！",
+      "theme": "问候",
+      "grade": 1
+    },
+    {
+      "en": "Good night!",
+      "zh": "晚安！",
+      "theme": "问候",
+      "grade": 1
+    },
+    {
+      "en": "How are you?",
+      "zh": "你好吗？",
+      "theme": "问候",
+      "grade": 1
+    },
+    {
+      "en": "I am fine.",
+      "zh": "我很好。",
+      "theme": "问候",
+      "grade": 1
+    },
+    {
+      "en": "Sorry.",
+      "zh": "对不起。",
+      "theme": "礼貌",
+      "grade": 1
+    },
+    {
+      "en": "Please.",
+      "zh": "请。",
+      "theme": "礼貌",
+      "grade": 1
+    },
+    {
+      "en": "Thank you very much.",
+      "zh": "非常感谢。",
+      "theme": "礼貌",
+      "grade": 1
+    },
+    {
+      "en": "Nice to meet you.",
+      "zh": "很高兴见到你。",
+      "theme": "问候",
+      "grade": 1
+    },
+    {
+      "en": "Come here.",
+      "zh": "过来。",
+      "theme": "指令",
+      "grade": 1
+    },
+    {
+      "en": "Sit down.",
+      "zh": "坐下。",
+      "theme": "指令",
+      "grade": 1
+    },
+    {
+      "en": "Stand up.",
+      "zh": "站起来。",
+      "theme": "指令",
+      "grade": 1
+    },
+    {
+      "en": "Listen to me.",
+      "zh": "听我说。",
+      "theme": "指令",
+      "grade": 1
+    },
+    {
+      "en": "Look at me.",
+      "zh": "看着我。",
+      "theme": "指令",
+      "grade": 1
+    },
+    {
+      "en": "I am hungry.",
+      "zh": "我饿了。",
+      "theme": "日常用语",
+      "grade": 1
+    },
+    {
+      "en": "I am thirsty.",
+      "zh": "我渴了。",
+      "theme": "日常用语",
+      "grade": 1
+    },
+    {
+      "en": "I want water.",
+      "zh": "我要水。",
+      "theme": "日常用语",
+      "grade": 1
+    },
+    {
+      "en": "Let us go.",
+      "zh": "我们走吧。",
+      "theme": "日常用语",
+      "grade": 1
+    },
+    {
+      "en": "Help me, please.",
+      "zh": "请帮帮我。",
+      "theme": "日常用语",
+      "grade": 1
+    },
+    {
+      "en": "What is this?",
+      "zh": "这是什么？",
+      "theme": "提问",
+      "grade": 1
+    },
+    {
+      "en": "What color is it?",
+      "zh": "它是什么颜色？",
+      "theme": "提问",
+      "grade": 1
+    },
+    {
+      "en": "How many?",
+      "zh": "有多少？",
+      "theme": "提问",
+      "grade": 1
     }
   ]
 }

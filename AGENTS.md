@@ -32,7 +32,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：488 条规则生成（一年级 196 / 二年级 162 / 三年级 130）；`MathExpr` 解析算式 |
 | `lib/data/chengyu.dart` | 成语题库 `kChengyu`：122 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
-| `lib/data/english.dart` | 英语题库 `kEnglish`：112 条（字母 26 / 主题词 62 / 短句 24），年级 1-3（**由 `tool/gen_english.py` 生成，不要手改**） |
+| `lib/data/english.dart` | 英语题库 `kEnglish`：135 条（字母 26 / 主题词 62 / 短句 47），年级 1-3（**由 `tool/gen_english.py` 生成，不要手改**） |
 | `lib/data/english_audio.dart` | 英语音频键与缓存入口；共用 `speech_audio.dart` 的下载与播放 |
 | `lib/data/pinyin_audio.dart` | 拼音点读音频键：按字词 UTF-16 编码生成稳定文件名 |
 | `lib/data/speech_audio.dart` | 英语 / 拼音音频共用播放与缓存：**音频不在 APK 里**，按条目从 OSS 懒下载到本地 |
@@ -42,7 +42,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/quiz_engine.dart` | 出题：17 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、计分 |
-| `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>` |
+| `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>`；`practicedEntryIds`（已练覆盖度，含答错）与 `masteredPoemIds`（答对过）是两回事 |
 | `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
 | `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 17 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 3 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
@@ -95,7 +95,9 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - **以听为主**：听音选词（`englishListen`）与听句选义（`englishSentence`）的 `Question.focus` 为空串，答题页只渲染喇叭按钮。判题后题干**仍只留喇叭**（文案变「再听一遍」），原文与释义由反馈卡和高亮选项负责，不重复露出（2026-11-21 改，AGENTS.md 旧句「判题后才露出原文」已过期）。改答题页时不要假设 `focus` 非空。
 - **音频不在 APK 里**：英语全靠听，设备自带 TTS 在中文 ROM 上常缺英文音色或读错元音（实测 Aria 孤立朗读 `cat` 时 /æ/ 偏离自身参照 56%，接近 /e/），所以音频用百炼 `qwen-audio-3.1-tts-plus`、音色 `longanfengyue_v3.1` 预生成（2026-11-21 起，与拼音统一音色），放 OSS `lliyuu-shi` 的 `shi-private/en/v2/`（CDN `media.lliyuu520.cn`），首次播放时按条目下载到本地缓存，之后离线。**换音色必须顺延版本段**（v2→v3，拼音同理）：CDN 对 .opus 缓存一年、手机按 key 永久缓存，同名覆盖两边都不生效。
 - `pubspec.yaml` **逐个声明**三个音效 wav，不写目录——目录写法会把 `assets/audio/en/` 一起收进包（Flutter 的目录声明是递归的，早期注释写的「不递归」是错的）。本地 `assets/audio/en/` 只是上传 OSS 前的源文件，不该进包。
-- 加了新词之后要跑：`python -I tool/gen_english.py --audio`（API Key 只走 stdin）→ `python -I tool/verify_english_audio.py`（ASR 全量校验）→ 上传 `shi-private/en/v2/`。校验不通过就别上传，一个错读音就是给孩子的错误输入。字母合成直接喂原字母「A.」，Qwen 自己读对字母名；**唯一例外 N**——风悦把「N.」稳定读成 /ʌn/（五种 seed 复验一致），`letter_n.opus` 沿用旧 Jenny 音频，重新生成后若缺失要从备份补回（`.wip_backup/english_jenny_opus/letter_n.opus`）。个别裸词形态读不稳的在 `gen_english.py` 的 `TEXT_OVERRIDES` 里改写（egg 带冠词、Key/Rice/Rain 用小写），改写文本都经 ASR 逐字复验后才固化。**sent_bread 必须走服务端原生 opus**（`NATIVE_OPUS_RATES`，rate 1.05）：本地「mp3 → ffmpeg libopus」转码会把 is bread 的 /b/ 浊音瞬态削成 /p/，32k~128k 全中，服务端编码器没这个问题。
+- 加了新词之后要跑：`python -I tool/gen_english.py --audio`（API Key 只走 stdin）→ `python -I tool/verify_english_audio.py`（ASR 全量校验）→ 上传 `shi-private/en/v2/`。校验不通过就别上传，一个错读音就是给孩子的错误输入。字母合成直接喂原字母「A.」，Qwen 自己读对字母名；**唯一例外 N**——风悦把「N.」稳定读成 /ʌn/（五种 seed 复验一致），`letter_n.opus` 沿用旧 Jenny 音频，重新生成后若缺失要从备份补回（`.wip_backup/english_jenny_opus/letter_n.opus`）。个别裸词形态读不稳的在 `gen_english.py` 的 `TEXT_OVERRIDES` 里改写（egg 带冠词、Key/Rice/Rain 用小写、`Hi!` 改句号），改写文本都经 ASR 逐字复验后才固化。**`Hi!` 的感叹号会让风悦稳定读成 "Bye"**（同 seed 四次复验一致，命中的是「感叹号 + 单音节」组合）：`sentence_25` 在 `TEXT_OVERRIDES` 里改成 `Hi.` 后两次复验都读对，转码链路无关（`Hi.` 的 mp3 与同款 32k opus 都识别为 Hi）。**改 `TEXT_OVERRIDES` 时 `verify_english_audio.py` 的 `text_overrides` 要同步加**，否则校验按题库原文比对会误报。**sent_bread 必须走服务端原生 opus**（`NATIVE_OPUS_RATES`，rate 1.05）：本地「mp3 → ffmpeg libopus」转码会把 is bread 的 /b/ 浊音瞬态削成 /p/，32k~128k 全中，服务端编码器没这个问题。
+- **句子音频键按下标命名，只能追加**：`EnglishAudioKeys.sentence(i)` 是 `sentence_${i}`（`sentence_00` 起），下标来自 `bank["sentences"]` 的数组位置。**往句子数组中间插一条会让后面所有句子的音频全部错位**，孩子听到的和题面对不上，而且不会有任何报错。新增句子一律追加到末尾。
+- **一年级句子池必须非空**（2026-11-23 补）：原来 24 条句子全缺省成二年级，一年级的 `englishSentence` 一道都出不来。现在 47 条（g1 25 / g2 12 / g3 10），一年级以问候、礼貌、课堂指令、表达需求、简单提问为主——**低龄优先词汇与日常用语，不做语法讲解**，句子是整句听读记忆。`test/english_test.dart` 有「一年级有日常用语与问候句」「一年级能出满听句选义」两条用例守着。
 - `QuizEngine._tryMake` 的 switch 必须覆盖 `QuestionKind` 全部成员（含 5 个 `english*`），否则 switch 不穷尽会让**整个测试套件编译不过**，表现为「loading ...」后直接失败，而不是某条用例红。
 - **英语干扰项要排除字母条目**：字母也是纯小写英文，混进「听音选词」会变成「听 cat 选 H」。`_englishListen` 的 `excludePoem` 里已排除 `_isEnglishLetter`。
 - **题型占比上限**（2026-11-23 加）：`kindWeights` 只影响「谁更容易被抽到」，压不住题池结构造成的硬偏斜——26 个字母条目只能出大小写题，而它们占一年级题池一半，实测一局 10 题有 5.5 题是大小写，与「以听为主」相反。所以 `kKindShareCaps`（`practice_scope.dart`）给 `englishCase` 设了 0.25 占比天花，由 `PracticePlan.kindShareCaps` 传给 `QuizEngine.generate`。**上限用比例不用绝对题数**（一局有 10 题与 15 题两种规模），且**只在可选题型多于一种时生效**——只点一种题型时无视上限，否则定向练大小写凑不满一局。被上限挡住的条目会从待选池消耗掉但不算已用，后续由别的条目补足，所以压的是占比不是整局长度（用例断言每局仍 ≥9.5 题）。
@@ -141,6 +143,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - 填空题：字池需能精确拼出答案（同一字出现几次就放几次），干扰字不得与答案字重复；`_plain()` 的正则负责去标点，长度计算、挖空、字池都依赖它——改正则要同时检查 `_minLineLength` 与 `blankLen` 分支。
 - 计分：**每题 1 分，只算对错**，年级与难度策略不影响得分（2026-11-19 取消倍率与连击加成）。答错不倒扣。**不做连击**（2026-11-20 移除局内连击条、反馈文案、结算「最高连击」与 `best_combo` 存档键），不要加回。
 - 一局内每条目只出一次题；`preferPoemIds`（错题优先）只影响前 3 题，其余打乱。
+- **未练优先**（2026-11-23 加）：`generate(practicedIds:)` 把已练过的条目排到队尾，一局先出没练过的。没有这条规则时大题库存（数学 488 条）每局都在随机撒点，单局只覆盖 2%，做十局也感觉不到在往前走——实测加规则后数学连做 10 局累计到 100 条、无一重复。**只在还剩没练过的时候生效**，全练完自动回落到原来的加权抽样，不会出空局；**只影响顺序不影响年级权重**（两个队列内部都仍按 `gradeWeights` 加权），所以不会因为「先练新的」打乱各年级配比。`practicedIds` 来自 `ProgressStore.practicedEntryIds`（含答错的条目，见「已练覆盖度」）。
 
 ## 关键不变量
 

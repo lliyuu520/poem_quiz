@@ -23,6 +23,16 @@ class QuizEngine {
   /// [kinds] 为空时全部题型都可能出现。优先从 [preferPoemIds] 里出题
   /// （错题重练用），用完后回落到其余候选。
   ///
+  /// [preferPoemIds] 是错题重练的优先条目（只影响前 3 题）。
+  ///
+  /// [practicedIds] 里已有的条目**排在后面**：一局先出没练过的，练完了才回头。
+  /// 大题库存（数学 488 条）单局只能覆盖百分之几，没有这条规则时每局都在
+  /// 随机撒点，孩子做十局也感觉不到在往前走。排除逻辑在引擎里做，因为只有
+  /// 引擎知道当前范围的题池是哪一批。
+  ///
+  /// 这条规则只影响**顺序**，不影响年级权重与题型配比：没练过的条目内部仍然
+  /// 按 [gradeWeights] 加权抽样，所以不会因为「先练新的」打乱各年级配比。
+  ///
   /// [excludePoemIds] 中的诗完全不出题（生涯模式已掌握的诗）。
   /// [gradeWeights] 决定题库范围与各年级的相对频率（学龄分层）：
   /// 键为年级、值为权重，如三年级为 `{1: 0.25, 2: 0.5, 3: 1}`。
@@ -47,6 +57,7 @@ class QuizEngine {
     Set<QuestionKind>? kinds,
     List<String> preferPoemIds = const <String>[],
     Set<String> excludePoemIds = const <String>{},
+    Set<String> practicedIds = const <String>{},
     int optionCount = 4,
     Map<int, double> gradeWeights = const <int, double>{},
     Map<QuestionKind, double> kindWeights = const <QuestionKind, double>{},
@@ -82,18 +93,41 @@ class QuizEngine {
     // 错题优先：偏好诗先出（最多前 3 题），其余按加权抽样消耗。
     final preferred = available.where((p) => preferPoemIds.contains(p.id)).toList()..shuffle(_random);
     final pendingPreferred = <Poem>[...preferred];
-    final pendingOthers = available.where((p) => !preferPoemIds.contains(p.id)).toList();
 
-    while (result.length < count && (pendingPreferred.isNotEmpty || pendingOthers.isNotEmpty)) {
+    // 未练优先：已练过的条目排到队尾，没练过的先出。
+    //
+    // 只在**还剩没练过的**时候生效——全练完了就退回原来的加权抽样，
+    // 否则做满一轮之后每局都出不了题。这条不影响年级权重：两个队列内部
+    // 都仍按 gradeWeights 加权抽样。
+    final fresh = <Poem>[];
+    final seen = <Poem>[];
+    for (final p in available) {
+      if (preferPoemIds.contains(p.id)) continue;
+      (practicedIds.contains(p.id) ? seen : fresh).add(p);
+    }
+    final pendingFresh = <Poem>[...fresh];
+    final pendingSeen = <Poem>[...seen];
+
+    while (result.length < count &&
+        (pendingPreferred.isNotEmpty || pendingFresh.isNotEmpty || pendingSeen.isNotEmpty)) {
       final Poem poem;
-      if (pendingPreferred.isNotEmpty && (result.length < 3 || pendingOthers.isEmpty || _random.nextDouble() < 0.5)) {
+      if (pendingPreferred.isNotEmpty &&
+          (result.length < 3 ||
+              (pendingFresh.isEmpty && pendingSeen.isEmpty) ||
+              _random.nextDouble() < 0.5)) {
         poem = pendingPreferred.removeAt(0);
-      } else {
-        // 加权抽样：本年级概率最高，越低年级越低，避免低年级题充斥整局。
-        final picked = _pickWeighted(pendingOthers, gradeWeights);
+      } else if (pendingFresh.isNotEmpty) {
+        // 还没练过的先出，内部按年级加权。
+        final picked = _pickWeighted(pendingFresh, gradeWeights);
         if (picked == null) break;
         poem = picked;
-        pendingOthers.remove(picked);
+        pendingFresh.remove(picked);
+      } else {
+        // 都练过了，回落到原来的加权抽样。
+        final picked = _pickWeighted(pendingSeen, gradeWeights);
+        if (picked == null) break;
+        poem = picked;
+        pendingSeen.remove(picked);
       }
 
       if (usedPoems.contains(poem.id)) continue;

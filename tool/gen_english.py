@@ -242,7 +242,15 @@ TEXT_OVERRIDES = {
     "word_windy": "windy.",
     "word_sing": "sing.",
     "word_busy": "busy.",
+    # 极短问候语：`Hi!` 的感叹号让风悦稳定读成 "Bye"（同 seed 四次复验一致，
+    # 命中的是「感叹号 + 单音节」这个组合）。改句号后两次复验都读对 `Hi!`，
+    # 且转码链路无关——`Hi.` 的 mp3 与同款 32k opus 都识别为 Hi。
+    # 只改合成文本，题库与题面仍是 `Hi!`。
+    "sentence_25": "Hi.",
 }
+
+# 与 TEXT_OVERRIDES 同步的期望文本表由 verify_english_audio.py 单独维护，
+# 新增改写时两边都要加，否则校验会按题库原文比对而误报。
 
 # 直接要服务端原生 opus 的条目（值是语速）。本地「mp3 → ffmpeg libopus 32k」
 # 转码会削掉个别浊音瞬态：sent_bread 的 b 在 32k~128k 本地转码下全读成
