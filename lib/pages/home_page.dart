@@ -162,12 +162,14 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute<void>(
         builder: (_) => QuizPage(
           session: session,
+          store: _store,
           onFinish: (s) => _store.recordSession(
             score: s.score,
             answered: s.index + 1,
             correct: s.correctCount,
             wrongIds: s.wrongPoemIds,
             clearedIds: s.clearedPoemIds,
+            practicedIds: s.practicedPoemIds,
             careerMode: s.careerMode,
           ),
         ),

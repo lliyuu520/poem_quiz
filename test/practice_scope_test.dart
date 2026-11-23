@@ -176,6 +176,66 @@ void main() {
       expect(plan(PracticeScope.extensionOnly).optionCount, 4);
       expect(plan(PracticeScope.grade(3)).kindWeights, isEmpty);
     });
+
+    test('题型占比上限：大小写题在任何策略下都有天花', () {
+      for (final tier in ChallengeTier.values) {
+        final caps = plan(PracticeScope.grade(1), tier: tier).kindShareCaps;
+        expect(caps[QuestionKind.englishCase], isNotNull,
+            reason: '$tier 没有给大小写题设上限');
+        expect(caps[QuestionKind.englishCase]!, lessThan(0.5),
+            reason: '上限过半等于没限');
+      }
+    });  });
+
+  group('题型占比上限', () {
+    PracticePlan englishPlan(ChallengeTier tier) => resolvePracticePlan(
+          scope: PracticeScope.grade(1),
+          entries: kEnglishTopic.entries,
+          recommendation: const GradeRecommendation.inSchool(1),
+          tier: tier,
+        );
+
+    /// 一年级英语：26 个字母条目只能出大小写题，占题池一半。
+    /// 没有上限时一局 10 题会有 5~6 题是大小写，与「以听为主」相反。
+    test('英语一年级大小写题不再占半局，且整局长度不受影响', () {
+      for (final tier in ChallengeTier.values) {
+        final plan = englishPlan(tier);
+        var caseCount = 0;
+        var length = 0;
+        const runs = 30;
+        for (var i = 0; i < runs; i++) {
+          final s = buildSession(
+            engine: QuizEngine(poems: kEnglishTopic.entries, random: Random(i + 7)),
+            topic: kEnglishTopic,
+            count: 10,
+            plan: plan,
+          );
+          length += s.questions.length;
+          caseCount += s.questions
+              .where((q) => q.kind == QuestionKind.englishCase)
+              .length;
+        }
+        final perSession = caseCount / runs;
+        expect(perSession, lessThanOrEqualTo(3),
+            reason: '$tier 大小写题平均 $perSession 题/局，超过上限');
+        expect(length / runs, greaterThanOrEqualTo(9.5),
+            reason: '$tier 压题型时把整局长度也压掉了：${length / runs} 题/局');
+      }
+    });
+
+    test('只点一种题型时无视上限，否则定向练习凑不满一局', () {
+      final engine = QuizEngine(poems: kEnglishTopic.entries, random: Random(3));
+      final qs = engine.generate(
+        count: 10,
+        kinds: <QuestionKind>{QuestionKind.englishCase},
+        gradeWeights: const <int, double>{1: 1.0},
+        kindShareCaps: const <QuestionKind, double>{QuestionKind.englishCase: 0.25},
+      );
+      expect(qs.length, 10, reason: '单一题型不该被占比上限卡住');
+      for (final q in qs) {
+        expect(q.kind, QuestionKind.englishCase);
+      }
+    });
   });
 
   group('范围持久化', () {

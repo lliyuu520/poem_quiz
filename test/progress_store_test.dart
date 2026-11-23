@@ -49,6 +49,72 @@ void main() {
     });
   });
 
+  group('已练覆盖度', () {
+    test('出过题的条目都算练过，不论对错', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      await store.recordSession(
+        score: 1,
+        answered: 2,
+        correct: 1,
+        wrongIds: const <String>['唐|李白|静夜思'],
+        clearedIds: const <String>['唐|杜甫|春望'],
+        practicedIds: const <String>['唐|李白|静夜思', '唐|杜甫|春望'],
+      );
+      // 答错的那条也算练过——这一局确实练了它。
+      expect(store.practicedEntryIds, hasLength(2));
+      expect(store.practicedEntryIds, contains('唐|李白|静夜思'));
+
+      // 与「已掌握」是两回事：只有答对的那条进了生涯。
+      expect(store.masteredPoemIds, isEmpty);
+    });
+
+    test('已练跨局累计并去重，落盘后可读回', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      await store.recordSession(
+        score: 1,
+        answered: 1,
+        correct: 1,
+        wrongIds: const <String>[],
+        clearedIds: const <String>['唐|李白|静夜思'],
+        practicedIds: const <String>['唐|李白|静夜思'],
+      );
+      await store.recordSession(
+        score: 1,
+        answered: 2,
+        correct: 1,
+        wrongIds: const <String>[],
+        clearedIds: const <String>[],
+        // 第一条重复出现，不应被数两次。
+        practicedIds: const <String>['唐|李白|静夜思', '唐|杜甫|春望'],
+      );
+      expect(store.practicedEntryIds, hasLength(2));
+
+      final reloaded = await ProgressStore.load(topicId: 'poetry');
+      expect(reloaded.practicedEntryIds, hasLength(2),
+          reason: '已练覆盖度应落盘');
+    });
+
+    test('已练不影响生涯重置；重置生涯后已练保留', () async {
+      final store = await ProgressStore.load(topicId: 'poetry');
+      await store.recordSession(
+        score: 2,
+        answered: 2,
+        correct: 2,
+        wrongIds: const <String>[],
+        clearedIds: const <String>['唐|李白|静夜思', '唐|杜甫|春望'],
+        practicedIds: const <String>['唐|李白|静夜思', '唐|杜甫|春望'],
+        careerMode: true,
+      );
+      expect(store.masteredPoemIds, hasLength(2));
+      expect(store.practicedEntryIds, hasLength(2));
+
+      await store.resetCareer();
+      // 生涯重置只清「答对过」，不清「见过」——覆盖度是历史事实。
+      expect(store.masteredPoemIds, isEmpty);
+      expect(store.practicedEntryIds, hasLength(2));
+    });
+  });
+
   group('重置生涯', () {
     test('重置后已掌握清空，其他统计保留', () async {
       final store = await ProgressStore.load(topicId: 'poetry');

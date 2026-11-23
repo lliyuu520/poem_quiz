@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/english_audio.dart';
 import '../data/pinyin_audio.dart';
+import '../data/progress_store.dart';
 import '../data/quiz_session.dart';
 import '../data/topic.dart';
 import '../models/question.dart';
@@ -14,10 +15,18 @@ import 'result_page.dart';
 
 /// 答题页：选择题与填空题共用。
 class QuizPage extends StatefulWidget {
-  const QuizPage({super.key, required this.session, required this.onFinish});
+  const QuizPage({
+    super.key,
+    required this.session,
+    required this.onFinish,
+    this.store,
+  });
 
   final QuizSession session;
   final Future<void> Function(QuizSession session) onFinish;
+
+  /// 传给结算页用来显示「已练 N / 总 M」。为 null 时结算页不显示这一行。
+  final ProgressStore? store;
 
   @override
   State<QuizPage> createState() => _QuizPageState();
@@ -101,11 +110,12 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Future<void> _finish() async {
+    // onFinish 会先记账（含 practicedIds），结算页读到的「已练」才是本局之后的。
     await widget.onFinish(widget.session);
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
-        builder: (_) => ResultPage(session: widget.session),
+        builder: (_) => ResultPage(session: widget.session, store: widget.store),
       ),
     );
   }

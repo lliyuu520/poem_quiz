@@ -30,6 +30,16 @@ class QuizEngine {
   ///
   /// [kindWeights] 是题型抽样权重（空表示等权），配合难度策略使用：轻松多出认读题，
   /// 挑战多出接句/补句这类需要主动回忆的题。
+  ///
+  /// [kindShareCaps] 是每种题型在一局内最多占的比例（如 `{englishCase: 0.25}`
+  /// 表示最多占四分之一），补 [kindWeights] 管不到的地方：权重只调「谁更容易
+  /// 被抽到」，但题型的天花板由题池结构决定——英语字母条目只能出大小写题，
+  /// 而字母占一年级题池的一半，光靠权重压不住。
+  ///
+  /// 上限只在可选题型多于一种时生效；调用方只点了这一种题型时无视上限，
+  /// 否则「只练大小写」会连一局都凑不满。被上限挡住的条目从待选池里消耗掉
+  /// 但不计入已用，后续由别的条目补足题数——所以压的是题型占比，不是整局长度。
+  ///
   /// [farDistractors] 把干扰项取得更远（轻松策略），
   /// [sameGroupDistractors] 优先取同朝代作者/同作者标题（挑战策略）。
   List<Question> generate({
@@ -40,6 +50,7 @@ class QuizEngine {
     int optionCount = 4,
     Map<int, double> gradeWeights = const <int, double>{},
     Map<QuestionKind, double> kindWeights = const <QuestionKind, double>{},
+    Map<QuestionKind, double> kindShareCaps = const <QuestionKind, double>{},
     bool farDistractors = false,
     bool sameGroupDistractors = false,
   }) {
@@ -47,6 +58,16 @@ class QuizEngine {
     final options = max(2, optionCount);
     final bias = _Bias(far: farDistractors, sameGroup: sameGroupDistractors);
     final used = <String>{};
+
+    /// 各题型已出的题数，用于 [kindShareCaps] 判上限。
+    final kindCount = <QuestionKind, int>{};
+    // 只点了一种题型时无视上限，否则定向练一种题型会凑不满一局。
+    final capsActive = enabled.length > 1;
+    int capFor(QuestionKind k) {
+      final share = kindShareCaps[k];
+      if (share == null) return count;
+      return max(1, (count * share).floor());
+    }
 
     /// 已经出过题的诗。一局内每首诗只出一次，否则同一首诗会占掉多个题位。
     final usedPoems = <String>{};
@@ -79,10 +100,12 @@ class QuizEngine {
 
       final kindList = _kindOrder(enabled, kindWeights);
       for (final kind in kindList) {
+        if (capsActive && (kindCount[kind] ?? 0) >= capFor(kind)) continue;
         final q = _tryMake(poem, kind, options, bias);
         if (q == null || used.contains(q.key)) continue;
         used.add(q.key);
         usedPoems.add(poem.id);
+        kindCount[kind] = (kindCount[kind] ?? 0) + 1;
         result.add(q);
         break;
       }

@@ -20,6 +20,7 @@ class ProgressStore extends ChangeNotifier {
   static const _kSessions = 'sessions';
   static const _kWrong = 'wrong_poems';
   static const _kMastered = 'career_mastered';
+  static const _kPracticed = 'practiced_entries';
   static const _kStages = 'stage_cleared';
   static const _kStageBest = 'stage_best_seconds';
   static const _kScope = 'practice_scope';
@@ -40,6 +41,14 @@ class ProgressStore extends ChangeNotifier {
 
   /// 生涯模式下已掌握的条目 id。生涯模式不再出这些题的题。
   final Set<String> masteredPoemIds = <String>{};
+
+  /// 出过题的条目 id（不论对错）。用来在结算页显示「本科目已练 N / 总 M」，
+  /// 让一局一局的积累可见——大题库单局只覆盖百分之几，没有这个数字，
+  /// 做完一局跟没做一样。
+  ///
+  /// 与 [masteredPoemIds] 不同：那个是「答对过」（生涯推进），这个是「见过」。
+  /// 答错了也算练过，因为这一局确实练了它。
+  final Set<String> practicedEntryIds = <String>{};
 
   /// 数独各难度档的完成局数，键是档位名（`one`~`five`）。
   ///
@@ -89,6 +98,16 @@ class ProgressStore extends ChangeNotifier {
         masteredPoemIds.addAll((jsonDecode(mastered) as List<dynamic>).cast<String>());
       } on FormatException {
         masteredPoemIds.clear();
+      }
+    }
+
+    final practiced = _prefs.getString(_key(_kPracticed));
+    if (practiced != null) {
+      try {
+        practicedEntryIds
+            .addAll((jsonDecode(practiced) as List<dynamic>).cast<String>());
+      } on FormatException {
+        practicedEntryIds.clear();
       }
     }
 
@@ -154,18 +173,22 @@ class ProgressStore extends ChangeNotifier {
   /// 一局结束后统一记账。
   ///
   /// [careerMode] 为真时，本轮答对的条目会被记为已掌握，日后生涯模式不再出题。
+  /// [practicedIds] 是本局出过题的条目（含答错的），只用于累计「已练」覆盖度。
   Future<void> recordSession({
     required int score,
     required int answered,
     required int correct,
     required List<String> wrongIds,
     required List<String> clearedIds,
+    Iterable<String> practicedIds = const <String>[],
     bool careerMode = false,
   }) async {
     sessions += 1;
     totalAnswered += answered;
     totalCorrect += correct;
     if (score > bestScore) bestScore = score;
+
+    practicedEntryIds.addAll(practicedIds);
 
     // 新错题放最前；本轮答对的从错题本移除。
     final next = <String>[
@@ -185,6 +208,7 @@ class ProgressStore extends ChangeNotifier {
     await _prefs.setInt(_key(_kCorrect), totalCorrect);
     await _prefs.setInt(_key(_kSessions), sessions);
     await _prefs.setString(_key(_kWrong), jsonEncode(wrongPoemIds));
+    await _prefs.setString(_key(_kPracticed), jsonEncode(practicedEntryIds.toList()));
     if (careerMode) {
       await _prefs.setString(_key(_kMastered), jsonEncode(masteredPoemIds.toList()));
     }

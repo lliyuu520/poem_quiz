@@ -208,6 +208,7 @@ class PracticePlan {
     required this.extensionPoolSize,
     required this.targetGrade,
     required this.needsBirthHint,
+    this.kindShareCaps = const <QuestionKind, double>{},
   });
 
   final PracticeScope scope;
@@ -220,6 +221,12 @@ class PracticePlan {
 
   /// 题型权重，空表示等权。
   final Map<QuestionKind, double> kindWeights;
+
+  /// 题型在一局内最多占的题数比例，空表示不限。与 [kindWeights] 互补：
+  /// 权重决定「谁更容易被抽到」，上限兜住题池结构造成的硬偏斜
+  /// （见 `QuizEngine.generate` 的注释）。用比例而不是绝对题数，
+  /// 是因为一局可能是 10 题也可能是 15 题，绝对值会随局题数走样。
+  final Map<QuestionKind, double> kindShareCaps;
 
   /// 展示用标题，如「三年级」或「跟随推荐 · 三年级」。
   final String label;
@@ -365,6 +372,7 @@ PracticePlan resolvePracticePlan({
     weights: weights,
     optionCount: optionCount,
     kindWeights: kindWeights,
+    kindShareCaps: kKindShareCaps,
     label: scope.describe(recommendation),
     grades: weights.keys.toSet(),
     curriculumPoolSize: curriculumPoolSize,
@@ -435,3 +443,20 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
       };
   }
 }
+
+/// 各策略下单局内题型最多占几成题。
+///
+/// 与 [kindWeightsFor] 互补，专治「题池结构决定题型配比」：权重只影响
+/// 「谁更容易被抽到」，但如果某类题型只能由一小批条目出、而这批条目占了
+/// 题池一半，光压权重也没用——英语字母条目（26 条，全是一年级）只能出
+/// 大小写题，一年级题池 52 条里它们占一半，一局 10 题会有 5~6 题是大小写，
+/// 与「以听为主」的定位相反。给这类题型设个占比天花，多出来的题位让给别的题型。
+///
+/// 目前三档用同一份上限：大小写配对是低阶认读，一两题热手足够，
+/// 策略再多也不该让它占满一局。真需要按策略区分时再改签名。
+///
+/// 上限只在可选题型多于一种时生效（见 `QuizEngine.generate`），
+/// 「只练大小写」这类定向出题不受影响。
+const Map<QuestionKind, double> kKindShareCaps = <QuestionKind, double>{
+  QuestionKind.englishCase: 0.25,
+};

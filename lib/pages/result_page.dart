@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../data/progress_store.dart';
 import '../data/quiz_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
@@ -7,9 +8,13 @@ import '../widgets/common.dart';
 
 /// 结算页：分数、正确率、错题清单。
 class ResultPage extends StatelessWidget {
-  const ResultPage({super.key, required this.session});
+  const ResultPage({super.key, required this.session, this.store});
 
   final QuizSession session;
+
+  /// 用来显示「本范围已练 N / 总 M」。为 null 时不显示这一行
+  /// （测试与不关心进度的调用方可以省略）。
+  final ProgressStore? store;
 
   @override
   Widget build(BuildContext context) {
@@ -197,12 +202,17 @@ class ResultPage extends StatelessWidget {
   }
 
   Widget _detailCard(int answered) {
+    final coverage = _coverage();
     return InkCard(
       child: Column(
         children: <Widget>[
           _Row(label: '范围', value: session.plan.label),
           const SizedBox(height: 12),
           _Row(label: '难度', value: session.plan.tier.title),
+          if (coverage != null) ...<Widget>[
+            const SizedBox(height: 12),
+            _Row(label: '已练进度', value: coverage),
+          ],
           const SizedBox(height: 12),
           _Row(label: '答对', value: '${session.correctCount} 题'),
           const SizedBox(height: 12),
@@ -223,6 +233,25 @@ class ResultPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 「本科目当前范围已练 N / 总 M」。
+  ///
+  /// 一条数字同时解决两种科目的问题：大题库（数学 488 条）单局只覆盖百分之几，
+  /// 没有这个累计数字，做完一局跟没做一样；小题库（诗词一年级 12 首）一局就
+  /// 覆盖大半，如实说出来比假装随机更诚实——孩子知道这轮快练完了。
+  ///
+  /// 统计的是 [ProgressStore.practicedEntryIds]（出过题，含答错）在**当前范围**
+  /// 内的条数，而不是全库：范围换了，进度条就该重新算。
+  String? _coverage() {
+    final store = this.store;
+    if (store == null) return null;
+    final inScope = session.topic.entries
+        .where((e) => session.plan.weights.containsKey(e.grade))
+        .toList();
+    if (inScope.isEmpty) return null;
+    final done = inScope.where((e) => store.practicedEntryIds.contains(e.id)).length;
+    return '$done / ${inScope.length} ${session.topic.unit}';
   }
 }
 

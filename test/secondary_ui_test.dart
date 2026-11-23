@@ -286,5 +286,51 @@ void main() {
       expect(find.text(plan.label), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('已练进度按当前范围统计，不传 store 时不显示', (tester) async {
+      final plan = resolvePracticePlan(
+        scope: PracticeScope.grade(1),
+        entries: kPoetryTopic.entries,
+        recommendation: const GradeRecommendation.inSchool(1),
+      );
+      final inScope = kPoetryTopic.entries
+          .where((e) => plan.weights.containsKey(e.grade))
+          .toList();
+      expect(inScope.length, greaterThan(3), reason: '一年级题池应足够大');
+
+      final session = buildSession(
+        engine: QuizEngine(poems: kPoetryTopic.entries, random: Random(4)),
+        topic: kPoetryTopic,
+        count: 5,
+        plan: plan,
+      );
+
+      // 不传 store：这一行整体不出现，旧调用方不受影响。
+      await pumpAt(tester, ResultPage(session: session));
+      expect(find.text('已练进度'), findsNothing);
+
+      // 传 store：显示 0 / 池大小（还没记账）。
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      await pumpAt(tester, ResultPage(session: session, store: store));
+      expect(find.text('已练进度'), findsOneWidget);
+      expect(find.text('0 / ${inScope.length} 首'), findsOneWidget);
+
+      // 记账后再看：只数本局出过的题。
+      await store.recordSession(
+        score: 1,
+        answered: 5,
+        correct: 5,
+        wrongIds: const <String>[],
+        clearedIds: const <String>[],
+        practicedIds: session.practicedPoemIds,
+      );
+      await pumpAt(tester, ResultPage(session: session, store: store));
+      final done = inScope
+          .where((e) => store.practicedEntryIds.contains(e.id))
+          .length;
+      expect(done, greaterThan(0), reason: '记完账后应有已练条目');
+      expect(find.text('$done / ${inScope.length} 首'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

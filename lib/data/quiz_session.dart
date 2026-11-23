@@ -32,6 +32,10 @@ class QuizSession extends ChangeNotifier {
   /// 生涯模式：答对的诗会被记为已掌握，之后不再出题。
   final bool careerMode;
 
+  /// 本局题目的条目 id（含答错的），供调用方累计「已练」覆盖度。
+  late final List<String> practicedPoemIds =
+      questions.map((q) => q.poem.id).toList();
+
   int index = 0;
   int correctCount = 0;
   int score = 0;
@@ -116,6 +120,7 @@ QuizSession buildSession({
     optionCount: effectivePlan.optionCount,
     gradeWeights: effectivePlan.weights,
     kindWeights: effectivePlan.kindWeights,
+    kindShareCaps: effectivePlan.kindShareCaps,
     farDistractors: effectivePlan.farDistractors,
     sameGroupDistractors: effectivePlan.sameGroupDistractors,
   );
