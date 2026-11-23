@@ -32,7 +32,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：488 条规则生成（一年级 196 / 二年级 162 / 三年级 130）；`MathExpr` 解析算式 |
 | `lib/data/chengyu.dart` | 成语题库 `kChengyu`：122 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
-| `lib/data/english.dart` | 英语题库 `kEnglish`：82 条（字母 26 / 主题词 / 短句），年级 1-2（**由 `tool/gen_english.py` 生成，不要手改**） |
+| `lib/data/english.dart` | 英语题库 `kEnglish`：112 条（字母 26 / 主题词 62 / 短句 24），年级 1-3（**由 `tool/gen_english.py` 生成，不要手改**） |
 | `lib/data/english_audio.dart` | 英语音频键与缓存入口；共用 `speech_audio.dart` 的下载与播放 |
 | `lib/data/pinyin_audio.dart` | 拼音点读音频键：按字词 UTF-16 编码生成稳定文件名 |
 | `lib/data/speech_audio.dart` | 英语 / 拼音音频共用播放与缓存：**音频不在 APK 里**，按条目从 OSS 懒下载到本地 |
