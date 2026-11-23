@@ -65,14 +65,24 @@ go run .                   # 需要本地 Redis
 
 ## 构建与部署
 
+**不用 Docker。** 交叉编译成静态链接单二进制，scp 上去 + systemd 托管：
+
 ```bash
-cd server
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o shi-account
-# 产物约 15MB，scp 到 ECS 即可运行
+./build.sh                 # → ./shi-account，约 8MB，statically linked
 ```
 
-Redis 用阿里云 Redis 服务时，把 `REDIS_ADDR`、`REDIS_PASSWORD` 写成内网
-地址与实例密码。**不要把 Redis 暴露公网**。
+```bash
+file shi-account
+# ELF 64-bit LSB executable, x86-64, statically linked, stripped
+```
+
+完整步骤（含 systemd unit、nginx 反代、升级流程）见 [`deploy/README.md`](deploy/README.md)。
+
+内存占用：二进制 8MB、常驻约 10~15MB，无容器开销。
+
+Redis 用阿里云 Redis 或 ECS 本地 Redis 都行，把 `REDIS_ADDR`、`REDIS_PASSWORD`
+写成实际地址与密码。**服务只监听 127.0.0.1，由 nginx 反代对外**——
+不要把 Go 服务开在 `0.0.0.0`，也不要把 Redis 暴露公网。
 
 ## 待办
 

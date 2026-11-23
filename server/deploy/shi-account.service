@@ -1,0 +1,38 @@
+[Unit]
+Description=Shi account & cloud save service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 用非 root 账号跑：即使服务被攻破也拿不到 root。先 useradd -r -s /sbin/nologin shi
+User=shi
+Group=shi
+WorkingDirectory=/opt/shi-account
+ExecStart=/opt/shi-account/shi-account
+
+# ── 配置：改这里之前先确认 Redis 是内网地址 ──
+Environment=LISTEN_ADDR=127.0.0.1:8080
+Environment=REDIS_ADDR=127.0.0.1:6379
+Environment=REDIS_PASSWORD=
+Environment=REDIS_DB=0
+Environment=SESSION_TTL=720h
+
+Restart=on-failure
+RestartSec=3s
+
+# 只监听回环，由 nginx 在前面做 HTTPS 与限流。
+# 不要把 Go 服务直接开在 0.0.0.0 —— 那等于把一个无 TLS 的口令接口挂到公网。
+# PrivateTmp 与 ProtectSystem 限制服务能碰到的文件范围。
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+ReadWritePaths=/opt/shi-account
+
+# 日志走 journald：journalctl -u shi-account -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
