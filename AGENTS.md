@@ -1,6 +1,6 @@
 # AGENTS.md — poem_quiz（拾）
 
-古诗词 / 拼音 / 数学 / 英语 / 成语 / 数独答题 App。Flutter 实现，纯离线（题库内置于代码，进度存本地），**只面向自己使用**，也给孩子玩。
+古诗词 / 拼音 / 成语 / 文学常识 / 歇后语 / 错别字 / 文言实词 / 词语 / 数学 / 英语 / 数独答题 App。Flutter 实现，纯离线（题库内置于代码，进度存本地），**只面向自己使用**，也给孩子玩。
 
 ## 定位与边界
 
@@ -26,7 +26,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 | 路径 | 内容 |
 |---|---|
-| `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 题型集合 + 存储键前缀；`TopicMode`（quiz / sudoku） |
+| `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 题型集合 + 存储键前缀 + 导航归属（`group` 学科组 id、`tabLabel` 二级块短名）；`TopicMode`（quiz / sudoku） |
 | `lib/data/topics.dart` | `kTopics`（诗词、拼音、成语、文学常识、歇后语、错别字、文言实词、词语、数学、英语、数独）、`kSubjectGroups`（语文/数学/英语三组，数独不入组）、`kDefaultTopic`；新增科目在这里加一条 |
 | `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
@@ -69,10 +69,10 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 同一 app 内切换科目，进度与错题本**按科目隔离**。
 
 - 页面一律从 `Topic` 取数，**不再直接引用 `kPoems`**。`kPoems` 只应出现在 `topics.dart` 的科目定义里。
-- **科目切换入口是首页顶部的 `_TopicTabs`**（遍历 `kTopics` 横排），不是设置页。切换只换根壳里的 `_topic` / `_store` 指针——启动时所有科目的 `ProgressStore` 已一次读齐，切换路径上没有磁盘 IO。
-- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`tagline`/`intro`（首页文案）、`unit`/`searchHint` 等文案。`seal` 仍是必填构造参数（填个两行字应付即可），但**不要给 `accent`/`accentSoft`/`seal` 接 UI**——字段保留兼容，界面已统一朱红。
+- **科目切换入口是首页顶部的两层 `_TopicTabs`**，不是设置页：一级遍历 `kSubjectGroups`（语文 / 数学 / 英语三组），二级遍历当前组内的科目，文案用 `Topic.displayTabLabel`（即 `tabLabel ?? name`），仅当组内科目数 > 1 时渲染（当前只有语文触发）。**语文有 8 个子科目，二级用块状方格**（`_TopicChip` + `Wrap`）而不是等分 tab：窄屏四列两行、44dp 高，宽屏 48dp——一行等分每格只剩约 40dp 读不清。**数独不在 tab 行**，走标题区的「玩数独」独立入口。每组记住上次选中的子科目（`_HomePageState._lastSubTopic` 内存 Map，不落盘）。切换只换根壳里的 `_topic` / `_store` 指针——启动时所有科目的 `ProgressStore` 已一次读齐，切换路径上没有磁盘 IO。
+- 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`group`（学科组 id，语文填 `'chinese'`）、`tabLabel`（二级块两字短名）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`tagline`/`intro`（首页文案）、`unit`/`searchHint` 等文案。`seal` 仍是必填构造参数（填个两行字应付即可），但**不要给 `accent`/`accentSoft`/`seal` 接 UI**——字段保留兼容，界面已统一朱红。
 - **题型随科目走，不随玩法走**：`Topic.kinds` 决定本科目能出哪些题型，`buildSession` 不传 `kinds` 时自动取科目题型，不会跨科目混题。玩法只决定题数与是否用错题本/生涯。
-- **学龄分档**：诗词、拼音、数学、成语都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
+- **学龄分档**：诗词、拼音、数学、成语、文学常识、歇后语、错别字、文言实词、词语都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。
 - **学龄由出生年月推算，不是用户选择的**（2026-11-19 改）：`gradeForBirth(birthYear, birthMonth)` 按 9 月 1 日入学分界推出在读年级，九年级以上与未入学都落拓展档。出生年月存 `UserProfile`（裸键 `birth_year` / `birth_month`，全局一份，不属于任何科目），设置页修改。**首页没有 `_GradeCard` 了**——推算结果只作为练习范围的默认值。
 - **练习范围与难度策略是两个正交维度**（2026-11-20 改）：`PracticeScope` 决定「出哪些年级的条目」（跟随推荐 / 指定年级 / 年级区间 / 教材全覆盖 / 仅拓展 / 全库），`ChallengeTier` 决定「怎么考」（轻松 / 标准 / 挑战，三档均为 A、B、C、D 四个选项；轻松多认读 / 挑战多回忆）。两者按科目存在 `ProgressStore` 的 `practice_scope` / `challenge_tier` 键，由 `resolvePracticePlan()` 解析成 `PracticePlan`（`weights` + `optionCount` + `kindWeights` + 干扰项偏好），再喂给 `QuizEngine.generate`。**不要在 UI 里重算计划**，首页只调 `resolvePracticePlan()`。
 - **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库含一~三年级条目（`graded` 自动为 true），推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
@@ -203,6 +203,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - **交付门禁**（收尾逐条核对，全过才算完成）：
   1. 跨模块易漏清单：
      - 动 `QuestionKind` → switch 穷尽，否则整套测试编译失败；
+     - 加题库类科目 → `topics.dart` 加 `Topic`（含 `group` / `tabLabel`）+ 题库脚本生成（不手改 dart）+ `test/<name>_test.dart`（id 唯一、每档有题、干扰项无双答案）；首页二级块由 `group` 自动出现，不用改导航；
      - 加存档字段 → `toJson` / `applySnapshot` 同步 + `snapshotVersion` 递增 + 序列化往返用例；
      - 加英语词/句 → 插画画法 + 音频合成 + ASR 校验 + 上传 OSS；**句子只能追加到末尾**；
      - 加页面 → 窄屏 + 宽屏布局 + `layout_test.dart` 三档宽度；
