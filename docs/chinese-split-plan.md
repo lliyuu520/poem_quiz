@@ -137,8 +137,8 @@ const kSubjectGroups = <({String id, String name})>[
 
 | 阶段 | 内容 | 独立完成判据 | WIP |
 |---|---|---|---|
-| T1 | 数据层：`Topic.group`/`tabLabel` + `kSubjectGroups`（三组，不含数独）+ 现有 5 个学科挂 group | `flutter analyze` 无问题；现有测试不挂；`kTopics` 长度不变 | ✅ 已落地（`79948dd`） |
-| T2 | UI：两层 `_TopicTabs`（一级三组）+ 标题区「玩数独」独立入口 + 每组记住子科目 + `layout_test.dart` 三档宽度 | 三组一级 tab 高亮正确；语文二级现有 3 个 tab 可切（7 个待 T3~T6）；数独从 tab 拿掉、标题区入口直达棋盘页；窄/中/宽屏不溢出；`flutter test` 全绿 | ✅ 已落地（`79948dd`，待 D1/D2 再开 T3~T6） |
+| T1 | 数据层：`Topic.group`/`tabLabel` + `kSubjectGroups`（三组，不含数独）+ 现有 5 个学科挂 group | `flutter analyze` 无问题；现有测试不挂；`kTopics` 长度不变 | ✅ 已落地（`e187959`） |
+| T2 | UI：两层 `_TopicTabs`（一级三组）+ 标题区「玩数独」独立入口 + 每组记住子科目 + `layout_test.dart` 三档宽度 | 三组一级 tab 高亮正确；语文二级现有 3 个 tab 可切（7 个待 T3~T6）；数独从 tab 拿掉、标题区入口直达棋盘页；窄/中/宽屏不溢出；`flutter test` 全绿 | ✅ 已落地（`e187959`，待 D1/D2 再开 T3~T6） |
 | T3 | 文学常识：`tool/literature_bank.json` + 生成脚本 + 题库 + 题型 + `Topic` + 测试 | 独立科目可出满一局；干扰项无双答案；全绿 | 链路验证 |
 | T4 | 歇后语：同 T3 套路 | 同上 | |
 | T5 | 错别字/形近字：同 T3 套路 | 同上 | |
