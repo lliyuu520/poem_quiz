@@ -27,12 +27,15 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | 路径 | 内容 |
 |---|---|
 | `lib/data/topic.dart` | **科目抽象** `Topic`：题库 + 分组维度 + 题型集合 + 存储键前缀；`TopicMode`（quiz / sudoku） |
-| `lib/data/topics.dart` | `kTopics`（诗词、拼音、成语、文学常识、数学、英语、数独）、`kSubjectGroups`（语文/数学/英语三组，数独不入组）、`kDefaultTopic`；新增科目在这里加一条 |
+| `lib/data/topics.dart` | `kTopics`（诗词、拼音、成语、文学常识、歇后语、错别字、文言实词、数学、英语、数独）、`kSubjectGroups`（语文/数学/英语三组，数独不入组）、`kDefaultTopic`；新增科目在这里加一条 |
 | `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：488 条规则生成（一年级 196 / 二年级 162 / 三年级 130）；`MathExpr` 解析算式 |
 | `lib/data/chengyu.dart` | 成语题库 `kChengyu`：122 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
 | `lib/data/literature.dart` | 文学常识题库 `kLiterature`：48 条，年级 7-9 + 拓展，一型题型 `literaturePick`（**由 `tool/gen_literature.py` 生成，不要手改**）；只考诗词考不到的并称/字号/流派/体裁/文学史常识，不做名句→作者 |
+| `lib/data/xiehouyu.dart` | 歇后语题库 `kXiehouyu`：49 条，年级 4-9 + 拓展，一型题型 `xiehouyuLink`（给前半选后半；**由 `tool/gen_xiehouyu.py` 生成，不要手改**）；后半唯一 |
+| `lib/data/typo.dart` | 错别字/形近字题库 `kTypo`：47 条，年级 4-9，一型题型 `typoCorrect`（**由 `tool/gen_typo.py` 生成，不要手改**）；`author` 存本条错写（`|` 连接）作真陷阱，其余干扰项取别的正确词 |
+| `lib/data/wenyan.dart` | 文言实词题库 `kWenyan`：40 条，年级 7-9，一型题型 `wenyanMeaning`（**由 `tool/gen_wenyan.py` 生成，不要手改**）；例句锚定一词多义，〈〉标目标词 |
 | `lib/data/english.dart` | 英语题库 `kEnglish`：135 条（字母 26 / 主题词 62 / 短句 47），年级 1-3（**由 `tool/gen_english.py` 生成，不要手改**） |
 | `lib/data/english_audio.dart` | 英语音频键与缓存入口；共用 `speech_audio.dart` 的下载与播放 |
 | `lib/data/pinyin_audio.dart` | 拼音点读音频键：按字词 UTF-16 编码生成稳定文件名 |
@@ -40,12 +43,12 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：113 首，唐 67 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位 + `gradeForBirth()` 推算 + **题池加权** `cumulativeWeights()` / `rangeWeights()` / `fullCurriculumWeights()`；`ReviewMode`（off / standard 1/3 / reinforced 1/2） |
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
-| `lib/data/quiz_engine.dart` | 出题：18 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/quiz_engine.dart` | 出题：21 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>`；`practicedEntryIds`（已练覆盖度，含答错）与 `masteredPoemIds`（答对过）是两回事 |
 | `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
-| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 18 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 3 / 文学常识 1 / 英语 5） |
+| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 21 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 3 / 文学常识 1 / 歇后语 1 / 错别字 1 / 文言 1 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/widgets/english_art.dart` | 英语内置矢量插图（`EnglishArt`），不引外部图片资源 |
@@ -59,7 +62,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `test/math_test.dart` | 数学题库、算式解析、三种算式题型、评语与摘要格式 |
 | `test/chengyu_test.dart` | 成语题库完整性、三种题型（选字/知词义/读成语）、干扰项与题池容量 |
 | `test/sudoku_test.dart` | 数独终盘合法性、题面唯一解、档位映射、首页与盘面渲染 |
-| `tool/` | 一次性辅助脚本（图标、拼音题库、英语题库与音频校验、文学常识题库、adb 驱动答题），不参与构建 |
+| `tool/` | 一次性辅助脚本（图标、拼音题库、英语题库与音频校验、文学常识/歇后语/错别字/文言题库、adb 驱动答题），不参与构建 |
 
 ## 多科目架构
 

@@ -140,9 +140,9 @@ const kSubjectGroups = <({String id, String name})>[
 | T1 | 数据层：`Topic.group`/`tabLabel` + `kSubjectGroups`（三组，不含数独）+ 现有 5 个学科挂 group | `flutter analyze` 无问题；现有测试不挂；`kTopics` 长度不变 | ✅ 已落地（`e187959`） |
 | T2 | UI：两层 `_TopicTabs`（一级三组）+ 标题区「玩数独」独立入口 + 每组记住子科目 + `layout_test.dart` 三档宽度 | 三组一级 tab 高亮正确；语文二级现有 3 个 tab 可切（7 个待 T3~T6）；数独从 tab 拿掉、标题区入口直达棋盘页；窄/中/宽屏不溢出；`flutter test` 全绿 | ✅ 已落地（`e187959`，待 D1/D2 再开 T3~T6） |
 | T3 | 文学常识：`tool/literature_bank.json` + 生成脚本 + 题库 + 题型 + `Topic` + 测试 | 独立科目可出满一局；干扰项无双答案；全绿 | ✅ 已落地（未提交，48 条，`literaturePick`） |
-| T4 | 歇后语：同 T3 套路 | 同上 | 待做 |
-| T5 | 错别字/形近字：同 T3 套路 | 同上 | 待做 |
-| T6 | 文言实词：同 T3 套路，例句逐条人审 | 同上 + 长例句渲染正确 | 待做 |
+| T4 | 歇后语：同 T3 套路 | 同上 | ✅ 已落地（49 条，`xiehouyuLink`） |
+| T5 | 错别字/形近字：同 T3 套路 | 同上 | ✅ 已落地（47 条，`typoCorrect`；方案 §4.3 的 `typoCorrect`/`homophonePick` 合并为单一 `typoCorrect`，选项含本条错写真陷阱） |
+| T6 | 文言实词：同 T3 套路，例句逐条人审 | 同上 + 长例句渲染正确 | ✅ 已落地（40 条，`wenyanMeaning`；例句锚定一词多义） |
 | T7 | 回归：`flutter test` + `flutter analyze` + `flutter build apk --release` + 文档收口 | 三条机械验证全过；待办表状态改「待发布」 | |
 | T8 | 发布：版本号 + APK + OSS 上传 + `version.json` + 刷 CDN | 真机更新闭环确认 | 单独批次 |
 

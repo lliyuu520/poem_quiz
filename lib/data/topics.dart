@@ -8,6 +8,9 @@ import 'math.dart';
 import 'pinyin.dart';
 import 'poems.dart';
 import 'topic.dart';
+import 'typo.dart';
+import 'wenyan.dart';
+import 'xiehouyu.dart';
 
 /// 学科组：首页一级 tab。数独偏游戏，不在此列，改由首页独立入口进入。
 /// [id] 与 [Topic.group] 对应；[name] 是一级 tab 文案。
@@ -302,13 +305,130 @@ String _literatureDetail(Poem p) => p.lines.join('\n');
 String _literatureSummaryFromId(List<String> parts) =>
     parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
 
-/// 已上线的科目，按首页学科组排列：语文（诗词/拼音/成语/文学常识）、
+/// 歇后语科目：给前半选后半，按学龄分档。
+///
+/// 题库由 `tool/gen_xiehouyu.py` 从 `tool/xiehouyu_bank.json` 生成，不要手改。
+/// 字段映射：`title`=前半（题干），`author`=后半（答案），`lines`=释义与用法。
+/// 后半在题库内唯一——两条前半共用一个后半会让选项出现两个正确答案。
+const Topic kXiehouyuTopic = Topic(
+  id: 'xiehouyu',
+  name: '歇后语',
+  unit: '条',
+  groupLabel: '类别',
+  group: 'chinese',
+  tabLabel: '歇后',
+  searchHint: '搜前半或后半',
+  entries: kXiehouyu,
+  groupOf: _xiehouyuGroupOf,
+  metaOf: _xiehouyuMeta,
+  kinds: <QuestionKind>{QuestionKind.xiehouyuLink},
+  nameOf: _xiehouyuName,
+  summaryOf: _xiehouyuSummary,
+  tagline: '半句一猜，俗语入味',
+  intro: '给前半句，选出后半句。谐音、喻事、故事各有门道。',
+  seal: '语\nquiz',
+  accent: AppColors.chengyu,
+  accentSoft: AppColors.chengyuSoft,
+  summaryFromId: _xiehouyuSummaryFromId,
+  detailOf: _xiehouyuDetail,
+);
+
+String _xiehouyuGroupOf(Poem p) => p.dynasty;
+String _xiehouyuMeta(Poem p) => p.author;
+String _xiehouyuName(Poem p) => p.title;
+String _xiehouyuSummary(Poem p) => '${p.title}——${p.author}';
+String _xiehouyuDetail(Poem p) => p.lines.join('\n');
+
+/// 歇后语条目 id 是「分组|后半|前半」，摘要写成「外甥打灯笼——照旧（舅）」。
+String _xiehouyuSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]}——${parts[1]}' : parts.join(' · ');
+
+/// 错别字 / 形近字科目：给语境选正确写法，按学龄分档。
+///
+/// 题库由 `tool/gen_typo.py` 从 `tool/typo_bank.json` 生成，不要手改。
+/// 字段映射：`title`=正确词形，`author`=错写（`|` 连接），`lines`=[语境句, 辨析]。
+/// 选项 = 正确词 + 本条错写（真陷阱）+ 别的条目正确词补齐。
+const Topic kTypoTopic = Topic(
+  id: 'typo',
+  name: '错别字',
+  unit: '条',
+  groupLabel: '类别',
+  group: 'chinese',
+  tabLabel: '错字',
+  searchHint: '搜词语或辨析',
+  entries: kTypo,
+  groupOf: _typoGroupOf,
+  metaOf: _typoMeta,
+  kinds: <QuestionKind>{QuestionKind.typoCorrect},
+  nameOf: _typoName,
+  summaryOf: _typoSummary,
+  tagline: '一字之差，意思两样',
+  intro: '给一句话，选出其中正确的写法。同音字、形近字、成语易错字都考。',
+  seal: '辨\nquiz',
+  accent: AppColors.chengyu,
+  accentSoft: AppColors.chengyuSoft,
+  summaryFromId: _typoSummaryFromId,
+  detailOf: _typoDetail,
+);
+
+String _typoGroupOf(Poem p) => p.dynasty;
+String _typoMeta(Poem p) => '正确：${p.title}';
+String _typoName(Poem p) => p.title;
+String _typoSummary(Poem p) => '${p.title}（正确写法）';
+String _typoDetail(Poem p) => p.lines.join('\n');
+
+/// 错别字条目 id 是「分组|错写|正确词」，摘要写正确词。
+String _typoSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]}（正确写法）' : parts.join(' · ');
+
+/// 文言实词科目：给例句选释义，按学龄分档（7-9 + 拓展）。
+///
+/// 题库由 `tool/gen_wenyan.py` 从 `tool/wenyan_bank.json` 生成，不要手改。
+/// 一词多义靠例句锚定：`title` 是「词@例句」，`author` 是该句语境下的释义，
+/// `lines`=[例句（〈〉标目标词）, 解析]。答案在例句语境下唯一。
+const Topic kWenyanTopic = Topic(
+  id: 'wenyan',
+  name: '文言实词',
+  unit: '条',
+  groupLabel: '虚实',
+  group: 'chinese',
+  tabLabel: '文言',
+  searchHint: '搜例句或释义',
+  entries: kWenyan,
+  groupOf: _wenyanGroupOf,
+  metaOf: _wenyanMeta,
+  kinds: <QuestionKind>{QuestionKind.wenyanMeaning},
+  nameOf: _wenyanName,
+  summaryOf: _wenyanSummary,
+  tagline: '一字一义，读通古文',
+  intro: '给一句文言，选出加〈〉的词在这个句子里的意思。一词多义，看语境。',
+  seal: '文\nquiz',
+  accent: AppColors.chengyu,
+  accentSoft: AppColors.chengyuSoft,
+  summaryFromId: _wenyanSummaryFromId,
+  detailOf: _wenyanDetail,
+);
+
+String _wenyanGroupOf(Poem p) => p.dynasty;
+String _wenyanMeta(Poem p) => p.lines.isEmpty ? '' : p.lines.first;
+String _wenyanName(Poem p) => p.author;
+String _wenyanSummary(Poem p) => '${p.lines.isEmpty ? '' : p.lines.first}——${p.author}';
+String _wenyanDetail(Poem p) => p.lines.join('\n');
+
+/// 文言条目 id 是「虚实|释义|词@例句」，摘要写例句与释义。
+String _wenyanSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]}——${parts[1]}' : parts.join(' · ');
+
+/// 已上线的科目，按首页学科组排列：语文（诗词/拼音/成语/文学常识/歇后语/错别字/文言实词）、
 /// 数学、英语，最后是数独（棋盘玩法，不进主 tab，由标题区独立入口进入）。
 final List<Topic> kTopics = <Topic>[
   kPoetryTopic,
   kPinyinTopic,
   kChengyuTopic,
   kLiteratureTopic,
+  kXiehouyuTopic,
+  kTypoTopic,
+  kWenyanTopic,
   kMathTopic,
   kEnglishTopic,
   kSudokuTopic,

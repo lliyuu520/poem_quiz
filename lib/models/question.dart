@@ -18,6 +18,9 @@ enum QuestionKind {
   idiomMeaning,
   idiomPinyin,
   literaturePick,
+  xiehouyuLink,
+  typoCorrect,
+  wenyanMeaning,
   englishListen,
   englishMeaning,
   englishCase,
@@ -40,6 +43,9 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.idiomMeaning => '知词义',
         QuestionKind.idiomPinyin => '读成语',
         QuestionKind.literaturePick => '知常识',
+        QuestionKind.xiehouyuLink => '接歇后语',
+        QuestionKind.typoCorrect => '辨字形',
+        QuestionKind.wenyanMeaning => '解文言',
         QuestionKind.englishListen => '听音选词',
         QuestionKind.englishMeaning => '认词义',
         QuestionKind.englishCase => '大小写',
@@ -82,6 +88,15 @@ bool isMathKind(QuestionKind kind) =>
 
 /// 是否为文学常识题型。
 bool isLiteratureKind(QuestionKind kind) => kind == QuestionKind.literaturePick;
+
+/// 是否为歇后语题型。
+bool isXiehouyuKind(QuestionKind kind) => kind == QuestionKind.xiehouyuLink;
+
+/// 是否为错别字/形近字题型。
+bool isTypoKind(QuestionKind kind) => kind == QuestionKind.typoCorrect;
+
+/// 是否为文言实词题型。
+bool isWenyanKind(QuestionKind kind) => kind == QuestionKind.wenyanMeaning;
 
 /// 一道题。选择题与填空题共用同一结构，填空题不使用 [options]。
 class Question {
@@ -138,10 +153,12 @@ class Question {
   /// 拼音题同样用 [focus] 展示题干、[options] 展示候选，只是文字是拼音。
   bool get isPinyin => isPinyinKind(kind);
 
-  /// 题干是长释义（成语「知词义」与文学常识「知常识」），
+  /// 题干是长释义/例句（成语「知词义」、文学常识「知常识」、文言「解文言」），
   /// 不能按单个词/短语的大字号渲染。
   bool get isLongPrompt =>
-      kind == QuestionKind.idiomMeaning || kind == QuestionKind.literaturePick;
+      kind == QuestionKind.idiomMeaning ||
+      kind == QuestionKind.literaturePick ||
+      kind == QuestionKind.wenyanMeaning;
 
   String get answerText => isBlank ? answerChars.join() : options[answerIndex];
 }

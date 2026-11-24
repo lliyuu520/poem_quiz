@@ -216,6 +216,12 @@ class QuizEngine {
         return _idiomPinyin(poem, optionCount, bias);
       case QuestionKind.literaturePick:
         return _literaturePick(poem, optionCount, bias);
+      case QuestionKind.xiehouyuLink:
+        return _xiehouyuLink(poem, optionCount, bias);
+      case QuestionKind.typoCorrect:
+        return _typoCorrect(poem, optionCount, bias);
+      case QuestionKind.wenyanMeaning:
+        return _wenyanMeaning(poem, optionCount, bias);
       case QuestionKind.englishListen:
         return _englishListen(poem, optionCount, bias);
       case QuestionKind.englishMeaning:
@@ -717,6 +723,127 @@ class QuizEngine {
       prompt: '选一选，这是谁或什么？',
       focus: entry.lines.first.trim(),
       key: '${entry.id}|literature',
+      options: options,
+      answerIndex: options.indexOf(entry.author),
+      note: note,
+    );
+  }
+
+  /// 歇后语：给前半（「外甥打灯笼」），选出后半（「照旧（舅）」）。
+  ///
+  /// 干扰项按 `author`（后半）排除：题库保证后半唯一，这里再兜一层，
+  /// 避免选项里出现两个正确答案。同分组（同为谐音、故事）更像。
+  Question? _xiehouyuLink(Poem entry, int optionCount, _Bias bias) {
+    if (entry.title.trim().isEmpty || entry.author.trim().isEmpty) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => p.id == entry.id || p.author == entry.author,
+      pool: (p) => p.author.trim().isEmpty ? const <String>[] : <String>[p.author],
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.author, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.xiehouyuLink,
+      poem: entry,
+      prompt: '这句歇后语的后半句是？',
+      focus: entry.title,
+      key: '${entry.id}|xiehouyu',
+      options: options,
+      answerIndex: options.indexOf(entry.author),
+      note: entry.lines.isEmpty ? '' : entry.lines.first.trim(),
+    );
+  }
+
+  /// 错别字/形近字：给语境（「作战计划已经（）完毕」），选出正确词形。
+  ///
+  /// `Poem.author` 是本题的错写（多个用 `|` 连接）——这是真正的陷阱选项，
+  /// 必须留在选项里。其余干扰项从**别的条目**的正确词取（排除同词），
+  /// 让选项恰好 4 个且不串义。分辨提示放 note。
+  Question? _typoCorrect(Poem entry, int optionCount, _Bias bias) {
+    if (entry.title.trim().isEmpty) return null;
+    if (entry.lines.isEmpty || entry.lines.first.trim().isEmpty) return null;
+
+    // 本条错写作为首选干扰项（真陷阱）。
+    final wrongs = entry.author
+        .split('|')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && s != entry.title)
+        .toList();
+    final options = <String>[entry.title];
+
+    for (final w in wrongs) {
+      if (options.length > optionCount) break;
+      if (!options.contains(w)) options.add(w);
+    }
+
+    // 用别的条目正确词补齐到 optionCount。
+    final remaining = optionCount - options.length;
+    if (remaining > 0) {
+      final fillers = _pickFromOthers(
+        exclude: entry,
+        count: remaining,
+        // 排除与已选选项相同的词，避免重复。
+        excludePoem: (p) =>
+            p.id == entry.id ||
+            p.title == entry.title ||
+            options.contains(p.title),
+        pool: (p) => p.title.trim().isEmpty ? const <String>[] : <String>[p.title],
+        bias: bias,
+        preferGroup: (p) => p.dynasty == entry.dynasty,
+      );
+      if (fillers.length < remaining) return null;
+      options.addAll(fillers);
+    }
+
+    if (options.length < max(2, optionCount)) return null;
+    options.shuffle(_random);
+    final note = entry.lines.length > 1 ? entry.lines[1].trim() : '';
+    return Question(
+      kind: QuestionKind.typoCorrect,
+      poem: entry,
+      prompt: '选出正确的写法',
+      focus: entry.lines.first.trim(),
+      key: '${entry.id}|typo',
+      options: options,
+      answerIndex: options.indexOf(entry.title),
+      note: note,
+    );
+  }
+
+  /// 解释文言词：给例句（目标词用〈〉标出），选出该词在本句中的意思。
+  ///
+  /// 一词多义靠例句锚定，答案（该句语境下的释义）唯一。干扰项是别的释义，
+  /// 排除相同释义，避免两条义项相同而出现两个正确答案。
+  Question? _wenyanMeaning(Poem entry, int optionCount, _Bias bias) {
+    if (entry.author.trim().isEmpty) return null;
+    if (entry.lines.isEmpty || entry.lines.first.trim().isEmpty) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => p.id == entry.id || p.author == entry.author,
+      pool: (p) => p.author.trim().isEmpty ? const <String>[] : <String>[p.author],
+      bias: bias,
+      // 干扰项取同虚实类别（同为虚词/实词），更像。
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.author, ...distractors]..shuffle(_random);
+    final note = entry.lines.length > 1 ? entry.lines[1].trim() : '';
+    return Question(
+      kind: QuestionKind.wenyanMeaning,
+      poem: entry,
+      prompt: '加〈〉的词在这句里是什么意思？',
+      focus: entry.lines.first.trim(),
+      key: '${entry.id}|wenyan',
       options: options,
       answerIndex: options.indexOf(entry.author),
       note: note,
