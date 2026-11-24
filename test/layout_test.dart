@@ -122,14 +122,14 @@ void main() {
       expect(find.text('玩'), findsNothing, reason: '数独不应出现在主 tab 行');
       // 数独是标题区的独立按钮。
       expect(find.text('玩数独'), findsOneWidget, reason: '数独独立入口应在标题区');
-      // 二级：语文组 7 个子科目短名都在。
-      for (final label in <String>['诗词', '拼音', '成语', '常识', '歇后', '错字', '文言']) {
+      // 二级：语文组 8 个子科目短名都在。
+      for (final label in <String>['诗词', '拼音', '成语', '常识', '歇后', '错字', '文言', '词语']) {
         expect(find.text(label), findsWidgets, reason: '语文二级 tab $label 应出现');
       }
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('窄屏手机：语文七个二级 tab 一行排开不溢出', (tester) async {
+    testWidgets('窄屏手机：语文八个二级 tab 一行排开不溢出', (tester) async {
       final store = await ProgressStore.load(topicId: kPoetryTopic.id);
       final profile = await loadProfile(birth: (2018, 9));
       await pumpAt(
@@ -142,10 +142,10 @@ void main() {
           onSwitchTopic: (_) {},
         ),
       );
-      for (final label in <String>['诗词', '拼音', '成语', '常识', '歇后', '错字', '文言']) {
+      for (final label in <String>['诗词', '拼音', '成语', '常识', '歇后', '错字', '文言', '词语']) {
         expect(find.text(label), findsWidgets, reason: '窄屏二级 tab $label 应出现');
       }
-      expect(tester.takeException(), isNull, reason: '窄屏四个二级 tab 不应溢出');
+      expect(tester.takeException(), isNull, reason: '窄屏八个二级 tab 不应溢出');
     });
 
     testWidgets('数独页：不显示玩数独按钮、不渲染学科二级 tab', (tester) async {

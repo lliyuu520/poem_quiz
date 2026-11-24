@@ -193,3 +193,19 @@ const kSubjectGroups = <({String id, String name})>[
 - [ ] 真机上可切换并实现「语文 → 各子科目」完整路径，进度按科目隔离
 - [ ] `docs/development-progress.md` 待办表状态更新为「待发布」，科目与题库表补入 4 行
 - [ ] 收尾汇报五件事：改了什么 / 验证了什么 / 未验证什么及原因 / 关键默认值 / 遗留风险
+
+## 12. 词语科目（同义 / 反义，2026-11-24 并入）
+
+原 `feat/chinese-split` 分支的「词语」子科目，合并时改造为 main 的归组结构后并入。
+
+| 项 | 内容 |
+|---|---|
+| 科目 id | `words`（存储键前缀独立，不影响其他科目存档） |
+| 二级 tab | `tabLabel: '词语'`，挂 `group: 'chinese'` |
+| 题型 | `synonymOf`（找近义词）/ `antonymOf`（找反义词），共 2 种 |
+| 题库 | `lib/data/words.dart`（`tool/gen_words.py` 从 `tool/word_bank.json` 生成，不要手改） |
+| 条目 | 82 个词条 / 286 条关系对（同义 149 / 反义 137），1-6 年级分档 |
+| 干扰项 | 查生成器算好的闭包 `kWordSynonyms` / `kWordAntonyms`，排除该词全部同义/反义词，防止一题两答案 |
+
+语文子科目因此为 8 个：诗词 / 拼音 / 成语 / 文学常识 / 歇后语 / 错别字 / 文言实词 / 词语。
+`QuestionKind` 总数 23 类（原 21 + 词语 2）。

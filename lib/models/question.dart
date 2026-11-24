@@ -1,7 +1,8 @@
 import 'poem.dart';
 
 /// 题型。前四种针对诗句，中间两种针对拼音读音，后三种针对算式，
-/// 成语三型针对成语，文学常识一型，最后五种针对英语（以听为主）。
+/// 成语三型针对成语，文学常识/歇后语/错别字/文言各一型，词语两型针对同义/反义，
+/// 最后五种针对英语（以听为主）。
 ///
 /// 一个科目只会用到其中一部分（见 `Topic.kinds`），引擎按题型分派。
 enum QuestionKind {
@@ -21,6 +22,8 @@ enum QuestionKind {
   xiehouyuLink,
   typoCorrect,
   wenyanMeaning,
+  synonymOf,
+  antonymOf,
   englishListen,
   englishMeaning,
   englishCase,
@@ -46,6 +49,8 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.xiehouyuLink => '接歇后语',
         QuestionKind.typoCorrect => '辨字形',
         QuestionKind.wenyanMeaning => '解文言',
+        QuestionKind.synonymOf => '找近义词',
+        QuestionKind.antonymOf => '找反义词',
         QuestionKind.englishListen => '听音选词',
         QuestionKind.englishMeaning => '认词义',
         QuestionKind.englishCase => '大小写',
@@ -63,6 +68,10 @@ bool isIdiomKind(QuestionKind kind) =>
     kind == QuestionKind.idiomBlank ||
     kind == QuestionKind.idiomMeaning ||
     kind == QuestionKind.idiomPinyin;
+
+/// 是否为词语（同义/反义）题型。
+bool isWordKind(QuestionKind kind) =>
+    kind == QuestionKind.synonymOf || kind == QuestionKind.antonymOf;
 
 /// 题干或选项是拼音串的题型。这类文字要用文楷（教学体单层 a/g），
 /// 衬线字体的双层 a 与教材拼音对不上。成语的「读成语」也算。

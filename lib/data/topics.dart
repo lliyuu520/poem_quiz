@@ -10,6 +10,7 @@ import 'poems.dart';
 import 'topic.dart';
 import 'typo.dart';
 import 'wenyan.dart';
+import 'words.dart';
 import 'xiehouyu.dart';
 
 /// 学科组：首页一级 tab。数独偏游戏，不在此列，改由首页独立入口进入。
@@ -421,6 +422,47 @@ String _wenyanSummaryFromId(List<String> parts) =>
 
 /// 已上线的科目，按首页学科组排列：语文（诗词/拼音/成语/文学常识/歇后语/错别字/文言实词）、
 /// 数学、英语，最后是数独（棋盘玩法，不进主 tab，由标题区独立入口进入）。
+
+/// 词语科目：找近义词 / 找反义词，按学龄分档。
+///
+/// 题库由 `tool/gen_words.py` 从 `tool/word_bank.json` 生成，不要手改。
+/// 条目复用 [Poem]：`title` 是词条，`author` 是关系词，
+/// `dynasty` 是关系类型（同义词/反义词），`lines` 是例句。
+const Topic kWordsTopic = Topic(
+  id: 'words',
+  name: '词语',
+  tabLabel: '词语',
+  group: 'chinese',
+  unit: '组',
+  groupLabel: '类别',
+  searchHint: '搜词或近义、反义词',
+  entries: kWords,
+  groupOf: _wordGroupOf,
+  metaOf: _wordMeta,
+  kinds: <QuestionKind>{QuestionKind.synonymOf, QuestionKind.antonymOf},
+  nameOf: _wordName,
+  summaryOf: _wordSummary,
+  tagline: '一词一义，记牢常用词',
+  intro: '找出一个词的近义词或反义词，按学龄分档练习常用词语。',
+  seal: '词\n语',
+  accent: AppColors.chengyu,
+  accentSoft: AppColors.chengyuSoft,
+  summaryFromId: _wordSummaryFromId,
+  detailOf: _wordDetail,
+);
+
+String _wordGroupOf(Poem p) => p.dynasty;
+String _wordMeta(Poem p) => p.author;
+String _wordName(Poem p) => p.title;
+String _wordSummary(Poem p) => '${p.title} · ${p.author}';
+
+/// 展开正文：例句一行，比 `fullText` 清楚。
+String _wordDetail(Poem p) => p.lines.join('\n');
+
+/// 词语条目 id 是「关系类型|关系词|词条」，摘要要写成「高兴 · 快乐」。
+String _wordSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
+
 final List<Topic> kTopics = <Topic>[
   kPoetryTopic,
   kPinyinTopic,
@@ -429,6 +471,7 @@ final List<Topic> kTopics = <Topic>[
   kXiehouyuTopic,
   kTypoTopic,
   kWenyanTopic,
+  kWordsTopic,
   kMathTopic,
   kEnglishTopic,
   kSudokuTopic,
