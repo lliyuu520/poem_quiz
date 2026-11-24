@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'data/account_service.dart';
+import 'data/grade.dart';
+import 'data/practice_scope.dart';
 import 'data/profile.dart';
 import 'data/progress_store.dart';
 import 'data/topic.dart';
@@ -18,16 +20,30 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final savedId = prefs.getString(_kLastTopic);
-  final topic = kTopics.firstWhere(
-    (t) => t.id == savedId,
-    orElse: () => kDefaultTopic,
-  );
   // 所有科目的存档一次读齐：切 tab 时只是换指针，不再 await 磁盘 IO，
   // 避免出现卡顿的空档。
   final stores = <String, ProgressStore>{
     for (final t in kTopics) t.id: await ProgressStore.load(topicId: t.id),
   };
   final profile = await UserProfile.load();
+  final recommendation = recommendForBirth(profile.birthYear, profile.birthMonth);
+  // 上次停留的科目现在可能已高于推算学龄（新增子科目后可能出现）：
+  // 这种情况下落回第一个适龄科目，别让 App 一启动就停在置灰页上。
+  //
+  // 判据走该科目自己的存档范围：「跟随推荐」才按学龄判超纲，家长显式选过
+  // 年级的科目不受影响——启动路径与首页用同一套 `resolvePracticePlan`。
+  bool blocked(Topic t) => resolvePracticePlan(
+        scope: stores[t.id]!.practiceScope,
+        entries: t.entries,
+        recommendation: recommendation,
+      ).aboveLevel;
+  final saved = kTopics.firstWhere(
+    (t) => t.id == savedId,
+    orElse: () => kDefaultTopic,
+  );
+  final topic = blocked(saved)
+      ? kTopics.firstWhere((t) => !blocked(t), orElse: () => kDefaultTopic)
+      : saved;
   final account = AccountService();
   await account.load(); // 读本地 token；过期会就地清除，界面不会误显示已登录
   runApp(PoemQuizApp(

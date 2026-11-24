@@ -18,6 +18,7 @@ import 'package:poem_quiz/pages/settings_page.dart';
 import 'package:poem_quiz/pages/study_page.dart';
 import 'package:poem_quiz/pages/wrong_book_page.dart';
 import 'package:poem_quiz/theme/app_theme.dart';
+import 'package:poem_quiz/widgets/common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -26,6 +27,16 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
   const phone = Size(400, 800);
+
+  /// 预置出生年月后加载个人档案。学龄由它推算，用例靠它构造「一年级」场景。
+  /// 会覆盖 mock 初始值，所以要在 `ProgressStore.load` **之前**调用。
+  Future<UserProfile> seedProfile((int, int)? birth) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      if (birth != null) 'birth_year': birth.$1,
+      if (birth != null) 'birth_month': birth.$2,
+    });
+    return UserProfile.load();
+  }
 
   Future<void> pumpAt(
     WidgetTester tester,
@@ -179,6 +190,49 @@ void main() {
       expect(tester.takeException(), isNull);
 
       await pumpAt(tester, home(), textScale: 1.5);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('一年级停在超纲子科目：说明卡替代范围卡、开始按钮禁用', (tester) async {
+      // 一年级读文学常识 = 超纲（题库 7-9 年级）。首页应当把范围卡换成
+      // 说明卡、开始按钮置灰，而不是照常出七年级的题。
+      final store = await ProgressStore.load(topicId: kLiteratureTopic.id);
+      final profile = await seedProfile((2020, 9)); // 2026 年读一年级
+      await pumpAt(
+        tester,
+        HomePage(
+          store: store,
+          topic: kLiteratureTopic,
+          profile: profile,
+          onSwitchTopic: (_) {},
+        ),
+      );
+
+      expect(find.text('高于当前学龄'), findsOneWidget);
+      expect(find.textContaining('从七年级开始'), findsOneWidget);
+      expect(find.text('本科目高于当前学龄'), findsOneWidget);
+      expect(find.text('开始答题'), findsNothing, reason: '超纲科目不给开始入口');
+      final start = tester.widget<PrimaryButton>(
+        find.widgetWithText(PrimaryButton, '本科目高于当前学龄'),
+      );
+      expect(start.onPressed, isNull, reason: '按钮应禁用');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('一年级停在适龄子科目：照常显示开始按钮', (tester) async {
+      final store = await ProgressStore.load(topicId: kChengyuTopic.id);
+      final profile = await seedProfile((2020, 9));
+      await pumpAt(
+        tester,
+        HomePage(
+          store: store,
+          topic: kChengyuTopic,
+          profile: profile,
+          onSwitchTopic: (_) {},
+        ),
+      );
+      expect(find.text('高于当前学龄'), findsNothing);
+      expect(find.text('开始答题'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

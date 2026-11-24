@@ -208,6 +208,8 @@ class PracticePlan {
     required this.extensionPoolSize,
     required this.targetGrade,
     required this.needsBirthHint,
+    this.lowestGrade,
+    this.aboveLevel = false,
     this.kindShareCaps = const <QuestionKind, double>{},
   });
 
@@ -245,6 +247,16 @@ class PracticePlan {
 
   /// 未设置出生年月时为 true，首页据此给出温和补填引导。
   final bool needsBirthHint;
+
+  /// 可出的最低教材年级（题库下沿），仅用于「超纲」判断与提示文案。
+  final int? lowestGrade;
+
+  /// 本科目（在当前范围下）整体高于当前学龄：一条可用条目都没有。
+  ///
+  /// 由 [resolvePracticePlan] 判定——**「跟随推荐」时推荐年级低于题库下沿**
+  /// （一年级孩子点文学常识，题库最低七年级）。引擎里 [weights] 为空就出
+  /// 不了题，UI 据此置灰二级块并拦下开局，而不是偷偷放宽到全库出超纲题。
+  final bool aboveLevel;
 
   int get poolSize => curriculumPoolSize + extensionPoolSize;
 
@@ -317,15 +329,7 @@ PracticePlan resolvePracticePlan({
       );
       break;
     case ScopeKind.recommended:
-      targetGrade = switch (recommendation.kind) {
-        RecommendationKind.unset => 3,
-        RecommendationKind.preschool => 1,
-        RecommendationKind.inSchool => recommendation.schoolGrade,
-        RecommendationKind.aboveSchool => maxSchoolGrade,
-      };
-      if (targetGrade != null && maxSchoolGrade != null) {
-        targetGrade = targetGrade.clamp(1, maxSchoolGrade);
-      }
+      targetGrade = recommendedTargetGrade(recommendation, entries);
       if (recommendation.kind == RecommendationKind.aboveSchool) {
         // 成人/九年级以上：教材全覆盖，等权。
         weights = _clampToPresent(fullCurriculumWeights(), schoolGrades);
@@ -349,13 +353,29 @@ PracticePlan resolvePracticePlan({
     weights[0] = top / 3;
   }
 
-  // 兜底：范围与题库完全不匹配时，退化为题库里真实存在的全部年级，
-  // 避免「选了 8 年级但拼音只到 6 年级」这类情况出 0 题。
+  // 兜底与「超纲」判定。
+  //
+  // 老逻辑在这里一律退化成「题库里真实存在的全部年级等权」，方向不分：
+  // 八年级用拼音（题库只到六年级）本该这样兜底，但一年级点文学常识
+  // （题库 7-9 年级）也会走同一条路，把七年级的文学史直接出给一年级孩子。
+  //
+  // 现在按方向分开处理：目标年级**低于**题库下沿 = 这个科目对当前学龄超纲，
+  // 保持空权重、出不了题，由 UI 置灰并拦下开局；其余情况（目标年级高于题库
+  // 上沿、题库只有拓展条目、空题库）才退回全库等权。
+  final lowestGrade = minSchoolGradeOf(entries);
+  var aboveLevel = false;
   if (weights.isEmpty) {
-    weights = <int, double>{
-      for (final g in present) g: 1.0,
-    };
-    targetGrade = maxSchoolGrade;
+    // 只在「跟随推荐」时判超纲：显式选年级（自己去点七年级）是主动挑战，
+    // 不该被拦；未设置出生年月时 recommendation 不可信，也不拦。
+    if (scope.isRecommended &&
+        isAboveRecommendedLevel(recommendation, entries)) {
+      aboveLevel = true;
+    } else {
+      weights = <int, double>{
+        for (final g in present) g: 1.0,
+      };
+      targetGrade = maxSchoolGrade;
+    }
   }
 
   final optionCount = 4;
@@ -379,7 +399,40 @@ PracticePlan resolvePracticePlan({
     extensionPoolSize: extensionPoolSize,
     targetGrade: targetGrade,
     needsBirthHint: recommendation.kind == RecommendationKind.unset,
+    lowestGrade: lowestGrade,
+    aboveLevel: aboveLevel,
   );
+}
+
+/// 「跟随推荐」时该用的目标年级；题库没有教材条目时返回 null。
+///
+/// 收敛到题库上限——诗词题库到九年级，八年级在读就是八年级；拼音只到六年级，
+/// 八年级在读会收敛到六年级（而不是出 0 题）。这里**不**处理「推荐年级低于
+/// 题库下沿」，那是 [isAboveRecommendedLevel] 的事。
+int? recommendedTargetGrade(GradeRecommendation recommendation, Iterable<Poem> entries) {
+  final max = maxSchoolGradeOf(entries);
+  if (max == null) return null;
+  final wanted = switch (recommendation.kind) {
+    RecommendationKind.unset => 3,
+    RecommendationKind.preschool => 1,
+    RecommendationKind.inSchool => recommendation.schoolGrade,
+    RecommendationKind.aboveSchool => max,
+  };
+  return wanted?.clamp(1, max);
+}
+
+/// 该科目对当前学龄是否整体超纲——推荐年级都够不到题库的最低年级。
+///
+/// 一年级在读 + 文学常识（题库 7-9 年级）= 超纲：这个科目没有任何一条内容
+/// 适合现在练。首页据此把二级块置灰，[resolvePracticePlan] 据此不再放宽到全库。
+///
+/// 未设置出生年月时返回 false（推荐值不可信，宁可照常出题）。
+bool isAboveRecommendedLevel(GradeRecommendation recommendation, Iterable<Poem> entries) {
+  if (recommendation.kind == RecommendationKind.unset) return false;
+  final lowest = minSchoolGradeOf(entries);
+  final target = recommendedTargetGrade(recommendation, entries);
+  if (lowest == null || target == null) return false;
+  return target < lowest;
 }
 
 Map<int, double> _clampToPresent(Map<int, double> weights, Set<int> present) {

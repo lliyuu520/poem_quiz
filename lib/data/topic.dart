@@ -141,15 +141,13 @@ class Topic {
   Set<int> get presentGrades => <int>{for (final e in entries) e.grade};
 
   /// 题库里的最高教材年级；没有教材条目时返回 null。
-  int? get maxSchoolGrade {
-    int? best;
-    for (final e in entries) {
-      if (e.grade >= 1 && e.grade <= 9 && (best == null || e.grade > best)) {
-        best = e.grade;
-      }
-    }
-    return best;
-  }
+  int? get maxSchoolGrade => maxSchoolGradeOf(entries);
+
+  /// 题库里的最低教材年级；没有教材条目时返回 null。
+  ///
+  /// 「本科目对当前学龄是否超纲」只看这个值：文学常识最低七年级，一年级孩子
+  /// 点进去只会出超纲题，首页据此把二级块置灰。
+  int? get minSchoolGrade => minSchoolGradeOf(entries);
 
   /// 题库里是否有课外拓展条目（[Poem.grade] == 0）。
   bool get hasExtension => entries.any((e) => e.grade == 0);

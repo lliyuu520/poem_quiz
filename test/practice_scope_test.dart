@@ -7,6 +7,7 @@ import 'package:poem_quiz/data/practice_scope.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
+import 'package:poem_quiz/data/topic.dart';
 import 'package:poem_quiz/data/topics.dart';
 import 'package:poem_quiz/models/poem.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -149,6 +150,83 @@ void main() {
       );
       expect(p.weights.containsKey(0), isFalse);
       expect(p.poolSize, greaterThan(0));
+    });
+  });
+
+  group('超纲与溢出：兜底必须分清方向', () {
+    test('推荐年级高于题库上沿：收敛到题库上限，照常出题（上溢兜底）', () {
+      // 拼音题库只到六年级，八年级孩子仍应能练拼音。
+      final p = resolvePracticePlan(
+        scope: PracticeScope.recommended,
+        entries: kPinyinTopic.entries,
+        recommendation: const GradeRecommendation.inSchool(8),
+      );
+      expect(p.aboveLevel, isFalse, reason: '超出题库上限不是超纲');
+      expect(p.targetGrade, 6, reason: '应收敛到题库最高年级');
+      expect(p.poolSize, greaterThan(0));
+    });
+
+    test('推荐年级低于题库下沿：跟随推荐判超纲，不放宽到全库（下溢）', () {
+      // 一年级孩子点「文言实词」（题库 7-9 年级）——这正是本次修的 bug：
+      // 老逻辑会退化成全库等权，把七年级题出给一年级。
+      final p = resolvePracticePlan(
+        scope: PracticeScope.recommended,
+        entries: kWenyanTopic.entries,
+        recommendation: const GradeRecommendation.inSchool(1),
+      );
+      expect(p.aboveLevel, isTrue);
+      expect(p.weights, isEmpty);
+      expect(p.lowestGrade, 7);
+      expect(p.poolSize, 0);
+    });
+
+    test('同一科目按学龄切换：一年级超纲、七年级正常', () {
+      PracticePlan at(int grade) => resolvePracticePlan(
+        scope: PracticeScope.recommended,
+        entries: kWenyanTopic.entries,
+        recommendation: GradeRecommendation.inSchool(grade),
+      );
+      expect(at(1).aboveLevel, isTrue);
+      expect(at(3).aboveLevel, isTrue, reason: '三年级同样够不到七年级题库');
+      expect(at(7).aboveLevel, isFalse);
+      expect(at(9).aboveLevel, isFalse);
+    });
+
+    test('显式选年级不受超纲拦截：主动挑战不算超纲', () {
+      // 自己去范围面板点七年级是明确意图，不能拦。
+      final p = resolvePracticePlan(
+        scope: PracticeScope.grade(7),
+        entries: kWenyanTopic.entries,
+        recommendation: const GradeRecommendation.inSchool(1),
+      );
+      expect(p.aboveLevel, isFalse);
+      expect(p.poolSize, greaterThan(0));
+    });
+
+    test('未设置出生年月时不判超纲（推荐值不可信）', () {
+      final p = resolvePracticePlan(
+        scope: PracticeScope.recommended,
+        entries: kWenyanTopic.entries,
+        recommendation: const GradeRecommendation.unset(),
+      );
+      expect(p.aboveLevel, isFalse);
+      expect(p.poolSize, greaterThan(0));
+    });
+
+    test('语文子科目按一年级学龄的适龄分组', () {
+      // 首页置灰与开局拦截都读这个判断，钉住各科的适龄分界。
+      bool ok(Topic t) => !isAboveRecommendedLevel(
+        const GradeRecommendation.inSchool(1),
+        t.entries,
+      );
+      expect(ok(kPoetryTopic), isTrue, reason: '诗词从一年级起');
+      expect(ok(kPinyinTopic), isTrue, reason: '拼音从一年级起');
+      expect(ok(kChengyuTopic), isTrue, reason: '成语从一年级起');
+      expect(ok(kWordsTopic), isTrue, reason: '词语从一年级起');
+      expect(ok(kXiehouyuTopic), isFalse, reason: '歇后语从四年级起');
+      expect(ok(kTypoTopic), isFalse, reason: '错别字从四年级起');
+      expect(ok(kLiteratureTopic), isFalse, reason: '文学常识从七年级起');
+      expect(ok(kWenyanTopic), isFalse, reason: '文言实词从七年级起');
     });
   });
 

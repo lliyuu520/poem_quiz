@@ -231,6 +231,31 @@ class GradeRecommendation {
       };
 }
 
+/// 题库里最低的教材年级（1~9）；只有拓展条目或空题库时返回 null。
+///
+/// 与 [Topic.minSchoolGrade] 同源——「科目是否高于学龄」的判断只认这一处，
+/// 不要在页面里自己遍历题库。
+int? minSchoolGradeOf(Iterable<Poem> entries) {
+  int? best;
+  for (final e in entries) {
+    if (e.grade >= 1 && e.grade <= 9 && (best == null || e.grade < best)) {
+      best = e.grade;
+    }
+  }
+  return best;
+}
+
+/// 题库里最高的教材年级（1~9）；只有拓展条目或空题库时返回 null。
+int? maxSchoolGradeOf(Iterable<Poem> entries) {
+  int? best;
+  for (final e in entries) {
+    if (e.grade >= 1 && e.grade <= 9 && (best == null || e.grade > best)) {
+      best = e.grade;
+    }
+  }
+  return best;
+}
+
 /// 年级的中文写法，保持与 [GradeLevel.title] 一致（二年级而非 2 年级）。
 String gradeChinese(int grade) => const <String>[
       '零', '一', '二', '三', '四', '五', '六', '七', '八', '九',

@@ -104,6 +104,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 点一级学科组：切到该组上次选中的子科目（默认第一个）。
+  ///
+  /// 记住的子科目现在可能高于推算学龄（新增子科目后，或改了出生年月），
+  /// 落回该组第一个适龄科目；整组都超纲就停在第一个并显示提示卡，
+  /// 不静默跳走——用户点了语文就该看到语文。
+  ///
+  /// 判据用该科目**自己的存档范围**（显式选过年级的科目不算超纲），
+  /// 与首页 `_plan`、启动路径同一套。
   void _onSelectGroup(String groupId) {
     if (widget.topic.group == groupId) return;
     final candidates = (widget.topics ?? kTopics)
@@ -115,7 +122,27 @@ class _HomePageState extends State<HomePage> {
       (t) => t.id == remembered,
       orElse: () => candidates.first,
     );
+    if (_isBlocked(target)) {
+      final usable = candidates.where((t) => !_isBlocked(t));
+      if (usable.isNotEmpty) {
+        _onSelectTopic(usable.first);
+        return;
+      }
+    }
     _onSelectTopic(target);
+  }
+
+  /// 某科目按它自己的存档范围是否整体超纲。
+  ///
+  /// 用该科目的 `ProgressStore`——不能拿当前科目的 `_plan`，也不能只看推荐，
+  /// 否则「家长给自己显式选了七年级」的科目会被误判成超纲。
+  bool _isBlocked(Topic topic) {
+    final store = widget.stores?[topic.id] ?? _store;
+    return resolvePracticePlan(
+      scope: store.practiceScope,
+      entries: topic.entries,
+      recommendation: _recommendation,
+    ).aboveLevel;
   }
 
   /// 已解锁的最高档。开局默认落在这里，孩子不用每次往上翻。
@@ -184,6 +211,11 @@ class _HomePageState extends State<HomePage> {
     }
 
     final plan = _plan;
+    // 超纲科目不开局（按钮已置灰，这里兜住其他调用路径，如快捷键/测试）。
+    if (plan.aboveLevel) {
+      _toast('「${widget.topic.name}」高于当前学龄，暂无适龄条目');
+      return;
+    }
     final session = buildSession(
       engine: _engine,
       topic: widget.topic,
@@ -313,6 +345,7 @@ class _HomePageState extends State<HomePage> {
           _TopicTabs(
             currentTopic: widget.topic,
             topics: widget.topics ?? kTopics,
+            isTopicLocked: _isBlocked,
             onSelectGroup: _onSelectGroup,
             onSelectTopic: _onSelectTopic,
           ),
@@ -350,6 +383,8 @@ class _HomePageState extends State<HomePage> {
     required double viewportHeight,
   }) {
     final isBoard = widget.topic.isBoardGame;
+    // 当前科目整体高于推算学龄（如一年级停在文学常识）：不出题，只说明原因。
+    final aboveLevel = !isBoard && _plan.aboveLevel;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -365,6 +400,7 @@ class _HomePageState extends State<HomePage> {
           _TopicTabs(
             currentTopic: widget.topic,
             topics: widget.topics ?? kTopics,
+            isTopicLocked: _isBlocked,
             onSelectGroup: _onSelectGroup,
             onSelectTopic: _onSelectTopic,
           ),
@@ -378,7 +414,9 @@ class _HomePageState extends State<HomePage> {
             horizontal: wide,
           )
         else ...<Widget>[
-          if (widget.topic.graded)
+          if (aboveLevel)
+            _LevelNotice(plan: _plan, topic: widget.topic)
+          else if (widget.topic.graded)
             _ScopeCard(
               plan: _plan,
               topic: widget.topic,
@@ -410,9 +448,15 @@ class _HomePageState extends State<HomePage> {
         PrimaryButton(
           label: isBoard
               ? '开始${_difficulty.title}'
+              : aboveLevel
+              ? '本科目高于当前学龄'
               : (_mode.isCareer ? '开始生涯' : '开始答题'),
-          icon: Icons.play_arrow_rounded,
-          onPressed: _start,
+          icon: isBoard
+              ? Icons.play_arrow_rounded
+              : aboveLevel
+              ? Icons.lock_outline
+              : Icons.play_arrow_rounded,
+          onPressed: aboveLevel ? null : _start,
         ),
         if (!isBoard) ...<Widget>[
           SizedBox(height: roomy ? 18 : 12),
@@ -498,12 +542,17 @@ class _TopicTabs extends StatelessWidget {
   const _TopicTabs({
     required this.currentTopic,
     required this.topics,
+    required this.isTopicLocked,
     required this.onSelectGroup,
     required this.onSelectTopic,
   });
 
   final Topic currentTopic;
   final List<Topic> topics;
+
+  /// 该子科目是否高于学龄（置灰不可点）。判断逻辑留在 `_HomePageState`——
+  /// 它才拿得到每个科目自己的存档范围。
+  final bool Function(Topic topic) isTopicLocked;
   final void Function(String groupId) onSelectGroup;
   final void Function(Topic topic) onSelectTopic;
 
@@ -553,6 +602,9 @@ class _TopicTabs extends StatelessWidget {
                           child: _TopicChip(
                             label: topic.displayTabLabel,
                             selected: topic.id == currentTopic.id,
+                            // 高于学龄的子科目置灰不可点：一年级点进
+                            // 文学常识（题库 7-9 年级）只会出超纲题。
+                            locked: isTopicLocked(topic),
                             onTap: () => onSelectTopic(topic),
                             compact: narrow,
                           ),
@@ -572,17 +624,23 @@ class _TopicTabs extends StatelessWidget {
 ///
 /// [compact]（窄屏）压到 44dp 高、字号 14、内边距收紧，为的是让语文 8 个
 /// 子科目两行排完——首页整页不滚动是硬约束。宽屏回到 48dp 触控目标。
+///
+/// [locked] 表示该科目高于推算学龄：压成淡底淡字、不可点。用 `IgnorePointer`
+/// 而不是把 `onTap` 传 null——`InkWell` 在 `onTap` 为空时连水波纹都没有，
+/// 块看起来像坏了；这里是刻意保留形状、只拒绝响应。
 class _TopicChip extends StatelessWidget {
   const _TopicChip({
     required this.label,
     required this.selected,
     required this.onTap,
+    this.locked = false,
     this.compact = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool locked;
   final bool compact;
 
   @override
@@ -590,37 +648,55 @@ class _TopicChip extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(9),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            constraints: BoxConstraints(minHeight: compact ? 44 : 48),
-            alignment: Alignment.center,
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 4 : 16,
-              vertical: compact ? 6 : 8,
-            ),
-            decoration: BoxDecoration(
-              color: selected ? AppColors.seal : AppColors.card,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: selected ? AppColors.seal : AppColors.line,
-                width: 1,
+      enabled: !locked,
+      child: IgnorePointer(
+        ignoring: locked,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(9),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              constraints: BoxConstraints(minHeight: compact ? 44 : 48),
+              alignment: Alignment.center,
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 4 : 16,
+                vertical: compact ? 6 : 8,
               ),
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: compact ? 14 : 15,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? AppColors.card : AppColors.inkSoft,
-                letterSpacing: compact ? 1 : 2,
+              decoration: BoxDecoration(
+                color: locked
+                    ? AppColors.paper
+                    : selected
+                    ? AppColors.seal
+                    : AppColors.card,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: locked
+                      ? AppColors.line
+                      : selected
+                      ? AppColors.seal
+                      : AppColors.line,
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: compact ? 14 : 15,
+                  fontWeight: selected && !locked
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                  color: locked
+                      ? AppColors.inkFaint
+                      : selected
+                      ? AppColors.card
+                      : AppColors.inkSoft,
+                  letterSpacing: compact ? 1 : 2,
+                ),
               ),
             ),
           ),
@@ -979,7 +1055,13 @@ class _ScopeSheetState extends State<_ScopeSheet> {
 
   Topic get _topic => widget.topic;
 
-  /// 题库里真实存在的最�1~9 年级，决定年级 chip 的数量。
+  /// 题库里真实存在的最低教材年级，决定年级 chip 的下沿。
+  ///
+  /// 文学常识题库是 7-9 年级，从一年级列到九年级会给出四个永远出不了题的
+  /// 年级按钮（选了一年级等于空池）。只列题库真实覆盖的区间。
+  int get _minGrade => _topic.minSchoolGrade ?? 1;
+
+  /// 题库里真实存在的最高 1~9 年级，决定年级 chip 的数量。
   int get _maxGrade => _topic.maxSchoolGrade ?? 1;
 
   PracticePlan get _preview => resolvePracticePlan(
@@ -1009,10 +1091,12 @@ class _ScopeSheetState extends State<_ScopeSheet> {
         ScopeKind.all => PracticeScope.all,
         // 切到区间时保留当前上下沿，避免没有值。
         ScopeKind.range => PracticeScope.range(
-          _scope.from ?? 1,
-          _scope.to ?? _maxGrade,
+          (_scope.from ?? _minGrade).clamp(_minGrade, _maxGrade),
+          (_scope.to ?? _maxGrade).clamp(_minGrade, _maxGrade),
         ).copyWith(review: _scope.review),
-        ScopeKind.grade => PracticeScope.grade(_scope.to ?? _maxGrade),
+        ScopeKind.grade => PracticeScope.grade(
+          (_scope.to ?? _maxGrade).clamp(_minGrade, _maxGrade),
+        ),
         ScopeKind.textbook => PracticeScope.textbook,
       };
     });
@@ -1085,7 +1169,7 @@ class _ScopeSheetState extends State<_ScopeSheet> {
                     selected: _scope.kind == ScopeKind.recommended,
                     onTap: () => _selectKind(ScopeKind.recommended),
                   ),
-                  for (var g = 1; g <= _maxGrade; g++)
+                  for (var g = _minGrade; g <= _maxGrade; g++)
                     _PickChip(
                       label: _gradeLabel(g),
                       selected:
@@ -1119,7 +1203,7 @@ class _ScopeSheetState extends State<_ScopeSheet> {
                       style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
                     ),
                     _gradeDropdown(
-                      value: (_scope.from ?? 1).clamp(1, _maxGrade),
+                      value: (_scope.from ?? _minGrade).clamp(_minGrade, _maxGrade),
                       onChanged: (v) => setState(
                         () => _scope = PracticeScope.range(
                           v,
@@ -1132,10 +1216,10 @@ class _ScopeSheetState extends State<_ScopeSheet> {
                       style: TextStyle(fontSize: 13, color: AppColors.inkSoft),
                     ),
                     _gradeDropdown(
-                      value: (_scope.to ?? _maxGrade).clamp(1, _maxGrade),
+                      value: (_scope.to ?? _maxGrade).clamp(_minGrade, _maxGrade),
                       onChanged: (v) => setState(
                         () => _scope = PracticeScope.range(
-                          (_scope.from ?? 1).clamp(1, v),
+                          (_scope.from ?? _minGrade).clamp(_minGrade, v),
                           v,
                         ).copyWith(review: _scope.review),
                       ),
@@ -1256,7 +1340,7 @@ class _ScopeSheetState extends State<_ScopeSheet> {
         underline: const SizedBox.shrink(),
         style: serif(15, spacing: 1),
         items: <DropdownMenuItem<int>>[
-          for (var g = 1; g <= _maxGrade; g++)
+          for (var g = _minGrade; g <= _maxGrade; g++)
             DropdownMenuItem<int>(value: g, child: Text('$g 年级')),
         ],
         onChanged: (v) {
@@ -1398,6 +1482,62 @@ class _TopicIntro extends StatelessWidget {
             style: const TextStyle(
               fontSize: 11,
               color: AppColors.inkSoft,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 「本科目高于当前学龄」提示卡，替代练习范围卡。
+///
+/// 出现条件由 [PracticePlan.aboveLevel] 决定：题库最低年级都高于推算学龄时
+/// （一年级读文学常识），这里说明为什么不让开局，并给出可操作的去处。不给
+/// 「强制开始」入口——默认体验应当是适龄内容，确有需要可在设置页改生日。
+class _LevelNotice extends StatelessWidget {
+  const _LevelNotice({required this.plan, required this.topic});
+
+  final PracticePlan plan;
+  final Topic topic;
+
+  @override
+  Widget build(BuildContext context) {
+    final lowest = plan.lowestGrade;
+    return InkCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.lock_outline, size: 16, color: AppColors.seal),
+              const SizedBox(width: 6),
+              Text(
+                '高于当前学龄',
+                style: serif(14, weight: FontWeight.w600, spacing: 2),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            lowest == null
+                ? '「${topic.name}」没有适合当前学龄的条目。'
+                : '「${topic.name}」的内容从${gradeChinese(lowest)}年级开始，'
+                      '当前学龄暂无适合的条目。',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.inkSoft,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '换个科目就行；确实想练，可在设置里调整出生年月。',
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.inkFaint,
               height: 1.5,
             ),
           ),

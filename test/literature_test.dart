@@ -145,21 +145,49 @@ void main() {
       expect(ids.toSet().length, ids.length, reason: '同一条常识出了多次题');
     });
 
-    test('走真实 buildSession：二年级默认范围不空池（兜底出全库）', () {
+    test('走真实 buildSession：二年级默认范围判为超纲，不出题', () {
+      // 文学常识题库最低七年级，二年级孩子「跟随推荐」应当判为超纲：
+      // 计划里没有可用条目，开局前就被 UI 拦下，而不是偷偷放宽到全库
+      // 把七年级的文学史出给二年级。
       final plan = resolvePracticePlan(
         scope: PracticeScope.recommended,
         entries: kLiterature,
         recommendation: const GradeRecommendation.inSchool(2),
       );
+      expect(plan.aboveLevel, isTrue, reason: '二年级读文学常识应判超纲');
+      expect(plan.weights, isEmpty, reason: '超纲时不应给出任何年级权重');
+      expect(plan.lowestGrade, 7, reason: '文学常识题库最低七年级');
+      expect(plan.poolSize, 0);
+
       final session = buildSession(
         engine: literatureEngine(9),
         topic: kLiteratureTopic,
         count: 10,
         plan: plan,
       );
-      expect(session.questions, isNotEmpty,
-          reason: '题库无低年级条目时，兜底应退化为全库，不应出 0 题');
-      expect(session.questions.length, greaterThanOrEqualTo(9));
+      expect(session.questions, isEmpty, reason: '超纲不应静默出题');
+    });
+
+    test('七年级起默认范围正常出题', () {
+      final plan = resolvePracticePlan(
+        scope: PracticeScope.recommended,
+        entries: kLiterature,
+        recommendation: const GradeRecommendation.inSchool(7),
+      );
+      expect(plan.aboveLevel, isFalse);
+      expect(plan.poolSize, greaterThan(0));
+      final session = buildSession(
+        engine: literatureEngine(10),
+        topic: kLiteratureTopic,
+        count: 10,
+        plan: plan,
+      );
+      expect(session.questions, isNotEmpty);
+      expect(
+        session.questions.every((q) => q.poem.grade >= 7 || q.poem.grade == 0),
+        isTrue,
+        reason: '七年级不应出低于题库下沿的条目',
+      );
     });
   });
 }
