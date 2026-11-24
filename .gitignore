@@ -59,3 +59,7 @@ android/build/
 server/shi-account
 server/shi-account.exe
 server/*.test
+
+# 本地 WIP 备份（Jenny 音频补回用）与待分发 APK，均不入库
+.wip_backup/
+apk/

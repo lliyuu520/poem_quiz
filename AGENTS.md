@@ -186,3 +186,23 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - `AppColors` 里仍有科目色（`pinyin` 青 / `math` 赭 / `sudoku` 靛 / `chengyu` 绛紫 / `english` 靛青），以及 `Topic.accent` / `Topic.accentSoft` / `Topic.seal` 字段。**这些当前不接 UI**，保留兼容；新增科目不用管它们。
 - **首页整页不滚动**：窄屏 `Column + Expanded + Spacer`，玩法是横排三个紧凑 `_ModeChip`（约 68dp）；宽屏标题与页签钉顶、玩法簇整体垂直居中（`_wideHomeBody`，玩法簇内部才允许滚动），超高竖屏切 roomy 变体。没有「关卡/练习范围/玩法」分隔标题。加区块前先确认整页放得下，优先压缩而不是改成滚动。
 - 首页右上角是书本图标 `Icons.auto_stories_outlined`，不再有印章文案。
+
+## 迭代与交付门禁
+
+> 机制细节见 `docs/development-progress.md`「功能待办表」。本节是收尾时的强制核对项。
+
+- **单一待办源**：`docs/development-progress.md` 的功能待办表是所有待开发功能的唯一入口——一行一个功能，带状态（规划 / 实现中 / 待发布 / 完成）、前置依赖、计划文档、完成判据。新功能先入表再动手；方案文档（如 `docs/mock-exam-plan.md`）必须从表链过去，不散落。
+- **WIP = 1**：同一时间只推进一个功能，关环（提交 + 测试全绿 + 纳入发布批次）后再开下一个。工作区混着多个未提交功能改动时先收口——分不清归属的改动不动。
+- **Spec-first**：每个功能先有一页方案，必须含四样：假设与待决策点、任务分解（每阶段独立可验）、测试计划、**完成判据**。判据不全不开写；「做完了」靠勾选判据，不靠感觉。待决策点实施前一次性拍板，带悬而未决的决策进实现 = 返工。
+- **薄层切片**：按「纯数据层 → 逻辑层 → UI → 存储 → 串联 → 回归」拆，每阶段有独立完成判据，任何阶段停下 App 都是好的（范本：`docs/mock-exam-plan.md` 的 T1–T7）。
+- **开发与发布解耦**：每个功能一个 commit；发布攒 2~3 个功能打一个包。小步提交、批量发布。
+- **交付门禁**（收尾逐条核对，全过才算完成）：
+  1. 跨模块易漏清单：
+     - 动 `QuestionKind` → switch 穷尽，否则整套测试编译失败；
+     - 加存档字段 → `toJson` / `applySnapshot` 同步 + `snapshotVersion` 递增 + 序列化往返用例；
+     - 加英语词/句 → 插画画法 + 音频合成 + ASR 校验 + 上传 OSS；**句子只能追加到末尾**；
+     - 加页面 → 窄屏 + 宽屏布局 + `layout_test.dart` 三档宽度；
+     - 展示文案 → 走 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不自己拼；
+     - 发布 → 版本号 + APK + OSS 上传 + `version.json` + 刷 CDN（清单与 APK 都刷）。
+  2. 机械验证三条全过：`flutter test` 全绿 + `flutter analyze` 无问题 + `flutter build apk --release` 能出包。
+  3. 收尾汇报五件事：改了什么 / 验证了什么 / 未验证什么及原因 / 关键默认值 / 遗留风险。
