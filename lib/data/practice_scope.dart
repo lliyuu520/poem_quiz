@@ -412,6 +412,9 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.idiomBlank: 0.6,
         QuestionKind.idiomMeaning: 1.4,
         QuestionKind.idiomPinyin: 2.0,
+        // 词语：轻松多出找近义词，少出需要主动提取的反义词。
+        QuestionKind.synonymOf: 2.0,
+        QuestionKind.antonymOf: 1.2,
         // 英语：轻松策略多出「听音选词 / 认词义 / 大小写」这类认读题，
         // 少出拼写与听句（需要更强的主动提取）。
         QuestionKind.englishListen: 2.2,
@@ -434,6 +437,9 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.idiomBlank: 2.2,
         QuestionKind.idiomMeaning: 1.2,
         QuestionKind.idiomPinyin: 0.6,
+        // 词语：挑战反过来，多出找反义词。
+        QuestionKind.synonymOf: 0.8,
+        QuestionKind.antonymOf: 2.0,
         // 英语：挑战策略反过来，多出拼写与听句。
         QuestionKind.englishListen: 0.8,
         QuestionKind.englishMeaning: 0.8,

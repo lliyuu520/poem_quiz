@@ -30,6 +30,7 @@ class HomePage extends StatefulWidget {
     this.stores,
     this.topics,
     required this.onSwitchTopic,
+    this.onSwitchGroup,
   });
 
   final ProgressStore store;
@@ -45,6 +46,10 @@ class HomePage extends StatefulWidget {
 
   /// 切换科目。由根壳重建存档与页面树。
   final void Function(Topic topic) onSwitchTopic;
+
+  /// 切换顶层分组（语文/其他）。由根壳落到该组的上次科目。
+  /// 独立构造的测试页面可不传，此时一级组 tab 不显示。
+  final void Function(TopicGroup group)? onSwitchGroup;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -273,7 +278,13 @@ class _HomePageState extends State<HomePage> {
             onSettings: _openSettings,
           ),
           const SizedBox(height: 14),
-          _TopicTabs(currentId: widget.topic.id, onSelect: widget.onSwitchTopic),
+          _TopicTabs(
+            currentId: widget.topic.id,
+            currentGroup: widget.topic.group,
+            topics: widget.topics ?? kTopics,
+            onSelect: widget.onSwitchTopic,
+            onSelectGroup: widget.onSwitchGroup,
+          ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, inner) => SingleChildScrollView(
@@ -321,7 +332,10 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 14),
           _TopicTabs(
             currentId: widget.topic.id,
+            currentGroup: widget.topic.group,
+            topics: widget.topics ?? kTopics,
             onSelect: widget.onSwitchTopic,
+            onSelectGroup: widget.onSwitchGroup,
           ),
           const SizedBox(height: 16),
         ],
@@ -442,29 +456,111 @@ enum GameMode {
   String subtitleFor(Topic topic) => subtitle.replaceAll('{name}', topic.name);
 }
 
-/// 科目页签：四科是第一层结构，直接摆在首页；切科由根壳换存档并重建页面树。
+/// 二级科目导航：一级是顶层分组（语文/其他），二级是该组内的科目。
 ///
-/// 底部一条细线 + 当前科目的短横，用各科墨色标出选中态。
+/// 「归组导航」的落点（见 `docs/chinese-split-plan.md` D3/D6）。分组只是 UI
+/// 概念，不落盘、不改科目 id——切科仍由根壳换存档并重建。测试页不传
+/// [onSelectGroup] 时隐藏一级组栏，退回原来的单排科目 tab。
+///
+/// 一级组栏用细字重与下划线标选中，二级科目栏用底部细线 + 当前科目的朱红短横。
 class _TopicTabs extends StatelessWidget {
-  const _TopicTabs({required this.currentId, required this.onSelect});
+  const _TopicTabs({
+    required this.currentId,
+    required this.currentGroup,
+    required this.topics,
+    required this.onSelect,
+    this.onSelectGroup,
+  });
 
   final String currentId;
+  final TopicGroup currentGroup;
+  final List<Topic> topics;
   final void Function(Topic topic) onSelect;
+  final void Function(TopicGroup group)? onSelectGroup;
 
   @override
   Widget build(BuildContext context) {
+    final showGroups = onSelectGroup != null && _groupCount(topics) > 1;
+    // 没有切组能力时（独立构造的测试页）退回原来的单层全科目 tab，
+    // 不能只因为 currentGroup 是语文就把其他科目藏掉。
+    final inGroup = showGroups
+        ? topics.where((t) => t.group == currentGroup).toList()
+        : topics;
+
     return Container(
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.line, width: 1)),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (showGroups) _groupRow(),
+          Row(
+            children: <Widget>[
+              for (final topic in inGroup) ...<Widget>[
+                Expanded(
+                  child: _TopicTab(
+                    topic: topic,
+                    selected: topic.id == currentId,
+                    onTap: () => onSelect(topic),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  int _groupCount(List<Topic> topics) =>
+      topics.map((t) => t.group).toSet().length;
+
+  /// 一级组栏：语文 / 其他。选中组用朱红文字与下划线，未选中是墨灰。
+  Widget _groupRow() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         children: <Widget>[
-          for (final topic in kTopics) ...<Widget>[
+          for (final group in TopicGroup.values) ...<Widget>[
             Expanded(
-              child: _TopicTab(
-                topic: topic,
-                selected: topic.id == currentId,
-                onTap: () => onSelect(topic),
+              child: Semantics(
+                selected: group == currentGroup,
+                button: true,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => onSelectGroup?.call(group),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 140),
+                      constraints: const BoxConstraints(minHeight: 40),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: group == currentGroup
+                                ? AppColors.seal
+                                : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        group.label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: group == currentGroup
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: group == currentGroup
+                              ? AppColors.seal
+                              : AppColors.inkSoft,
+                          letterSpacing: 4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

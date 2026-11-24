@@ -3,6 +3,7 @@ import 'dart:math';
 import '../models/poem.dart';
 import '../models/question.dart';
 import 'math.dart';
+import 'words.dart';
 
 /// 出题引擎：从题库生成一轮题目。
 ///
@@ -214,6 +215,10 @@ class QuizEngine {
         return _idiomMeaning(poem, optionCount, bias);
       case QuestionKind.idiomPinyin:
         return _idiomPinyin(poem, optionCount, bias);
+      case QuestionKind.synonymOf:
+        return _wordRelation(poem, QuestionKind.synonymOf, optionCount, bias);
+      case QuestionKind.antonymOf:
+        return _wordRelation(poem, QuestionKind.antonymOf, optionCount, bias);
       case QuestionKind.englishListen:
         return _englishListen(poem, optionCount, bias);
       case QuestionKind.englishMeaning:
@@ -684,6 +689,65 @@ class QuizEngine {
     if (p.lines.isEmpty) return null;
     final s = p.lines.first.trim();
     return s.isEmpty ? null : s;
+  }
+
+  // ── 词语题型（同义 / 反义）───────────────────────────────
+  //
+  // 词库里一条 Poem = 一个「词 → 关系词」：`title` 是词条，`author` 是关系词，
+  // `dynasty` 是关系类型（同义词/反义词），`lines` 是例句。
+  // 题干给词条，问它的同义词/反义词；正确答案就是本条的 `author`。
+  //
+  // 干扰项最容易出错：必须排除该词**全部**同义词（同义题）或反义词（反义题），
+  // 否则选项里会混进第二个说得通的答案。生成器已把闭包写进
+  // `kWordSynonyms`/`kWordAntonyms`，这里直接查表（见 _wordRelation）。
+
+  Question? _wordRelation(
+    Poem entry,
+    QuestionKind kind,
+    int optionCount,
+    _Bias bias,
+  ) {
+    final relation = kind == QuestionKind.synonymOf ? '同义词' : '反义词';
+    // 本条就是被问的「词条 → 关系词」，关系类型必须吻合。
+    if (entry.dynasty != relation || entry.author.trim().isEmpty) return null;
+
+    final word = entry.title;
+    final answer = entry.author.trim();
+    final need = optionCount - 1;
+
+    // 排除集：同义题排除该词的全部同义词，反义题排除全部反义词。
+    // 用生成器算好的闭包 map——它含传递关系（如「快乐」的同义词还有「愉快」），
+    // 只靠题库里人工挑的几条关系对会漏，干扰项里就会混进第二个正确答案。
+    final closure = kind == QuestionKind.synonymOf
+        ? kWordSynonyms
+        : kWordAntonyms;
+    final excluded = <String>{
+      answer,
+      word,
+      ...closure[word] ?? const <String>[],
+    };
+
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => excluded.contains(p.author.trim()),
+      pool: (p) => <String>[p.author.trim()],
+      bias: bias,
+      // 优先取同年级的词，干扰项更贴近孩子的认知水平。
+      preferGroup: (p) => p.grade == entry.grade,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[answer, ...distractors]..shuffle(_random);
+    return Question(
+      kind: kind,
+      poem: entry,
+      prompt: kind == QuestionKind.synonymOf ? '下面哪个词和它意思相近？' : '下面哪个词和它意思相反？',
+      focus: word,
+      key: '${entry.id}|${kind.name}',
+      options: options,
+      answerIndex: options.indexOf(answer),
+    );
   }
 
   String? _randomLine(Poem poem) {

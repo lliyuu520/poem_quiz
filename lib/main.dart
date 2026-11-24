@@ -12,6 +12,7 @@ import 'pages/home_page.dart';
 import 'theme/app_theme.dart';
 
 /// 上次使用的科目 id。独立于科目存档键（那些带 `<topicId>_` 前缀），不会冲突。
+/// 顶层分组不单独落盘——它由科目所属组推出，科目是更精确的定位。
 const String _kLastTopic = 'last_topic';
 
 Future<void> main() async {
@@ -67,6 +68,16 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
   late ProgressStore _store = widget.stores[widget.initialTopic.id]!;
   late final UserProfile _profile = widget.initialProfile;
 
+  @override
+  void initState() {
+    super.initState();
+    // 启动时各组都先落在当前科目所在组；其它组取该组第一个。
+    for (final t in kTopics) {
+      _lastGroupTopic.putIfAbsent(t.group, () => t.id);
+    }
+    _lastGroupTopic[widget.initialTopic.group] = widget.initialTopic.id;
+  }
+
   /// 持久化「上次科目」不挡切换：fire-and-forget，失败也不影响体验。
   void _saveLastTopic(String id) {
     unawaited(SharedPreferences.getInstance().then(
@@ -81,8 +92,27 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
       _topic = topic;
       _store = widget.stores[topic.id]!;
     });
+    _lastGroupTopic[topic.group] = topic.id;
     _saveLastTopic(topic.id);
   }
+
+  /// 切换顶层分组：落到该组的上次科目或第一个科目。
+  void switchGroup(TopicGroup group) {
+    if (group == _topic.group) return;
+    final candidates = kTopics.where((t) => t.group == group).toList();
+    if (candidates.isEmpty) return;
+    // 优先回到该组里上次用过的科目，否则取该组第一个。
+    final lastId = _lastGroupTopic[group];
+    final topic = candidates.firstWhere(
+      (t) => t.id == lastId,
+      orElse: () => candidates.first,
+    );
+    switchTopic(topic);
+  }
+
+  /// 各组上次用过的科目，内存态即可——切组时优先回到它。
+  /// 持久化由 `last_topic` 负责：它存的是精确科目，组由科目推出。
+  final Map<TopicGroup, String> _lastGroupTopic = <TopicGroup, String>{};
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +130,7 @@ class _PoemQuizAppState extends State<PoemQuizApp> {
         stores: widget.stores,
         topics: kTopics,
         onSwitchTopic: switchTopic,
+        onSwitchGroup: switchGroup,
       ),
     );
   }

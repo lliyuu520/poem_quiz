@@ -7,12 +7,14 @@ import 'math.dart';
 import 'pinyin.dart';
 import 'poems.dart';
 import 'topic.dart';
+import 'words.dart';
 
 /// 已上线的科目。以后接入成语，在这里加一条即可，
 /// 其余代码通过 [kTopics] 取用，不再直接引用 [kPoems]。
 const Topic kPoetryTopic = Topic(
   id: 'poetry',
   name: '诗词',
+  group: TopicGroup.chinese,
   unit: '首',
   groupLabel: '朝代',
   searchHint: '搜诗名、作者或诗句',
@@ -43,6 +45,7 @@ String _poemMeta(Poem p) => '${p.dynasty} · ${p.author}';
 const Topic kPinyinTopic = Topic(
   id: 'pinyin',
   name: '拼音',
+  group: TopicGroup.chinese,
   unit: '条',
   groupLabel: '类别',
   searchHint: '搜字词或拼音',
@@ -207,6 +210,7 @@ const Topic kSudokuTopic = Topic(
 const Topic kChengyuTopic = Topic(
   id: 'chengyu',
   name: '成语',
+  group: TopicGroup.chinese,
   unit: '条',
   groupLabel: '类别',
   searchHint: '搜成语、拼音或释义',
@@ -239,14 +243,54 @@ String _chengyuDetail(Poem p) => p.lines.join('\n');
 String _chengyuSummaryFromId(List<String> parts) =>
     parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
 
+/// 词语科目：找近义词 / 找反义词，按学龄分档。
+///
+/// 题库由 `tool/gen_words.py` 从 `tool/word_bank.json` 生成，不要手改。
+/// 条目复用 [Poem]：`title` 是词条，`author` 是关系词，
+/// `dynasty` 是关系类型（同义词/反义词），`lines` 是例句。
+const Topic kWordsTopic = Topic(
+  id: 'words',
+  name: '词语',
+  group: TopicGroup.chinese,
+  unit: '组',
+  groupLabel: '类别',
+  searchHint: '搜词或近义、反义词',
+  entries: kWords,
+  groupOf: _wordGroupOf,
+  metaOf: _wordMeta,
+  kinds: <QuestionKind>{QuestionKind.synonymOf, QuestionKind.antonymOf},
+  nameOf: _wordName,
+  summaryOf: _wordSummary,
+  tagline: '一词一义，记牢常用词',
+  intro: '找出一个词的近义词或反义词，按学龄分档练习常用词语。',
+  seal: '词\n语',
+  accent: AppColors.chengyu,
+  accentSoft: AppColors.chengyuSoft,
+  summaryFromId: _wordSummaryFromId,
+  detailOf: _wordDetail,
+);
+
+String _wordGroupOf(Poem p) => p.dynasty;
+String _wordMeta(Poem p) => p.author;
+String _wordName(Poem p) => p.title;
+String _wordSummary(Poem p) => '${p.title} · ${p.author}';
+
+/// 展开正文：例句一行，比 `fullText` 清楚。
+String _wordDetail(Poem p) => p.lines.join('\n');
+
+/// 词语条目 id 是「关系类型|关系词|词条」，摘要要写成「高兴 · 快乐」。
+String _wordSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
+
 /// 预留科目：成语。接入时把 [Topic.entries] 换成自己的题库，
 /// 并把 [Topic.id] 用作存储键前缀，进度自然与诗词隔离。
 final List<Topic> kTopics = <Topic>[
   kPoetryTopic,
   kPinyinTopic,
+  kChengyuTopic,
+  kWordsTopic,
   kMathTopic,
   kEnglishTopic,
-  kChengyuTopic,
   kSudokuTopic,
 ];
 

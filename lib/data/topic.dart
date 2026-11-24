@@ -11,6 +11,19 @@ import 'grade.dart';
 /// 没有题库也没有题型，盘面由 `Sudoku.open()` 按档位现生成。
 enum TopicMode { quiz, sudoku }
 
+/// 科目归属的顶层分组，首页一级导航按它归类。
+///
+/// 只是 UI 层的导航维度，不落盘、不改各科目 id——存档、云同步与 last_topic
+/// 全部沿用原键（见 `docs/chinese-split-plan.md` D4/D8）。
+enum TopicGroup { chinese, other }
+
+extension TopicGroupLabel on TopicGroup {
+  String get label => switch (this) {
+        TopicGroup.chinese => '语文',
+        TopicGroup.other => '其他',
+      };
+}
+
 /// 一个科目（题库）：诗词、拼音、数学、成语等各是一份 [Topic]。
 ///
 /// 科目决定四件事：
@@ -37,6 +50,7 @@ class Topic {
     this.metaOf = _noMeta,
     this.intro = '',
     this.mode = TopicMode.quiz,
+    this.group = TopicGroup.other,
     this.headline,
     this.accent = AppColors.seal,
     this.accentSoft = AppColors.sealSoft,
@@ -65,6 +79,9 @@ class Topic {
 
   /// 玩法形态。问答科目走题库出题，数独走棋盘。
   final TopicMode mode;
+
+  /// 顶层分组。首页一级导航按它归类；只是 UI 概念，不参与存储键。
+  final TopicGroup group;
 
   /// 首页大标题的覆盖值。不传时直接用科目名（数独就叫「数独」）。
   final String? headline;
