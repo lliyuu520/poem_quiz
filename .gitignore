@@ -63,3 +63,6 @@ server/*.test
 # 本地 WIP 备份（Jenny 音频补回用）与待分发 APK，均不入库
 .wip_backup/
 apk/
+
+# 本地预览截图（tool/ 临时产物）
+/preview/
