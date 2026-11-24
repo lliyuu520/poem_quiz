@@ -7,6 +7,7 @@ import 'package:poem_quiz/data/profile.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
+import 'package:poem_quiz/data/topic.dart';
 import 'package:poem_quiz/data/topics.dart';
 import 'package:poem_quiz/models/poem.dart';
 import 'package:poem_quiz/models/question.dart';
@@ -99,6 +100,115 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    testWidgets('顶层导航：一级三组 + 玩数独入口，语文带二级 tab', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final profile = await loadProfile(birth: (2018, 9));
+      await pumpAt(
+        tester,
+        tabletLandscape,
+        () => HomePage(
+          store: store,
+          topic: kPoetryTopic,
+          profile: profile,
+          onSwitchTopic: (_) {},
+        ),
+      );
+      // 一级只有语文/数学/英语三个学科组，数独不在 tab 行里。
+      for (final group in kSubjectGroups) {
+        expect(find.text(group.name), findsOneWidget,
+            reason: '一级学科组 ${group.name} 应出现');
+      }
+      expect(find.text('玩'), findsNothing, reason: '数独不应出现在主 tab 行');
+      // 数独是标题区的独立按钮。
+      expect(find.text('玩数独'), findsOneWidget, reason: '数独独立入口应在标题区');
+      // 二级：语文组的三个子科目短名都在（T3~T6 后扩到 7 个）。
+      for (final label in <String>['诗词', '拼音', '成语']) {
+        expect(find.text(label), findsWidgets, reason: '语文二级 tab $label 应出现');
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('数独页：不显示玩数独按钮、不渲染学科二级 tab', (tester) async {
+      final store = await ProgressStore.load(topicId: kSudokuTopic.id);
+      final profile = await loadProfile();
+      await pumpAt(
+        tester,
+        tabletLandscape,
+        () => HomePage(
+          store: store,
+          topic: kSudokuTopic,
+          profile: profile,
+          onSwitchTopic: (_) {},
+        ),
+      );
+      expect(find.text('玩数独'), findsNothing, reason: '已在数独页时不再显示入口');
+      // 数独不挂学科组，二级行不渲染。
+      expect(find.text('诗词'), findsNothing);
+      expect(find.text('拼音'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('点一级学科组与玩数独入口能切换科目', (tester) async {
+      final stores = <String, ProgressStore>{
+        for (final t in kTopics)
+          t.id: await ProgressStore.load(topicId: t.id),
+      };
+      final profile = await loadProfile(birth: (2018, 9));
+      Topic? switched;
+      await pumpAt(
+        tester,
+        phone,
+        () => HomePage(
+          store: stores[kPoetryTopic.id]!,
+          topic: kPoetryTopic,
+          profile: profile,
+          stores: stores,
+          topics: kTopics,
+          onSwitchTopic: (t) => switched = t,
+        ),
+      );
+      // 点「数学」组 → 切到数学科目。
+      await tester.tap(find.text('数学').first);
+      await tester.pumpAndSettle();
+      expect(switched, kMathTopic, reason: '点一级数学组应切到数学科目');
+
+      // 点标题区「玩数独」→ 切到数独。
+      await tester.tap(find.text('玩数独'));
+      await tester.pumpAndSettle();
+      expect(switched, kSudokuTopic, reason: '点玩数独应切到数独');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('切组记住子科目：语文拼音切到数学再切回仍停在拼音', (tester) async {
+      final stores = <String, ProgressStore>{
+        for (final t in kTopics)
+          t.id: await ProgressStore.load(topicId: t.id),
+      };
+      final profile = await loadProfile(birth: (2018, 9));
+
+      // 用有状态外壳真正执行切换，让 didUpdateWidget 与新科目同步。
+      await tester.pumpWidget(MaterialApp(
+        theme: buildAppTheme(),
+        home: _SwitchableHome(stores: stores, profile: profile),
+      ));
+      await tester.pumpAndSettle();
+
+      // 语文默认诗词 → 点二级「拼音」。
+      await tester.tap(find.text('拼音'));
+      await tester.pumpAndSettle();
+      // 切到数学组。
+      await tester.tap(find.text('数学').first);
+      await tester.pumpAndSettle();
+      expect(find.text('数学'), findsWidgets);
+      // 切回语文组，应停在拼音而非诗词。
+      await tester.tap(find.text('语文'));
+      await tester.pumpAndSettle();
+      final shell = tester.state<_SwitchableHomeState>(find.byType(_SwitchableHome));
+      expect(shell.topic, kPinyinTopic,
+          reason: '切回语文组应回到上次选中的拼音');
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('数独首页平板横屏：五档关卡一行排开', (tester) async {
       final store = await ProgressStore.load(topicId: kSudokuTopic.id);
@@ -523,4 +633,33 @@ void main() {
       });
     }
   });
+}
+
+/// 有状态外壳：真正执行切科，用来验证 didUpdateWidget 后的组记忆行为。
+class _SwitchableHome extends StatefulWidget {
+  const _SwitchableHome({required this.stores, required this.profile});
+
+  final Map<String, ProgressStore> stores;
+  final UserProfile profile;
+
+  @override
+  State<_SwitchableHome> createState() => _SwitchableHomeState();
+}
+
+class _SwitchableHomeState extends State<_SwitchableHome> {
+  Topic topic = kPoetryTopic;
+
+  void switchTo(Topic t) => setState(() => topic = t);
+
+  @override
+  Widget build(BuildContext context) {
+    return HomePage(
+      store: widget.stores[topic.id]!,
+      topic: topic,
+      profile: widget.profile,
+      stores: widget.stores,
+      topics: kTopics,
+      onSwitchTopic: switchTo,
+    );
+  }
 }

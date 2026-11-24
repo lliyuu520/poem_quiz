@@ -63,10 +63,15 @@ class _HomePageState extends State<HomePage> {
   late PracticeScope _scope = widget.store.practiceScope;
   late ChallengeTier _tier = widget.store.challengeTier;
 
+  /// 每个学科组记住上次选中的子科目，避免从数学切回语文总落在诗词。
+  /// 只存内存，重启回默认——落盘要给存档加字段，不值当。
+  final Map<String, String> _lastSubTopic = <String, String>{};
+
   @override
   void initState() {
     super.initState();
     _difficulty = _highestUnlocked;
+    _lastSubTopic[widget.topic.group] = widget.topic.id;
   }
 
   /// 切换科目时根壳复用本 Widget（不再强制整树重建），这里同步本科目的
@@ -80,6 +85,37 @@ class _HomePageState extends State<HomePage> {
     _scope = widget.store.practiceScope;
     _tier = widget.store.challengeTier;
     _mode = GameMode.quick;
+    if (!widget.topic.isBoardGame) _lastSubTopic[widget.topic.group] = widget.topic.id;
+  }
+
+  /// 选中一个具体科目：记住它所属组的子科目，再交给根壳切存档。
+  /// 数独是游戏入口，不进学科组的记忆表。
+  void _onSelectTopic(Topic topic) {
+    if (!topic.isBoardGame) _lastSubTopic[topic.group] = topic.id;
+    widget.onSwitchTopic(topic);
+  }
+
+  /// 数独独立入口：从当前学科切到数独棋盘页。经注入的 topics 找棋盘科目，
+  /// 找不到时静默返回，避免构造方传了不含数独的列表时抛 StateError。
+  void _onPlaySudoku() {
+    final board = (widget.topics ?? kTopics).where((t) => t.isBoardGame);
+    if (board.isEmpty) return;
+    widget.onSwitchTopic(board.first);
+  }
+
+  /// 点一级学科组：切到该组上次选中的子科目（默认第一个）。
+  void _onSelectGroup(String groupId) {
+    if (widget.topic.group == groupId) return;
+    final candidates = (widget.topics ?? kTopics)
+        .where((t) => t.group == groupId)
+        .toList();
+    if (candidates.isEmpty) return;
+    final remembered = _lastSubTopic[groupId];
+    final target = candidates.firstWhere(
+      (t) => t.id == remembered,
+      orElse: () => candidates.first,
+    );
+    _onSelectTopic(target);
   }
 
   /// 已解锁的最高档。开局默认落在这里，孩子不用每次往上翻。
@@ -271,9 +307,15 @@ class _HomePageState extends State<HomePage> {
             store: _store,
             topic: widget.topic,
             onSettings: _openSettings,
+            onPlaySudoku: _onPlaySudoku,
           ),
           const SizedBox(height: 14),
-          _TopicTabs(currentId: widget.topic.id, onSelect: widget.onSwitchTopic),
+          _TopicTabs(
+            currentTopic: widget.topic,
+            topics: widget.topics ?? kTopics,
+            onSelectGroup: _onSelectGroup,
+            onSelectTopic: _onSelectTopic,
+          ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, inner) => SingleChildScrollView(
@@ -317,11 +359,14 @@ class _HomePageState extends State<HomePage> {
             store: _store,
             topic: widget.topic,
             onSettings: _openSettings,
+            onPlaySudoku: _onPlaySudoku,
           ),
           const SizedBox(height: 14),
           _TopicTabs(
-            currentId: widget.topic.id,
-            onSelect: widget.onSwitchTopic,
+            currentTopic: widget.topic,
+            topics: widget.topics ?? kTopics,
+            onSelectGroup: _onSelectGroup,
+            onSelectTopic: _onSelectTopic,
           ),
           const SizedBox(height: 16),
         ],
@@ -442,48 +487,83 @@ enum GameMode {
   String subtitleFor(Topic topic) => subtitle.replaceAll('{name}', topic.name);
 }
 
-/// 科目页签：四科是第一层结构，直接摆在首页；切科由根壳换存档并重建页面树。
+/// 科目页签：一级只摆三个学科组（语文/数学/英语）。数独偏游戏，不在这里——
+/// 它的「玩数独」入口在标题区独立按钮上。切科由根壳换存档。
 ///
-/// 底部一条细线 + 当前科目的短横，用各科墨色标出选中态。
+/// 底部一条细线 + 当前项的短横，统一用朱红标出选中态（不按科目换色）。
 class _TopicTabs extends StatelessWidget {
-  const _TopicTabs({required this.currentId, required this.onSelect});
+  const _TopicTabs({
+    required this.currentTopic,
+    required this.topics,
+    required this.onSelectGroup,
+    required this.onSelectTopic,
+  });
 
-  final String currentId;
-  final void Function(Topic topic) onSelect;
+  final Topic currentTopic;
+  final List<Topic> topics;
+  final void Function(String groupId) onSelectGroup;
+  final void Function(Topic topic) onSelectTopic;
 
   @override
   Widget build(BuildContext context) {
+    // 当前组的子科目，只有多科目组才渲染二级行。数独不挂组，不会走到这里。
+    final groupTopics = topics.where((t) => t.group == currentTopic.group).toList();
+    final showSubTabs = groupTopics.length > 1;
+
     return Container(
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.line, width: 1)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          for (final topic in kTopics) ...<Widget>[
-            Expanded(
-              child: _TopicTab(
-                topic: topic,
-                selected: topic.id == currentId,
-                onTap: () => onSelect(topic),
-              ),
+          Row(
+            children: <Widget>[
+              for (final group in kSubjectGroups) ...<Widget>[
+                Expanded(
+                  child: _NavTab(
+                    label: group.name,
+                    selected: currentTopic.group == group.id,
+                    onTap: () => onSelectGroup(group.id),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (showSubTabs)
+            Row(
+              children: <Widget>[
+                for (final topic in groupTopics) ...<Widget>[
+                  Expanded(
+                    child: _NavTab(
+                      label: topic.displayTabLabel,
+                      selected: topic.id == currentTopic.id,
+                      onTap: () => onSelectTopic(topic),
+                      subtle: true,
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
         ],
       ),
     );
   }
 }
 
-class _TopicTab extends StatelessWidget {
-  const _TopicTab({
-    required this.topic,
+/// 一行 tab 里的单项：一级与二级共用，只有字号/选中强弱的区别。
+class _NavTab extends StatelessWidget {
+  const _NavTab({
+    required this.label,
     required this.selected,
     required this.onTap,
+    this.subtle = false,
   });
 
-  final Topic topic;
+  final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool subtle;
 
   @override
   Widget build(BuildContext context) {
@@ -496,23 +576,27 @@ class _TopicTab extends StatelessWidget {
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
+            alignment: Alignment.center,
             constraints: const BoxConstraints(minHeight: 48),
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
                   color: selected ? AppColors.seal : Colors.transparent,
-                  width: 2,
+                  width: subtle ? 1.5 : 2,
                 ),
               ),
             ),
             child: Text(
-              topic.name,
+              label,
               textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: subtle ? 14 : 15,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected ? AppColors.ink : AppColors.inkSoft,
+                color: selected
+                    ? (subtle ? AppColors.seal : AppColors.ink)
+                    : AppColors.inkSoft,
                 letterSpacing: 2,
               ),
             ),
@@ -528,11 +612,13 @@ class _TitleBlock extends StatelessWidget {
     required this.store,
     required this.topic,
     required this.onSettings,
+    required this.onPlaySudoku,
   });
 
   final ProgressStore store;
   final Topic topic;
   final VoidCallback onSettings;
+  final VoidCallback onPlaySudoku;
 
   /// 已解锁的档数，数独统计里用。
   String get _unlockedCount {
@@ -576,6 +662,42 @@ class _TitleBlock extends StatelessWidget {
                 ],
               ),
             ),
+            if (!topic.isBoardGame) ...<Widget>[
+              const SizedBox(width: 4),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onPlaySudoku,
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.sealSoft,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(Icons.grid_view_outlined, size: 17,
+                            color: AppColors.seal),
+                        const SizedBox(width: 5),
+                        Text(
+                          '玩数独',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.seal,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
             IconButton(
               onPressed: onSettings,
               icon: const Icon(Icons.settings_outlined, size: 22),

@@ -8,6 +8,14 @@ import 'pinyin.dart';
 import 'poems.dart';
 import 'topic.dart';
 
+/// 学科组：首页一级 tab。数独偏游戏，不在此列，改由首页独立入口进入。
+/// [id] 与 [Topic.group] 对应；[name] 是一级 tab 文案。
+const List<({String id, String name})> kSubjectGroups = <({String id, String name})>[
+  (id: 'chinese', name: '语文'),
+  (id: 'math', name: '数学'),
+  (id: 'english', name: '英语'),
+];
+
 /// 已上线的科目。以后接入成语，在这里加一条即可，
 /// 其余代码通过 [kTopics] 取用，不再直接引用 [kPoems]。
 const Topic kPoetryTopic = Topic(
@@ -15,6 +23,8 @@ const Topic kPoetryTopic = Topic(
   name: '诗词',
   unit: '首',
   groupLabel: '朝代',
+  group: 'chinese',
+  tabLabel: '诗词',
   searchHint: '搜诗名、作者或诗句',
   entries: kPoems,
   groupOf: _dynastyOf,
@@ -45,6 +55,8 @@ const Topic kPinyinTopic = Topic(
   name: '拼音',
   unit: '条',
   groupLabel: '类别',
+  group: 'chinese',
+  tabLabel: '拼音',
   searchHint: '搜字词或拼音',
   entries: kPinyin,
   groupOf: _pinyinGroupOf,
@@ -84,6 +96,8 @@ final Topic kMathTopic = Topic(
   name: '数学',
   unit: '题',
   groupLabel: '类型',
+  group: 'math',
+  tabLabel: '数学',
   searchHint: '搜算式或得数',
   entries: kMath,
   groupOf: _mathGroupOf,
@@ -139,6 +153,8 @@ const Topic kEnglishTopic = Topic(
   name: '英语',
   unit: '个',
   groupLabel: '类别',
+  group: 'english',
+  tabLabel: '英语',
   searchHint: '搜单词或中文',
   entries: kEnglish,
   groupOf: _englishGroupOf,
@@ -209,6 +225,8 @@ const Topic kChengyuTopic = Topic(
   name: '成语',
   unit: '条',
   groupLabel: '类别',
+  group: 'chinese',
+  tabLabel: '成语',
   searchHint: '搜成语、拼音或释义',
   entries: kChengyu,
   groupOf: _chengyuGroupOf,

@@ -32,6 +32,8 @@ class Topic {
     this.kinds = const <QuestionKind>{},
     this.unit = '题',
     this.groupLabel = '',
+    this.group = 'other',
+    this.tabLabel,
     this.searchHint = '',
     this.groupOf = _noGroup,
     this.metaOf = _noMeta,
@@ -58,6 +60,16 @@ class Topic {
 
   /// 学习模式里分组筛选的含义，如「朝代」。
   final String groupLabel;
+
+  /// 学科组 id（见 `topics.dart` 的 `kSubjectGroups`）。用于首页两级导航分组，
+  /// 默认 `other`——数独是独立游戏入口，不挂学科组，也保持这个默认值。
+  final String group;
+
+  /// 二级 tab 的短名（两字），默认用 [name]。
+  final String? tabLabel;
+
+  /// 首页二级 tab 展示名，两字短名优先，否则用科目全名。
+  String get displayTabLabel => tabLabel ?? name;
 
   final String searchHint;
 
