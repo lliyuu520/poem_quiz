@@ -1,7 +1,7 @@
 import 'poem.dart';
 
 /// 题型。前四种针对诗句，中间两种针对拼音读音，后三种针对算式，
-/// 成语三型针对成语，最后五种针对英语（以听为主）。
+/// 成语三型针对成语，文学常识一型，最后五种针对英语（以听为主）。
 ///
 /// 一个科目只会用到其中一部分（见 `Topic.kinds`），引擎按题型分派。
 enum QuestionKind {
@@ -17,6 +17,7 @@ enum QuestionKind {
   idiomBlank,
   idiomMeaning,
   idiomPinyin,
+  literaturePick,
   englishListen,
   englishMeaning,
   englishCase,
@@ -38,6 +39,7 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.idiomBlank => '选字',
         QuestionKind.idiomMeaning => '知词义',
         QuestionKind.idiomPinyin => '读成语',
+        QuestionKind.literaturePick => '知常识',
         QuestionKind.englishListen => '听音选词',
         QuestionKind.englishMeaning => '认词义',
         QuestionKind.englishCase => '大小写',
@@ -77,6 +79,9 @@ bool isMathKind(QuestionKind kind) =>
     kind == QuestionKind.mathResult ||
     kind == QuestionKind.mathBlank ||
     kind == QuestionKind.mathCompare;
+
+/// 是否为文学常识题型。
+bool isLiteratureKind(QuestionKind kind) => kind == QuestionKind.literaturePick;
 
 /// 一道题。选择题与填空题共用同一结构，填空题不使用 [options]。
 class Question {
@@ -133,8 +138,10 @@ class Question {
   /// 拼音题同样用 [focus] 展示题干、[options] 展示候选，只是文字是拼音。
   bool get isPinyin => isPinyinKind(kind);
 
-  /// 题干是长释义（成语「知词义」），不能按单个词/短语的大字号渲染。
-  bool get isLongPrompt => kind == QuestionKind.idiomMeaning;
+  /// 题干是长释义（成语「知词义」与文学常识「知常识」），
+  /// 不能按单个词/短语的大字号渲染。
+  bool get isLongPrompt =>
+      kind == QuestionKind.idiomMeaning || kind == QuestionKind.literaturePick;
 
   String get answerText => isBlank ? answerChars.join() : options[answerIndex];
 }

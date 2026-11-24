@@ -122,11 +122,30 @@ void main() {
       expect(find.text('玩'), findsNothing, reason: '数独不应出现在主 tab 行');
       // 数独是标题区的独立按钮。
       expect(find.text('玩数独'), findsOneWidget, reason: '数独独立入口应在标题区');
-      // 二级：语文组的三个子科目短名都在（T3~T6 后扩到 7 个）。
-      for (final label in <String>['诗词', '拼音', '成语']) {
+      // 二级：语文组的子科目短名都在（诗词/拼音/成语/常识，T4~T6 再加三个）。
+      for (final label in <String>['诗词', '拼音', '成语', '常识']) {
         expect(find.text(label), findsWidgets, reason: '语文二级 tab $label 应出现');
       }
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('窄屏手机：语文四个二级 tab 一行排开不溢出', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final profile = await loadProfile(birth: (2018, 9));
+      await pumpAt(
+        tester,
+        phone,
+        () => HomePage(
+          store: store,
+          topic: kPoetryTopic,
+          profile: profile,
+          onSwitchTopic: (_) {},
+        ),
+      );
+      for (final label in <String>['诗词', '拼音', '成语', '常识']) {
+        expect(find.text(label), findsWidgets, reason: '窄屏二级 tab $label 应出现');
+      }
+      expect(tester.takeException(), isNull, reason: '窄屏四个二级 tab 不应溢出');
     });
 
     testWidgets('数独页：不显示玩数独按钮、不渲染学科二级 tab', (tester) async {
@@ -579,6 +598,29 @@ void main() {
         for (final p in <String>['接下句', '识诗人', '辨出处', '补诗句', '选读音', '选字词']) {
           expect(find.text(p), findsNothing, reason: '数学科目出了别的科目题型：$p');
         }
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    for (final (name, size) in <(String, Size)>[
+      ('手机', phone),
+      ('平板横屏', tabletLandscape),
+    ]) {
+      testWidgets('文学常识答题页 $name 渲染无溢出', (tester) async {
+        final engine = QuizEngine(poems: kLiteratureTopic.entries);
+        final session = buildSession(
+          engine: engine,
+          topic: kLiteratureTopic,
+          count: 5,
+          grade: GradeLevel.g8,
+        );
+        await pumpAt(
+          tester,
+          size,
+          () => QuizPage(session: session, onFinish: (_) async {}),
+        );
+        expect(find.text('知常识'), findsWidgets, reason: '文学常识答题页应显示题型标签');
+        // 长题干走正文分支，不应按单词大字号渲染（无异常即可）。
         expect(tester.takeException(), isNull);
       });
     }

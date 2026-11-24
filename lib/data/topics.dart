@@ -3,6 +3,7 @@ import '../models/question.dart';
 import '../theme/app_theme.dart';
 import 'chengyu.dart';
 import 'english.dart';
+import 'literature.dart';
 import 'math.dart';
 import 'pinyin.dart';
 import 'poems.dart';
@@ -257,14 +258,59 @@ String _chengyuDetail(Poem p) => p.lines.join('\n');
 String _chengyuSummaryFromId(List<String> parts) =>
     parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
 
-/// 预留科目：成语。接入时把 [Topic.entries] 换成自己的题库，
-/// 并把 [Topic.id] 用作存储键前缀，进度自然与诗词隔离。
+/// 文学常识科目：并称、字号、流派、体裁与文学史常识。
+///
+/// **内容边界（D1 独立建题库）**：只考诗词科目考不到的——并称/字号/流派/体裁/
+/// 文学史常识，不做「名句→作者」（那是诗词科目的 author/title 题型）。
+/// 题库由 `tool/gen_literature.py` 从 `tool/literature_bank.json` 生成，不要手改。
+///
+/// 字段映射：`title`=短名（列表锚点），`author`=答案，`lines[0]`=题干描述、
+/// `lines[1]`=解析。年级 7-9 + 拓展（0），孩子默认「跟随推荐」时题库无低年级条目，
+/// 由 `resolvePracticePlan` 的兜底退化为全库出题，不会空池。
+const Topic kLiteratureTopic = Topic(
+  id: 'literature',
+  name: '文学常识',
+  unit: '条',
+  groupLabel: '类别',
+  group: 'chinese',
+  tabLabel: '常识',
+  searchHint: '搜并称、字号或流派',
+  entries: kLiterature,
+  groupOf: _literatureGroupOf,
+  metaOf: _literatureMeta,
+  kinds: <QuestionKind>{QuestionKind.literaturePick},
+  nameOf: _literatureName,
+  summaryOf: _literatureSummary,
+  tagline: '知人论世，读懂文脉',
+  intro: '并称、字号、流派、体裁与文学史常识。给一段描述，选出对应的人、作品或术语。',
+  seal: '识\nquiz',
+  accent: AppColors.chengyu,
+  accentSoft: AppColors.chengyuSoft,
+  summaryFromId: _literatureSummaryFromId,
+  detailOf: _literatureDetail,
+);
+
+String _literatureGroupOf(Poem p) => p.dynasty;
+String _literatureMeta(Poem p) => p.author;
+String _literatureName(Poem p) => p.title;
+String _literatureSummary(Poem p) => '${p.title} · ${p.author}';
+
+/// 展开正文：题干描述 + 解析，分两段看。
+String _literatureDetail(Poem p) => p.lines.join('\n');
+
+/// 文学常识条目 id 是「分组|答案|短名」，摘要写成「诗仙 · 李白」。
+String _literatureSummaryFromId(List<String> parts) =>
+    parts.length >= 3 ? '${parts[2]} · ${parts[1]}' : parts.join(' · ');
+
+/// 已上线的科目，按首页学科组排列：语文（诗词/拼音/成语/文学常识）、
+/// 数学、英语，最后是数独（棋盘玩法，不进主 tab，由标题区独立入口进入）。
 final List<Topic> kTopics = <Topic>[
   kPoetryTopic,
   kPinyinTopic,
+  kChengyuTopic,
+  kLiteratureTopic,
   kMathTopic,
   kEnglishTopic,
-  kChengyuTopic,
   kSudokuTopic,
 ];
 

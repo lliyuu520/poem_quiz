@@ -214,6 +214,8 @@ class QuizEngine {
         return _idiomMeaning(poem, optionCount, bias);
       case QuestionKind.idiomPinyin:
         return _idiomPinyin(poem, optionCount, bias);
+      case QuestionKind.literaturePick:
+        return _literaturePick(poem, optionCount, bias);
       case QuestionKind.englishListen:
         return _englishListen(poem, optionCount, bias);
       case QuestionKind.englishMeaning:
@@ -684,6 +686,41 @@ class QuizEngine {
     if (p.lines.isEmpty) return null;
     final s = p.lines.first.trim();
     return s.isEmpty ? null : s;
+  }
+
+  /// 文学常识：题干是一段描述（如「号青莲居士，被称为诗仙」），
+  /// 四个选项是答案（人名/作品名/术语），选出对应项。
+  ///
+  /// 干扰项按 `author`（答案）排除：同一条答案不能当干扰项，否则选项里
+  /// 会有两个正确答案（如「诗仙」与「青莲居士」的答案都是李白）。
+  Question? _literaturePick(Poem entry, int optionCount, _Bias bias) {
+    if (entry.author.trim().isEmpty) return null;
+    if (entry.lines.isEmpty || entry.lines.first.trim().isEmpty) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) => p.id == entry.id || p.author == entry.author,
+      pool: (p) => p.author.trim().isEmpty ? const <String>[] : <String>[p.author],
+      bias: bias,
+      // 干扰项取同分组（同是「字号」「并称」），比跨组更像。
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.author, ...distractors]..shuffle(_random);
+    final note = entry.lines.length > 1 ? entry.lines[1].trim() : '';
+    return Question(
+      kind: QuestionKind.literaturePick,
+      poem: entry,
+      prompt: '选一选，这是谁或什么？',
+      focus: entry.lines.first.trim(),
+      key: '${entry.id}|literature',
+      options: options,
+      answerIndex: options.indexOf(entry.author),
+      note: note,
+    );
   }
 
   String? _randomLine(Poem poem) {
