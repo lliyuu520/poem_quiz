@@ -76,6 +76,11 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - **学龄由出生年月推算，不是用户选择的**（2026-11-19 改）：`gradeForBirth(birthYear, birthMonth)` 按 9 月 1 日入学分界推出在读年级，九年级以上与未入学都落拓展档。出生年月存 `UserProfile`（裸键 `birth_year` / `birth_month`，全局一份，不属于任何科目），设置页修改。**首页没有 `_GradeCard` 了**——推算结果只作为练习范围的默认值。
 - **练习范围与难度策略是两个正交维度**（2026-11-20 改）：`PracticeScope` 决定「出哪些年级的条目」（跟随推荐 / 指定年级 / 年级区间 / 教材全覆盖 / 仅拓展 / 全库），`ChallengeTier` 决定「怎么考」（轻松 / 标准 / 挑战，三档均为 A、B、C、D 四个选项；轻松多认读 / 挑战多回忆）。两者按科目存在 `ProgressStore` 的 `practice_scope` / `challenge_tier` 键，由 `resolvePracticePlan()` 解析成 `PracticePlan`（`weights` + `optionCount` + `kindWeights` + 干扰项偏好），再喂给 `QuizEngine.generate`。**不要在 UI 里重算计划**，首页只调 `resolvePracticePlan()`。
 - **`Topic.graded` 由题库推导，不是构造参数**：`entries` 跨两个年级以上才为 true。数学题库含一~三年级条目（`graded` 自动为 true），推算档高于题库最高年级时题池只含低年级条目，由题池累加加权自然兜底，无需特判。
+- **兜底必须分清方向：超纲 ≠ 溢出（2026-11-24 修）**：各科目题库的年级跨度差别很大（诗词 1-9、词语/成语/拼音 1-6、错别字/歇后语 4-9、文言实词与文学常识 7-9）。原 `resolvePracticePlan()` 在 `weights` 为空时**不分方向**，一律退化成「题库全部年级等权」——于是「一年级点文学常识」这种下溢也走了兜底，把七年级文学史直接出给孩子。现在按方向分开：
+  - **上溢**（推荐年级高于题库上沿，如八年级练拼音）：收敛到题库上限，照常出题，这才是兜底的本意；
+  - **下溢**（推荐年级低于题库下沿）：`PracticePlan.aboveLevel = true`、`weights` 保持为空、不出题。首页把二级块置灰不可点、范围卡换成 `_LevelNotice` 说明卡、开始按钮禁用；`_start()` 与 `main.dart` 启动路径也各拦一次。
+  - **只在 `scope.isRecommended` 时判超纲**——显式选年级是主动挑战，不算超纲；未设置出生年月时推荐值不可信，也不判。
+  - 判据只在一处：`isAboveRecommendedLevel()` / `minSchoolGradeOf()` / `maxSchoolGradeOf()`（`grade.dart`，`Topic.minSchoolGrade` 是同源的便捷读法）。范围面板的年级 chip 按 `Topic.minSchoolGrade`~`maxSchoolGrade` 裁剪，不列题库没有的年级。**新增高年级起步的科目时不必改代码，这套逻辑自动生效**。
 - **数学三年级不全穷举**：三位数加减若全组合近百万条，会把低年级题池彻底淹没。`_addSubWithin1000()` 只收整百±整百、整百+整十、整千-整百这类能在脑子里算的形态；`_twoDigitMul()` 只收 11~34 × 2~5。**有余数除法暂时进不来**——`MathExpr` 只支持单个得数，表达不了「7 ÷ 2 = 3 余 1」，要加得先扩解析器。
 - **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」，成语是「一心一意」与「一心一意 · yì xīn yí yì」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
