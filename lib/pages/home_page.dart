@@ -487,10 +487,13 @@ enum GameMode {
   String subtitleFor(Topic topic) => subtitle.replaceAll('{name}', topic.name);
 }
 
-/// 科目页签：一级只摆三个学科组（语文/数学/英语）。数独偏游戏，不在这里——
-/// 它的「玩数独」入口在标题区独立按钮上。切科由根壳换存档。
+/// 科目导航：一级是三个学科组（语文/数学/英语），二级是该组内的子科目。
 ///
-/// 底部一条细线 + 当前项的短横，统一用朱红标出选中态（不按科目换色）。
+/// 数独偏游戏，不在这里——它的「玩数独」入口在标题区独立按钮上。切科由根壳
+/// 换存档。
+///
+/// 一级用底部细线 + 朱红短横。二级科目多（语文 8 个），挤一行每个只剩约 40dp
+/// 读不清，改用**块状方格**：`Wrap` 自动换行，每块带描边、选中填朱红。
 class _TopicTabs extends StatelessWidget {
   const _TopicTabs({
     required this.currentTopic,
@@ -506,7 +509,7 @@ class _TopicTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 当前组的子科目，只有多科目组才渲染二级行。数独不挂组，不会走到这里。
+    // 当前组的子科目，只有多科目组才渲染二级块。数独不挂组，不会走到这里。
     final groupTopics = topics.where((t) => t.group == currentTopic.group).toList();
     final showSubTabs = groupTopics.length > 1;
 
@@ -531,19 +534,33 @@ class _TopicTabs extends StatelessWidget {
             ],
           ),
           if (showSubTabs)
-            Row(
-              children: <Widget>[
-                for (final topic in groupTopics) ...<Widget>[
-                  Expanded(
-                    child: _NavTab(
-                      label: topic.displayTabLabel,
-                      selected: topic.id == currentTopic.id,
-                      onTap: () => onSelectTopic(topic),
-                      subtle: true,
-                    ),
-                  ),
-                ],
-              ],
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 10),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 窄屏要守住「首页整页不滚动」：块压到 44dp 高、四列均分，
+                  // 语文 8 个正好两行。宽屏给足 48dp 触控与呼吸间距。
+                  final narrow = constraints.maxWidth < 600;
+                  return Wrap(
+                    spacing: narrow ? 6 : 8,
+                    runSpacing: narrow ? 6 : 8,
+                    children: <Widget>[
+                      for (final topic in groupTopics)
+                        SizedBox(
+                          width: narrow
+                              ? (constraints.maxWidth - 6 * 3) / 4
+                              : null,
+                          child: _TopicChip(
+                            label: topic.displayTabLabel,
+                            selected: topic.id == currentTopic.id,
+                            onTap: () => onSelectTopic(topic),
+                            compact: narrow,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
         ],
       ),
@@ -551,19 +568,79 @@ class _TopicTabs extends StatelessWidget {
   }
 }
 
-/// 一行 tab 里的单项：一级与二级共用，只有字号/选中强弱的区别。
-class _NavTab extends StatelessWidget {
-  const _NavTab({
+/// 二级子科目的块状方格。选中时朱红底 + 白字，未选中是宣纸卡片底 + 细描边。
+///
+/// [compact]（窄屏）压到 44dp 高、字号 14、内边距收紧，为的是让语文 8 个
+/// 子科目两行排完——首页整页不滚动是硬约束。宽屏回到 48dp 触控目标。
+class _TopicChip extends StatelessWidget {
+  const _TopicChip({
     required this.label,
     required this.selected,
     required this.onTap,
-    this.subtle = false,
+    this.compact = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  final bool subtle;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(9),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            constraints: BoxConstraints(minHeight: compact ? 44 : 48),
+            alignment: Alignment.center,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 4 : 16,
+              vertical: compact ? 6 : 8,
+            ),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.seal : AppColors.card,
+              borderRadius: BorderRadius.circular(9),
+              border: Border.all(
+                color: selected ? AppColors.seal : AppColors.line,
+                width: 1,
+              ),
+            ),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: compact ? 14 : 15,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? AppColors.card : AppColors.inkSoft,
+                letterSpacing: compact ? 1 : 2,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 一级学科组的 tab 单项：底部细线 + 当前组朱红短横。
+class _NavTab extends StatelessWidget {
+  const _NavTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -583,7 +660,7 @@ class _NavTab extends StatelessWidget {
               border: Border(
                 bottom: BorderSide(
                   color: selected ? AppColors.seal : Colors.transparent,
-                  width: subtle ? 1.5 : 2,
+                  width: 2,
                 ),
               ),
             ),
@@ -592,11 +669,9 @@ class _NavTab extends StatelessWidget {
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: subtle ? 14 : 15,
+                fontSize: 15,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: selected
-                    ? (subtle ? AppColors.seal : AppColors.ink)
-                    : AppColors.inkSoft,
+                color: selected ? AppColors.ink : AppColors.inkSoft,
                 letterSpacing: 2,
               ),
             ),
