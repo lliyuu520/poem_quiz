@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart'
+    show BoxHitTestResult, BoxParentData, RenderObjectWithChildMixin;
 
 import '../data/english_audio.dart';
 import '../data/pinyin_audio.dart';
@@ -44,8 +48,11 @@ class _QuizPageState extends State<QuizPage> {
 
   bool _locked = false;
 
-  /// 窄屏内容区的滚动控制器；切下一题时回到顶部。
+  /// 窄屏内容区的滚动控制器；切下一题时回到顶部，判题后滚到反馈卡。
   final ScrollController _scroll = ScrollController();
+
+  /// 反馈卡的全局键：判题后把它滚进视口，孩子不用手动滑。
+  final GlobalKey _feedbackKey = GlobalKey();
 
   @override
   void initState() {
@@ -90,6 +97,30 @@ class _QuizPageState extends State<QuizPage> {
       _verdict = correct;
     });
     widget.session.submit(correct: correct);
+    // 反馈卡接在选项之后，多数情况下已在一屏开外；等 AnimatedSize/卡片
+    // 布局稳定后把它滚进视口，孩子不用手动滑。宽屏反馈卡常驻右栏底部，
+    // 不需要滚。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToFeedback());
+  }
+
+  /// 把反馈卡滚进视口：卡已整卡可见时不动；否则滚动到「卡底对齐视口底」，
+  /// 让「答对了/答错了 + 出处 + 正文」完整入眼，而不是只露个头。
+  void _scrollToFeedback() {
+    if (!_scroll.hasClients) return;
+    final ctx = _feedbackKey.currentContext;
+    if (ctx == null) return;
+    final box = ctx.findRenderObject()! as RenderBox;
+    final cardTop = box.localToGlobal(Offset.zero).dy;
+    final cardBottom = cardTop + box.size.height;
+    final viewportBottom = _scroll.position.viewportDimension +
+        _scroll.position.pixels;
+    if (cardTop >= 0 && cardBottom <= viewportBottom) return; // 已可见
+    final target = _scroll.offset + (cardBottom - viewportBottom);
+    _scroll.animateTo(
+      target.clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+    );
   }
 
   void _next() {
@@ -267,7 +298,10 @@ class _QuizPageState extends State<QuizPage> {
                   _answerArea(),
                   if (_verdict != null) ...<Widget>[
                     const SizedBox(height: 20),
+                    // GlobalKey 只在窄屏挂：宽屏反馈卡常驻右栏底部，
+                    // 不经滚动容器，不需要滚到它。
                     _Feedback(
+                      key: _feedbackKey,
                       question: _question,
                       correct: _verdict!,
                       topic: widget.session.topic,
@@ -1003,8 +1037,9 @@ class _CharTile extends StatelessWidget {
   }
 }
 
-class _Feedback extends StatelessWidget {
+class _Feedback extends StatefulWidget {
   const _Feedback({
+    super.key,
     required this.question,
     required this.correct,
     required this.topic,
@@ -1018,12 +1053,62 @@ class _Feedback extends StatelessWidget {
   final Topic topic;
 
   @override
+  State<_Feedback> createState() => _FeedbackState();
+}
+
+class _FeedbackState extends State<_Feedback> {
+  /// 长正文默认收起：反馈卡是判题后的「确认 + 下一题」过场，整首诗全文
+  /// 一起展开会把卡顶到几屏高，窄屏上「下一题」虽钉在底部，卡片本体
+  /// 却要滑很久。约两行（15pt × 1.7 × 2 ≈ 51dp，留一点余量）先截断，
+  /// 点一下看全文，学习页里看完整的。
+  static const double _collapsedHeight = 56;
+
+  bool _expanded = false;
+
+  /// 正文是否值得给「展开」 affordance：LayoutBuilder 量出来，只有真的
+  /// 超高才显示按钮（短诗、组词示例不出现多余的「展开」）。
+  bool _overflows = false;
+
+  Widget _bodyText(double fontSize, {Color? color}) {
+    final question = widget.question;
+    return Text(
+      // 算式题的正文就是算式本身，重复展示没有意义，改显示解题思路。
+      question.note.isNotEmpty ? question.note : question.poem.fullText,
+      style: serif(fontSize, color: color, height: 1.7, spacing: 1.5),
+    );
+  }
+
+  /// 限高正文：[_Measuring] 这个 RenderObject 先按无约束排出自然高度，
+  /// 再按收起/展开收缩占位；是否超高回调给 `_overflows` 决定要不要
+  /// 显示「展开全文」。不用 LayoutBuilder——含它的子树进不了
+  /// IntrinsicHeight（见 AGENTS.md 渲染坑），能少一层是一层。
+  Widget _clampedBody(double fontSize, {Color? color}) {
+    return _Measuring(
+      maxHeight: _collapsedHeight,
+      expanded: _expanded,
+      onOverflow: (over) {
+        if (_overflows != over) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _overflows = over);
+          });
+        }
+      },
+      child: _bodyText(fontSize, color: color),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = correct ? AppColors.jade : AppColors.seal;
-    final icon = correct ? Icons.check_circle_outline : Icons.error_outline;
+    final question = widget.question;
+    final topic = widget.topic;
+    final color = widget.correct ? AppColors.jade : AppColors.seal;
+    final icon = widget.correct
+        ? Icons.check_circle_outline
+        : Icons.error_outline;
+    final body = _clampedBody(15);
 
     return InkCard(
-      color: correct ? AppColors.jadeSoft : AppColors.sealSoft,
+      color: widget.correct ? AppColors.jadeSoft : AppColors.sealSoft,
       borderColor: color.withValues(alpha: 0.35),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1039,7 +1124,7 @@ class _Feedback extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  correct ? '答对了' : '答错了',
+                  widget.correct ? '答对了' : '答错了',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1047,7 +1132,7 @@ class _Feedback extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!correct) ...<Widget>[
+              if (!widget.correct) ...<Widget>[
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -1087,6 +1172,8 @@ class _Feedback extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
+                      // 插画旁的正文不参与限高：旁边有图压着高度，展开逻辑
+                      // 会把图下方的空间拉扯得很怪，这类正文本来也短。
                       Text(
                         question.note.isNotEmpty
                             ? question.note
@@ -1112,14 +1199,214 @@ class _Feedback extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              // 算式题的正文就是算式本身，重复展示没有意义，改显示解题思路。
-              question.note.isNotEmpty ? question.note : question.poem.fullText,
-              style: serif(15, color: AppColors.ink, height: 1.7, spacing: 1.5),
-            ),
+            if (_overflows && !_expanded)
+              // 收起态：整块可点展开，底部淡出 + 「展开全文」提示。
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _expanded = true),
+                child: Stack(
+                  children: <Widget>[
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxHeight: _collapsedHeight,
+                      ),
+                      child: ClipRect(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          heightFactor: 1.0,
+                          child: OverflowBox(
+                            alignment: Alignment.topCenter,
+                            minHeight: 0,
+                            maxHeight: double.infinity,
+                            child: Align(
+                              alignment: Alignment.topLeft,
+                              child: body,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.only(top: 18),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const <double>[0, 1],
+                            colors: <Color>[
+                              (widget.correct
+                                      ? AppColors.jadeSoft
+                                      : AppColors.sealSoft)
+                                  .withValues(alpha: 0),
+                              widget.correct
+                                  ? AppColors.jadeSoft
+                                  : AppColors.sealSoft,
+                            ],
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            Icon(
+                              Icons.expand_more,
+                              size: 14,
+                              color: color.withValues(alpha: 0.9),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '展开全文',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: color.withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              body,
           ],
         ],
       ),
     );
+  }
+}
+
+/// 量正文自然高度并回调是否超高；收起时裁剪到 [maxHeight]。
+///
+/// 直接用 [_Measuring] 这个 RenderObjectWidget，不再包一层 StatelessWidget。
+class _Measuring extends SingleChildRenderObjectWidget {
+  const _Measuring({
+    required Widget super.child,
+    required this.maxHeight,
+    required this.expanded,
+    required this.onOverflow,
+  });
+
+  final double maxHeight;
+  final bool expanded;
+  final void Function(bool) onOverflow;
+
+  @override
+  RenderMeasureText createRenderObject(BuildContext context) {
+    return RenderMeasureText(
+      maxHeight: maxHeight,
+      expanded: expanded,
+      onOverflow: onOverflow,
+    );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant RenderMeasureText renderObject,
+  ) {
+    renderObject
+      ..maxHeight = maxHeight
+      ..expanded = expanded
+      ..onOverflow = onOverflow;
+  }
+}
+
+/// 先按内容自然高度排版（告诉上层「要多高有多高」），再按收起/展开
+/// 收缩实际占位。自然高度与 maxHeight 的比较结果通过 [onOverflow] 上报。
+///
+/// 直接继承 [RenderBox] + `RenderObjectWithChildMixin`：RenderProxyBoxMixin
+/// 的 performLayout/paint 契约与这里的「child 按无约束排、自己按限高收缩」
+/// 模型冲突，显式实现反而少踩坑。
+class RenderMeasureText extends RenderBox
+    with RenderObjectWithChildMixin<RenderBox> {
+  RenderMeasureText({
+    required double maxHeight,
+    required bool expanded,
+    required void Function(bool) onOverflow,
+  }) {
+    _maxHeight = maxHeight;
+    _expanded = expanded;
+    _onOverflow = onOverflow;
+  }
+
+  double _maxHeight = 0;
+  bool _expanded = false;
+  bool? _lastReported;
+  void Function(bool)? _onOverflow;
+
+  set maxHeight(double v) {
+    if (_maxHeight == v) return;
+    _maxHeight = v;
+    markNeedsLayout();
+  }
+
+  set expanded(bool v) {
+    if (_expanded == v) return;
+    _expanded = v;
+    markNeedsLayout();
+  }
+
+  set onOverflow(void Function(bool) v) => _onOverflow = v;
+
+  @override
+  void setupParentData(covariant RenderObject child) {
+    // child 画在 (0,0)，用默认 BoxParentData（offset 恒 0）。
+    // 不能空着不设——applyPaintTransform 的默认实现要求 child 带 BoxParentData。
+    if (child.parentData is! BoxParentData) {
+      child.parentData = BoxParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    // 1) 无限高度约束下让 child 排出自然高度。
+    child!.layout(
+      BoxConstraints(
+        maxWidth: constraints.maxWidth,
+        maxHeight: double.infinity,
+      ),
+      parentUsesSize: true,
+    );
+    final natural = child!.size.height;
+
+    // 2) 实际占位：展开或没超高用自然高度，收起用限高。
+    final visual = _expanded || natural <= _maxHeight ? natural : _maxHeight;
+    size = constraints.constrainDimensions(constraints.maxWidth, visual);
+
+    final over = natural > _maxHeight + 1;
+    if (_lastReported != over) {
+      _lastReported = over;
+      // 布局中不能同步回调 setState，丢到微任务里。
+      scheduleMicrotask(() => _onOverflow?.call(over));
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final childSize = child!.size;
+    if (_expanded || childSize.height <= _maxHeight) {
+      context.paintChild(child!, offset);
+      return;
+    }
+    // 收起：裁剪到限高，只画上半截。
+    context.pushClipRect(
+      true,
+      offset,
+      Offset.zero & size,
+      (PaintingContext c, Offset o) => c.paintChild(child!, o),
+    );
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    // child 整体画在 (0,0)，无偏移。
+    return child!.hitTest(result, position: position);
   }
 }

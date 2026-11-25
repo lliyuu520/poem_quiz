@@ -651,6 +651,125 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('窄屏判题后反馈卡滚进视口：小屏也能整卡看到，不用手动滑', (tester) async {
+      // 小屏 + 长诗全文：判题后「题干 + 选项 + 反馈卡」远超一屏，
+      // 自动滚动应把反馈卡完整带进视口。
+      final engine = QuizEngine(
+        poems: kPoetryTopic.entries,
+        random: Random(9),
+      );
+      final session = buildSession(
+        engine: engine,
+        topic: kPoetryTopic,
+        count: 1,
+        grade: GradeLevel.g3,
+        kinds: <QuestionKind>{QuestionKind.author},
+      );
+      await pumpAt(
+        tester,
+        const Size(375, 667),
+        () => QuizPage(session: session, onFinish: (_) async {}),
+      );
+      await tester.tap(find.text(session.current.options[session.current.answerIndex]));
+      await tester.pumpAndSettle();
+
+      final feedback = find.ancestor(
+        of: find.text('答对了'),
+        matching: find.byType(InkCard),
+      ).first;
+      final feedbackBottom = tester.getBottomRight(feedback).dy;
+      expect(
+        feedbackBottom,
+        lessThanOrEqualTo(667 - 24),
+        reason: '反馈卡应滚到视口内，底部实际在 $feedbackBottom',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('长正文默认收起，出现展开全文；点开可见完整正文', (tester) async {
+      // 静夜思全文 4 行（15pt × 1.7 行高 ≈ 100dp+）超过 92dp 收起限高；
+      // 而单行正文（算式/组词示例）不应出现「展开全文」。
+      // 选一首足够长的（春夜喜雨 8 句 ≈ 48 字，两行放不下才触发限高）；
+      // 静夜思只有 4 句，2 行正文 ≈ 51dp 不超高，不会出现展开提示。
+      final entry = kPoetryTopic.entries.firstWhere(
+        (p) => p.title == '春夜喜雨',
+        orElse: () => kPoetryTopic.entries.first,
+      );
+      final session = QuizSession(
+        questions: <Question>[
+          Question(
+            kind: QuestionKind.author,
+            poem: entry,
+            prompt: '这句诗出自哪位诗人？',
+            focus: entry.lines.first,
+            key: 'clamped-fb',
+            options: const <String>['李白', '杜甫', '王维', '白居易'],
+            answerIndex: 0,
+          ),
+        ],
+        total: 1,
+        topic: kPoetryTopic,
+        plan: planOfGrade(GradeLevel.g3, kPoetryTopic),
+        careerMode: false,
+      );
+      await pumpAt(
+        tester,
+        phone,
+        () => QuizPage(session: session, onFinish: (_) async {}),
+      );
+      await tester.tap(find.text('李白'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('展开全文'), findsOneWidget, reason: '长诗全文应默认收起');
+      // 展开前只露出上半截：反馈卡高度明显小于全文展开后的高度。
+      final feedback = find.ancestor(
+        of: find.text('答对了'),
+        matching: find.byType(InkCard),
+      ).first;
+      final collapsedHeight = tester.getSize(feedback).height;
+      await tester.tap(find.text('展开全文'));
+      await tester.pumpAndSettle();
+      expect(find.text('展开全文'), findsNothing, reason: '展开后提示应消失');
+      final expandedHeight = tester.getSize(feedback).height;
+      expect(expandedHeight, greaterThan(collapsedHeight),
+          reason: '展开后卡片应变高（$collapsedHeight → $expandedHeight）');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('短正文不出现展开提示：算式思路一行放得下', (tester) async {
+      final entry = kMathTopic.entries.firstWhere(
+        (e) => e.title == '3 + 4',
+        orElse: () => kMathTopic.entries.first,
+      );
+      final session = QuizSession(
+        questions: <Question>[
+          Question(
+            kind: QuestionKind.mathResult,
+            poem: entry,
+            prompt: '这个算式的得数是多少？',
+            focus: entry.title,
+            key: 'short-fb',
+            options: const <String>['7', '6', '8', '9'],
+            answerIndex: 0,
+          ),
+        ],
+        total: 1,
+        topic: kMathTopic,
+        plan: planOfGrade(GradeLevel.g1, kMathTopic),
+        careerMode: false,
+      );
+      await pumpAt(
+        tester,
+        phone,
+        () => QuizPage(session: session, onFinish: (_) async {}),
+      );
+      await tester.tap(find.text('7'));
+      await tester.pumpAndSettle();
+      expect(find.text('展开全文'), findsNothing,
+          reason: '单行正文不应出现展开提示');
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('设置页', () {
