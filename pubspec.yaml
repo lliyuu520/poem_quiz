@@ -1,7 +1,7 @@
 name: poem_quiz
 description: "拾 —— 古诗词与识字答题本，离线自用。"
 publish_to: 'none'
-version: 0.5.1+14
+version: 0.5.2+15
 
 environment:
   sdk: ^3.13.4
