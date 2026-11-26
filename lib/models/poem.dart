@@ -42,6 +42,7 @@ class PoemScene {
     required this.group,
     required this.scene,
     required this.line,
+    required this.explain,
   });
 
   final String group;
@@ -49,6 +50,10 @@ class PoemScene {
 
   /// 逐字取自该首 [Poem.lines] 的一句（含句末标点）。
   final String line;
+
+  /// 判题后的说明：为什么这一句适合这个场合。场景题考的是匹配，
+  /// 只给整首诗全文不解释「为什么」，孩子答错了也不知道错在哪。
+  final String explain;
 }
 
 /// 一条「情境套用」标注：一句话生活情境 → 最贴切的那个成语。

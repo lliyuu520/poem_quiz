@@ -161,9 +161,12 @@ const Map<String, IdiomScene> kIdiomScenes = <String, IdiomScene>{
   '全神贯注': IdiomScene(group: '专注', context: '上课时他眼睛盯着黑板，连下课铃都没听见'),
   '聚精会神': IdiomScene(group: '专注', context: '看动画片时他坐在那儿一动不动，谁叫他都不应'),
   '目不转睛': IdiomScene(group: '专注', context: '魔术师表演时，孩子们眼珠一动不动地盯着他的手'),
+  // 「一丝不苟」「废寝忘食」讲的也是当下全神投入，与上面四条同一个语义簇，
+  // 必须同组——拆成「认真」「勤奋」两组会让它们互为干扰项，一道题两个答案。
+  '一丝不苟': IdiomScene(group: '专注', context: '他抄写生字，每一笔都写得端端正正，一个也不马虎'),
+  '废寝忘食': IdiomScene(group: '专注', context: '为了解那道题，他连饭都忘了吃、觉也不想睡'),
 
-  // ── 勤奋 ──
-  '废寝忘食': IdiomScene(group: '勤奋', context: '为了解那道题，他连饭都忘了吃、觉也不想睡'),
+  // ── 勤奋（长期坚持，与「专注」的当下投入分开）──
   '孜孜不倦': IdiomScene(group: '勤奋', context: '奶奶每天练字一小时，练了十年也不觉得累'),
   '持之以恒': IdiomScene(group: '勤奋', context: '他每天跳绳一百下，风雨无阻坚持了整整一年'),
   '坚持不懈': IdiomScene(group: '勤奋', context: '练了半年还是不会，他也没停下，一天都没断'),
@@ -208,9 +211,9 @@ const Map<String, IdiomScene> kIdiomScenes = <String, IdiomScene>{
   '波光粼粼': IdiomScene(group: '山水', context: '太阳照在湖面上，水面一闪一闪地发亮'),
 
   // ── 认真 ──
-  '一丝不苟': IdiomScene(group: '认真', context: '他抄写生字，每一笔都写得端端正正，一个也不马虎'),
-  '脚踏实地': IdiomScene(group: '认真', context: '他从不空想，每天按计划一点点把事做完'),
-  '三思而行': IdiomScene(group: '认真', context: '做决定前他总要反复想几遍，才肯动手'),
+  '脚踏实地': IdiomScene(group: '勤奋', context: '他从不空想，每天按计划一点点把事做完'),
+  // ── 谨慎（决策前反复权衡，与「专注」不同）──
+  '三思而行': IdiomScene(group: '谨慎', context: '做决定前他总要反复想几遍，才肯动手'),
 
   // ── 互助 ──
   '助人为乐': IdiomScene(group: '互助', context: '他常帮同学捡球、扶老人过马路，说帮上忙最开心'),
@@ -223,9 +226,9 @@ const Map<String, IdiomScene> kIdiomScenes = <String, IdiomScene>{
   '井底之蛙': IdiomScene(group: '短浅', context: '他从没出过小镇，就以为外面的世界都跟自己这儿一样'),
   '鼠目寸光': IdiomScene(group: '短浅', context: '为了省一点小钱，他放弃了能学本领的好机会'),
 
-  // ── 多余 ──
-  '画蛇添足': IdiomScene(group: '多余', context: '文章本来已经写好了，他又硬加两段，反而显得乱'),
-  '拔苗助长': IdiomScene(group: '多余', context: '怕孩子长不高，他天天逼着加练，结果反而伤了身体'),
+  // ── 适得其反（做得过头或违反规律，反而坏事）──
+  '画蛇添足': IdiomScene(group: '适得其反', context: '文章本来已经写好了，他又硬加两段，反而显得乱'),
+  '拔苗助长': IdiomScene(group: '适得其反', context: '怕孩子长不高，他天天逼着加练，结果反而伤了身体'),
 
   // ── 补救 ──
   '亡羊补牢': IdiomScene(group: '补救', context: '考砸了一次，他马上把错题整理出来，及时补上'),

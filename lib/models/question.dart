@@ -55,7 +55,7 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.idiomBlank => '选字',
         QuestionKind.idiomMeaning => '知词义',
         QuestionKind.idiomPinyin => '读成语',
-        QuestionKind.idiomScene => '情景套用',
+        QuestionKind.idiomScene => '情境套用',
         QuestionKind.literaturePick => '知常识',
         QuestionKind.xiehouyuLink => '接歇后语',
         QuestionKind.typoCorrect => '辨字形',
@@ -194,10 +194,6 @@ class Question {
   /// 是否为诗词线索猜诗题：题干是「朝代 + 主题」两行短线索，
   /// 判题前可能再补一条名句线索（[extraClue]），按正文小段排而不是单个大词。
   bool get isPoemRiddle => kind == QuestionKind.poemRiddle;
-
-  /// 是否为诗词场景选句题：题干是一句生活场景，选项是诗句，
-  /// 题干不是整首诗也不是单个词。
-  bool get isPoemScene => kind == QuestionKind.poemScene;
 
   String get answerText => isBlank ? answerChars.join() : options[answerIndex];
 }

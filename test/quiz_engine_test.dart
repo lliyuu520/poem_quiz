@@ -606,6 +606,21 @@ void main() {
       }
     });
 
+    test('判题后带「为什么这句合适」的说明', () {
+      final engine = engineWithSeed(707);
+      final qs = engine.generate(
+        count: 10,
+        kinds: {QuestionKind.poemScene},
+        gradeWeights: GradeLevel.g6.weights,
+      );
+      expect(qs, isNotEmpty);
+      for (final q in qs) {
+        // 场景题考的是匹配，答错只给整首诗全文解释不了「为什么」。
+        expect(q.note, isNotEmpty, reason: '\${q.key} 缺少场景说明');
+        expect(q.note, kPoemScenes[q.poem.id]!.explain);
+      }
+    });
+
     test('同 seed 两次生成 key 一致，且每档都能出场景题', () {
       final a = engineWithSeed(808).generate(
         count: 20,
@@ -669,6 +684,24 @@ void main() {
           }
         }
       }
+    });
+
+    test('近义簇不互相当干扰项（专注/勤奋/谨慎分开但组内不互斥）', () {
+      // 回归用例：曾经把「一丝不苟」标成「认真」、「持之以恒」标成「勤奋」，
+      // 两条同属「用功」语义簇却不同组，于是互为干扰项一起进选项——
+      // 同一个情境下两个都说得通，就是双答案。
+      const cluster = <String>['一丝不苟', '废寝忘食', '一心一意', '全神贯注', '聚精会神', '目不转睛'];
+      for (final c in cluster) {
+        final meta = kIdiomScenes[c];
+        expect(meta, isNotNull, reason: '\$c 应有情境标注');
+        expect(meta!.group, '专注', reason: '\$c 与「专注」同簇，必须同组');
+      }
+      // 「脚踏实地」讲长期坚持，与「专注」的当下投入不同簇，归勤奋。
+      expect(kIdiomScenes['脚踏实地']!.group, '勤奋');
+      expect(kIdiomScenes['三思而行']!.group, '谨慎');
+      // 拔苗助长不是「多余」，是做得过头反而坏事。
+      expect(kIdiomScenes['拔苗助长']!.group, isNot('多余'));
+      expect(kIdiomScenes['拔苗助长']!.group, kIdiomScenes['画蛇添足']!.group);
     });
 
     test('答案释义作为反馈说明带出', () {

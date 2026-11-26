@@ -853,6 +853,8 @@ class QuizEngine {
       key: '${poem.id}|scene',
       options: options,
       answerIndex: options.indexOf(meta.line),
+      // 场景题考的是「这句为什么适合这个场合」，只给整首诗全文不够。
+      note: meta.explain,
     );
   }
 
