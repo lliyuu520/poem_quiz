@@ -39,6 +39,7 @@ const Topic kPoetryTopic = Topic(
     QuestionKind.author,
     QuestionKind.title,
     QuestionKind.blank,
+    QuestionKind.poemRiddle,
   },
   tagline: '一句一题，闲时温故',
   seal: '诗\nquiz',

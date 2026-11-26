@@ -2,7 +2,7 @@ import 'poem.dart';
 
 /// 题型。前四种针对诗句，中间两种针对拼音读音，后三种针对算式，
 /// 成语三型针对成语，文学常识/歇后语/错别字/文言各一型，词语两型针对同义/反义，
-/// 最后五种针对英语（以听为主）。
+/// 诗词线索猜诗插在诗词题型之后，最后五种针对英语（以听为主）。
 ///
 /// 一个科目只会用到其中一部分（见 `Topic.kinds`），引擎按题型分派。
 enum QuestionKind {
@@ -10,6 +10,7 @@ enum QuestionKind {
   author,
   title,
   blank,
+  poemRiddle,
   pinyinOf,
   wordOf,
   mathResult,
@@ -37,6 +38,7 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.author => '识诗人',
         QuestionKind.title => '辨出处',
         QuestionKind.blank => '补诗句',
+        QuestionKind.poemRiddle => '猜猜它是谁',
         QuestionKind.pinyinOf => '选读音',
         QuestionKind.wordOf => '选字词',
         QuestionKind.mathResult => '算得数',
@@ -122,6 +124,7 @@ class Question {
     this.answerChars = const [],
     this.charPool = const [],
     this.note = '',
+    this.extraClue = '',
   });
 
   final QuestionKind kind;
@@ -150,6 +153,10 @@ class Question {
   /// 判题后的知识点补充，如算式题的解题思路。为空时不显示。
   final String note;
 
+  /// 猜诗题的第二档线索（原诗里的一句名句），孩子点「看一条名句」时才展示。
+  /// 为空表示本题只有第一档线索。其他题型恒为空。
+  final String extraClue;
+
   /// 是否为填空题（从候选字池里点选补齐）。拼单词与补诗句、补成语同属一类。
   bool get isBlank =>
       kind == QuestionKind.blank ||
@@ -168,6 +175,10 @@ class Question {
       kind == QuestionKind.idiomMeaning ||
       kind == QuestionKind.literaturePick ||
       kind == QuestionKind.wenyanMeaning;
+
+  /// 是否为诗词线索猜诗题：题干是「朝代 + 主题」两行短线索，
+  /// 判题前可能再补一条名句线索（[extraClue]），按正文小段排而不是单个大词。
+  bool get isPoemRiddle => kind == QuestionKind.poemRiddle;
 
   String get answerText => isBlank ? answerChars.join() : options[answerIndex];
 }

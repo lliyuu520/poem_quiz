@@ -770,6 +770,62 @@ void main() {
           reason: '单行正文不应出现展开提示');
       expect(tester.takeException(), isNull);
     });
+
+    // 每档宽度一个独立 testWidgets（文件惯例）：pumpWidget 会按 type 复用
+    // 上一个 QuizPage 的 State，同一个 testWidgets 里连 pump 两档宽度会把
+    // 第一轮的揭示状态带进第二轮。
+    for (final (name, size) in <(String, Size)>[
+      ('手机', phone),
+      ('平板横屏', tabletLandscape),
+    ]) {
+      testWidgets('猜诗题（$name）：线索先藏后揭，判题后不再出提示按钮', (tester) async {
+        final entry = kPoetryTopic.entries.firstWhere(
+          (p) => p.title == '静夜思',
+        );
+        final session = QuizSession(
+          questions: <Question>[
+            Question(
+              kind: QuestionKind.poemRiddle,
+              poem: entry,
+              prompt: '靠两条线索，猜猜它是哪一首',
+              focus: '唐代诗人写的\n望月思乡',
+              key: '唐|李白|静夜思|riddle',
+              options: const <String>['静夜思', '春晓', '咏鹅', '池上'],
+              answerIndex: 0,
+              extraClue: entry.lines.first,
+            ),
+          ],
+          total: 1,
+          topic: kPoetryTopic,
+          plan: planOfGrade(GradeLevel.g1, kPoetryTopic),
+          careerMode: false,
+        );
+        // 宽屏走 _wideLayout 的 enlarged 题干，布线（clueRevealed /
+        // onRevealClue）与窄屏一致。
+        await pumpAt(tester, size, () => QuizPage(session: session, onFinish: (_) async {}));
+
+        // 判题前：两档线索都在，名句默认藏起，提示按钮可点。
+        expect(find.text('望月思乡'), findsOneWidget, reason: '$name：主题线索应在');
+        expect(find.text(entry.lines.first), findsNothing,
+            reason: '$name：名句线索不应直接露出');
+        expect(find.text('想不出来？看一条名句'), findsOneWidget, reason: '$name：提示按钮应在');
+
+        await tester.tap(find.text('想不出来？看一条名句'));
+        await tester.pumpAndSettle();
+        expect(find.text(entry.lines.first), findsOneWidget,
+            reason: '$name：揭示后应看到名句');
+        expect(find.text('想不出来？看一条名句'), findsNothing,
+            reason: '$name：同题只揭示一次');
+
+        // 揭示后照常作答；判题后提示按钮不再出现。
+        await tester.tap(find.text('静夜思'));
+        await tester.pumpAndSettle();
+        expect(find.text('答对了'), findsOneWidget, reason: '$name：判题反馈应在');
+        expect(find.text('想不出来？看一条名句'), findsNothing,
+            reason: '$name：判题后不应再出提示按钮');
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 
   group('设置页', () {

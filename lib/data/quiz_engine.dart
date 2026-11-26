@@ -3,6 +3,7 @@ import 'dart:math';
 import '../models/poem.dart';
 import '../models/question.dart';
 import 'math.dart';
+import 'poems.dart';
 import 'words.dart';
 
 /// 出题引擎：从题库生成一轮题目。
@@ -199,6 +200,8 @@ class QuizEngine {
         return _title(poem, optionCount, bias);
       case QuestionKind.blank:
         return _blank(poem);
+      case QuestionKind.poemRiddle:
+        return _poemRiddle(poem, optionCount, bias);
       case QuestionKind.pinyinOf:
         return _pinyinOf(poem, optionCount, bias);
       case QuestionKind.wordOf:
@@ -572,6 +575,80 @@ class QuizEngine {
       answerChars: target.split(''),
       charPool: pool,
     );
+  }
+
+  /// 线索猜诗：题干只给「朝代 + 主题」两行线索，从四首诗里猜是哪一首。
+  ///
+  /// 这是思维题（见 docs「思维拓展题」T1）：识别题给足信息让孩子认答案，
+  /// 这题给的是**不完整**线索，孩子要在记忆里检索候选再比对。名句线索
+  /// （`extraClue`）是第二档，取自答案的 `lines`（带标点），由答题页在孩子
+  /// 点「看一条名句」时揭示——不点就是更难的一档，一期不做分级计分。
+  ///
+  /// 干扰项三条约束，缺一不可，否则线索下会出现两个说得通的答案：
+  /// - 排除同名标题（凉州词两首都叫「凉州词」）；
+  /// - 排除同朝代**同主题**的诗（`kPoemThemes` 已保证同朝代同主题不撞，
+  ///   但标注按 id 存，这里兜底排除）；
+  /// - 排除 `lines` 里**含有名句线索整句**的诗（不排除时名句线索直接泄题）。
+  /// 主题未标注的诗（grade 0 拓展与 7-9 年级）出不了这道题——线索拼不完整。
+  ///
+  /// 有意的取舍：同朝代**未标注**主题的诗不排除——它们进不了本题的
+  /// 主题线索比对（比对只在已标注条目间做），第一档「朝代 + 主题」下
+  /// 语义相邻的诗（如望月思乡 vs 月下独酌）本就可能两首都说得通；这是
+  /// 第一档的合理难度，第二档名句线索揭示后唯一指向答案（全题库 113 首
+  /// 无跨诗整句重复，`quiz_engine_test.dart` 有线索句归属用例钉住）。
+  /// 要收紧只能给全库标主题，成本高收益小，一期不做。
+  Question? _poemRiddle(Poem poem, int optionCount, _Bias bias) {
+    final theme = kPoemThemes[poem.id];
+    if (theme == null) return null;
+    final clue = _riddleLine(poem);
+    if (clue == null) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: poem,
+      count: need,
+      // 同名标题先挡；朝代与主题相同的诗与答案在第一档线索下无法区分，
+      // 名句线索整句出现在别诗里等于泄题——两者都必须排除。
+      excludePoem: (p) =>
+          p.id == poem.id ||
+          p.title == poem.title ||
+          p.dynasty == poem.dynasty && kPoemThemes[p.id] == theme ||
+          p.lines.contains(clue),
+      pool: (p) => <String>[p.title],
+      bias: bias,
+      // 同朝代的诗放一起比「唐 vs 汉」的混搭更像真的在猜。
+      preferGroup: (p) => p.dynasty == poem.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[poem.title, ...distractors]..shuffle(_random);
+    // 朝代行措辞：单字朝代拼「代」（唐 → 唐代）；多字朝代（南北朝、东晋、
+    // 南唐）自带结尾，再叠「代」会拼出「南北朝代」「东晋代」，直接用。
+    final era =
+        poem.dynasty.length == 1 ? '${poem.dynasty}代' : poem.dynasty;
+    return Question(
+      kind: QuestionKind.poemRiddle,
+      poem: poem,
+      prompt: '靠两条线索，猜猜它是哪一首',
+      focus: '$era诗人写的\n$theme',
+      key: '${poem.id}|riddle',
+      options: options,
+      answerIndex: options.indexOf(poem.title),
+      extraClue: clue,
+    );
+  }
+
+  /// 名句线索：优先取含「主题词」的那句（线索互相印证，更像真猜谜），
+  /// 否则取第一句。太短的句子信息量不足（「争渡，」），不要。
+  String? _riddleLine(Poem poem) {
+    final candidates = poem.lines
+        .where((l) => _plain(l).length >= _minLineLength)
+        .toList();
+    if (candidates.isEmpty) return null;
+    final theme = kPoemThemes[poem.id]!;
+    final hit = candidates.where((l) => l.contains(theme)).toList();
+    final pool = hit.isNotEmpty ? hit : candidates;
+    return pool[_random.nextInt(pool.length)];
   }
 
   /// 成语选字：从四字成语中挖去一字，从其他成语里取干扰字组成字池。

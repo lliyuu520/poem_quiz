@@ -48,6 +48,9 @@ class _QuizPageState extends State<QuizPage> {
 
   bool _locked = false;
 
+  /// 猜诗题的名句线索是否已揭示（第二档线索）。同题内只能揭示一次。
+  bool _clueRevealed = false;
+
   /// 窄屏内容区的滚动控制器；切下一题时回到顶部，判题后滚到反馈卡。
   final ScrollController _scroll = ScrollController();
 
@@ -135,6 +138,7 @@ class _QuizPageState extends State<QuizPage> {
       _pickedChars.clear();
       _verdict = null;
       _locked = false;
+      _clueRevealed = false;
     });
     // 上一题留下的滚动位置对新题没有意义；回到顶部先看题干。
     if (_scroll.hasClients) _scroll.jumpTo(0);
@@ -220,6 +224,8 @@ class _QuizPageState extends State<QuizPage> {
                       verdict: _verdict,
                       topic: widget.session.topic,
                       enlarged: true,
+                      clueRevealed: _clueRevealed,
+                      onRevealClue: () => setState(() => _clueRevealed = true),
                     ),
                   ),
                 ),
@@ -293,6 +299,8 @@ class _QuizPageState extends State<QuizPage> {
                     picked: _pickedChars,
                     verdict: _verdict,
                     topic: widget.session.topic,
+                    clueRevealed: _clueRevealed,
+                    onRevealClue: () => setState(() => _clueRevealed = true),
                   ),
                   const SizedBox(height: 20),
                   _answerArea(),
@@ -442,6 +450,8 @@ class _QuestionCard extends StatelessWidget {
     required this.verdict,
     required this.topic,
     this.enlarged = false,
+    this.clueRevealed = false,
+    this.onRevealClue,
   });
 
   final Question question;
@@ -451,6 +461,12 @@ class _QuestionCard extends StatelessWidget {
 
   /// 宽屏舞台模式：题干字号与写字格整体放大，孩子离屏幕远也看得清。
   final bool enlarged;
+
+  /// 猜诗题的名句线索是否已揭示；判题后（[verdict] 非空）不再显示按钮。
+  final bool clueRevealed;
+
+  /// 揭示名句线索的回调（猜诗题专用）。
+  final VoidCallback? onRevealClue;
 
   /// 普通题干：纯文本居中。
   ///
@@ -519,7 +535,15 @@ class _QuestionCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: enlarged ? 22 : 18),
-          if (question.isBlank)
+          if (question.isPoemRiddle)
+            _RiddlePrompt(
+              question: question,
+              enlarged: enlarged,
+              revealed: clueRevealed,
+              canReveal: verdict == null,
+              onReveal: onRevealClue,
+            )
+          else if (question.isBlank)
             _BlankPrompt(
               question: question,
               picked: picked,
@@ -576,6 +600,105 @@ class _QuestionCard extends StatelessWidget {
             _plainFocus(question.focus, enlarged),
         ],
       ),
+    );
+  }
+}
+
+/// 猜诗题干：两行「朝代 + 主题」线索居中，名句线索默认藏起，
+/// 点「看一条名句」才展开——孩子先用少线索想，想不出再要提示。
+/// 判题后不再给提示按钮（已经出结果了），但已揭示的名句保持可见。
+class _RiddlePrompt extends StatelessWidget {
+  const _RiddlePrompt({
+    required this.question,
+    required this.enlarged,
+    required this.revealed,
+    required this.canReveal,
+    this.onReveal,
+  });
+
+  final Question question;
+  final bool enlarged;
+  final bool revealed;
+
+  /// 判题前才允许揭示。
+  final bool canReveal;
+  final VoidCallback? onReveal;
+
+  static const Duration _anim = Duration(milliseconds: 180);
+
+  @override
+  Widget build(BuildContext context) {
+    final clue = question.extraClue;
+    final parts = question.focus.split('\n');
+    return Column(
+      children: <Widget>[
+        for (var i = 0; i < parts.length; i++)
+          Padding(
+            padding: EdgeInsets.only(bottom: i == 0 ? 4 : 0),
+            child: Text(
+              parts[i],
+              textAlign: TextAlign.center,
+              // 朝代行小、主题行大：线索越具体字号越高，孩子扫一眼就知道重点。
+              style: i == 0
+                  ? TextStyle(
+                      fontSize: enlarged ? 19 : 16,
+                      color: AppColors.inkSoft,
+                      letterSpacing: 2,
+                    )
+                  : serif(
+                      enlarged ? 30 : 24,
+                      height: 1.6,
+                      spacing: enlarged ? 4 : 3,
+                    ),
+            ),
+          ),
+        if (clue.isNotEmpty) ...<Widget>[
+          SizedBox(height: enlarged ? 18 : 14),
+          AnimatedSize(
+            duration: _anim,
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: revealed
+                ? Column(
+                    children: <Widget>[
+                      Divider(
+                        color: AppColors.line,
+                        height: 1,
+                        indent: 24,
+                        endIndent: 24,
+                      ),
+                      SizedBox(height: enlarged ? 14 : 10),
+                      Text(
+                        clue,
+                        textAlign: TextAlign.center,
+                        style: serif(
+                          enlarged ? 26 : 20,
+                          height: 1.7,
+                          spacing: 2,
+                          color: AppColors.ink,
+                        ),
+                      ),
+                    ],
+                  )
+                // 未揭示时占位：有高度才不会在展开瞬间把选项顶跳。
+                : const SizedBox(width: double.infinity),
+          ),
+          if (!revealed && canReveal)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: TextButton.icon(
+                onPressed: onReveal,
+                icon: const Icon(Icons.lightbulb_outline, size: 20),
+                label: const Text('想不出来？看一条名句'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.seal,
+                  textStyle: const TextStyle(fontSize: 15, letterSpacing: 1),
+                  minimumSize: const Size(0, 48),
+                ),
+              ),
+            ),
+        ],
+      ],
     );
   }
 }

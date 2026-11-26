@@ -365,8 +365,8 @@ void main() {
     });
 
     test('学龄不限制题型', () {
-      // 学龄只决定题池范围；题型由科目决定，诗词科目下四类题型都可出。
-      expect(kPoetryTopic.kinds.length, 4, reason: '诗词科目应有四类题型');
+      // 学龄只决定题池范围；题型由科目决定，诗词科目下五类题型都可出。
+      expect(kPoetryTopic.kinds.length, 5, reason: '诗词科目应有五类题型');
       final engine = engineWithSeed(83);
       final seen = <QuestionKind>{};
       for (var round = 0; round < 20; round++) {
@@ -422,6 +422,131 @@ void main() {
       }
       expect(s.clearedPoemIds.toSet(), answeredIds.toSet());
       expect(s.careerMode, isTrue);
+    });
+  });
+
+  group('诗词线索猜诗（poemRiddle）', () {
+    test('主题标注表真实存在且同朝代同主题不冲突', () {
+      final ids = kPoems.map((p) => p.id).toSet();
+      final seen = <String, String>{};
+      for (final e in kPoemThemes.entries) {
+        expect(ids, contains(e.key), reason: '主题标注指向不存在的诗：${e.key}');
+        expect(e.value.trim(), isNotEmpty, reason: '${e.key} 主题为空');
+        // 主题不得包含标题全名（≥2 字才判：单字标题如「风」无法避开，
+        // 「风落叶开花」仍是推理）。否则第一档线索逐字送出答案——
+        // 春夜喜雨曾标成「春夜喜雨」，猜诗直接失效。
+        final title = e.key.split('|').last;
+        if (title.length >= 2) {
+          expect(
+            e.value.contains(title),
+            isFalse,
+            reason: '${e.key} 主题「${e.value}」含完整标题，第一档线索送答案',
+          );
+        }
+        final dynasty = e.key.split('|').first;
+        // 同朝代同主题的两首诗在第一档线索下都说得通——线索必须唯一指向答案。
+        expect(
+          seen.containsKey('$dynasty|${e.value}'),
+          isFalse,
+          reason: '同朝代同主题撞车：$dynasty ${e.value}（${seen['$dynasty|${e.value}']} 与 ${e.key}）',
+        );
+        seen['$dynasty|${e.value}'] = e.key;
+      }
+      // 一~六年级教材内篇目必须全部标注，否则这些诗出不了猜诗题。
+      final g16 = kPoems.where((p) => p.grade >= 1 && p.grade <= 6).map((p) => p.id).toSet();
+      expect(g16.difference(kPoemThemes.keys.toSet()), isEmpty, reason: '一~六年级有诗未标主题');
+    });
+
+    test('线索句逐字属于答案的 lines，且不泄给干扰项', () {
+      final engine = engineWithSeed(101);
+      for (var round = 0; round < 30; round++) {
+        for (final q in engine.generate(
+          count: 20,
+          kinds: {QuestionKind.poemRiddle},
+          gradeWeights: GradeLevel.g6.weights,
+        )) {
+          expect(q.extraClue, isNotEmpty, reason: '${q.key} 名句线索为空');
+          // 线索句必须是答案 lines 里的一句（带标点整句比对）。
+          expect(q.poem.lines, contains(q.extraClue), reason: '${q.key} 线索句不在答案原诗中');
+          // 题干两行：朝代行与主题行。朝代行措辞精确断言：单字朝代拼
+          // 「代」（唐代），多字朝代直接用——「南北朝」拼成「南北朝代」拗口。
+          expect(q.focus.split('\n').length, 2, reason: '${q.key} 线索行数不对');
+          final dynasty = q.poem.dynasty;
+          final era = dynasty.length == 1 ? '$dynasty代' : dynasty;
+          expect(q.focus.split('\n').first, '$era诗人写的', reason: '${q.key} 朝代行措辞不对');
+          expect(kPoemThemes[q.poem.id], q.focus.split('\n').last, reason: '${q.key} 主题线索不对');
+          // 干扰项：无双答案。判据按**文本**而不是按 Poem：两首《凉州词》
+          // 同名不同诗，正确答案文本命中两条 Poem 是正常的，真正要挡的是
+          // 干扰文本与正确答案文本相同（引擎已按 title 排除同名诗）。
+          final distractorTexts = <String>{
+            for (var i = 0; i < q.options.length; i++)
+              if (i != q.answerIndex) q.options[i],
+          };
+          expect(
+            distractorTexts, isNot(contains(q.poem.title)),
+            reason: '${q.key} 干扰项与答案同名',
+          );
+          for (final p in kPoems) {
+            if (!distractorTexts.contains(p.title)) continue;
+            if (p.id == q.poem.id) continue;
+            expect(
+              kPoemThemes[p.id] == kPoemThemes[q.poem.id] && p.dynasty == q.poem.dynasty,
+              isFalse,
+              reason: '${q.key} 同朝代同主题的 ${p.title} 混进选项',
+            );
+            expect(p.lines, isNot(contains(q.extraClue)), reason: '${q.key} 名句线索泄给 ${p.title}');
+          }
+        }
+      }
+    });
+
+    test('同 seed 两次生成，题目 key 完全一致', () {
+      final a = engineWithSeed(202).generate(
+        count: 20,
+        kinds: {QuestionKind.poemRiddle},
+        gradeWeights: GradeLevel.g6.weights,
+      );
+      final b = engineWithSeed(202).generate(
+        count: 20,
+        kinds: {QuestionKind.poemRiddle},
+        gradeWeights: GradeLevel.g6.weights,
+      );
+      expect(a.map((q) => q.key).toList(), b.map((q) => q.key).toList(),
+          reason: '同 seed 两次生成不一致，错题本按 key 重建会错位');
+      // key 本身必须钉住条目（含名句线索的随机选取），否则换 seed 重建同一题时线索句可能漂移。
+      for (final q in a) {
+        expect(q.key, startsWith('${q.poem.id}|riddle'));
+      }
+    });
+
+    test('一~六年级每档都能实际出猜诗题', () {
+      for (final g in GradeLevel.values.where((lv) => lv.grade >= 1 && lv.grade <= 6)) {
+        final engine = engineWithSeed(303);
+        final qs = engine.generate(
+          count: 10,
+          kinds: {QuestionKind.poemRiddle},
+          gradeWeights: g.weights,
+        );
+        expect(qs, isNotEmpty, reason: '${g.title} 出不了猜诗题');
+        for (final q in qs) {
+          expect(q.kind, QuestionKind.poemRiddle);
+          expect(q.options.length, 4, reason: '${q.key} 选项数不为 4');
+          expect(q.options.toSet().length, q.options.length, reason: '${q.key} 选项重复');
+          expect(q.options[q.answerIndex], q.poem.title, reason: '${q.key} 答案不是本诗标题');
+        }
+      }
+    });
+
+    test('未标注主题的诗（拓展与 7-9 年级）不出猜诗题', () {
+      final engine = engineWithSeed(404);
+      final qs = engine.generate(
+        count: 20,
+        kinds: {QuestionKind.poemRiddle},
+        gradeWeights: GradeLevel.g9.weights,
+      );
+      for (final q in qs) {
+        expect(kPoemThemes, contains(q.poem.id), reason: '${q.poem.id} 未标主题却出了猜诗题');
+      }
     });
   });
 }

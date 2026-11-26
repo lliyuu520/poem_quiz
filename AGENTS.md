@@ -43,12 +43,12 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：113 首，唐 67 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位 + `gradeForBirth()` 推算 + **题池加权** `cumulativeWeights()` / `rangeWeights()` / `fullCurriculumWeights()`；`ReviewMode`（off / standard 1/3 / reinforced 1/2） |
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
-| `lib/data/quiz_engine.dart` | 出题：23 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/quiz_engine.dart` | 出题：24 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>`；`practicedEntryIds`（已练覆盖度，含答错）与 `masteredPoemIds`（答对过）是两回事 |
 | `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
-| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 23 类题型（诗词 4 / 拼音 2 / 数学 3 / 成语 3 / 文学常识 1 / 歇后语 1 / 错别字 1 / 文言 1 / 词语 2 / 英语 5） |
+| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 24 类题型（诗词 5 / 拼音 2 / 数学 3 / 成语 3 / 文学常识 1 / 歇后语 1 / 错别字 1 / 文言 1 / 词语 2 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/widgets/english_art.dart` | 英语内置矢量插图（`EnglishArt`），不引外部图片资源 |
