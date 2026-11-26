@@ -1,8 +1,9 @@
 import 'poem.dart';
 
-/// 题型。前五种针对诗句，中间两种针对拼音读音，算式题型见 [isMathKind]，
-/// 成语三型针对成语，文学常识/歇后语/错别字/文言各一型，词语两型针对同义/反义，
-/// 诗词线索猜诗插在诗词题型之后，最后五种针对英语（以听为主）。
+/// 题型。前六种针对诗句（含线索猜诗与场景选句），中间两种针对拼音读音，
+/// 算式题型见 [isMathKind]，成语四型针对成语（含情境套用），
+/// 文学常识/歇后语/错别字/文言各一型，词语两型针对同义/反义，
+/// 最后五种针对英语（以听为主）。
 ///
 /// 一个科目只会用到其中一部分（见 `Topic.kinds`），引擎按题型分派。
 enum QuestionKind {
@@ -11,6 +12,7 @@ enum QuestionKind {
   title,
   blank,
   poemRiddle,
+  poemScene,
   pinyinOf,
   wordOf,
   mathResult,
@@ -21,6 +23,7 @@ enum QuestionKind {
   idiomBlank,
   idiomMeaning,
   idiomPinyin,
+  idiomScene,
   literaturePick,
   xiehouyuLink,
   typoCorrect,
@@ -41,6 +44,7 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.title => '辨出处',
         QuestionKind.blank => '补诗句',
         QuestionKind.poemRiddle => '猜猜它是谁',
+        QuestionKind.poemScene => '用哪一句',
         QuestionKind.pinyinOf => '选读音',
         QuestionKind.wordOf => '选字词',
         QuestionKind.mathResult => '算得数',
@@ -51,6 +55,7 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.idiomBlank => '选字',
         QuestionKind.idiomMeaning => '知词义',
         QuestionKind.idiomPinyin => '读成语',
+        QuestionKind.idiomScene => '情景套用',
         QuestionKind.literaturePick => '知常识',
         QuestionKind.xiehouyuLink => '接歇后语',
         QuestionKind.typoCorrect => '辨字形',
@@ -73,7 +78,8 @@ bool isPinyinKind(QuestionKind kind) =>
 bool isIdiomKind(QuestionKind kind) =>
     kind == QuestionKind.idiomBlank ||
     kind == QuestionKind.idiomMeaning ||
-    kind == QuestionKind.idiomPinyin;
+    kind == QuestionKind.idiomPinyin ||
+    kind == QuestionKind.idiomScene;
 
 /// 是否为词语（同义/反义）题型。
 bool isWordKind(QuestionKind kind) =>
@@ -175,10 +181,12 @@ class Question {
   /// 拼音题同样用 [focus] 展示题干、[options] 展示候选，只是文字是拼音。
   bool get isPinyin => isPinyinKind(kind);
 
-  /// 题干是长释义/例句/一句话情境（成语「知词义」、文学常识「知常识」、
-  /// 文言「解文言」、数学「应用题」），不能按单个词/短语的大字号渲染。
+  /// 题干是长释义/例句/一句话情境（成语「知词义」「情景套用」、文学常识「知常识」、
+  /// 文言「解文言」、数学「应用题」、诗词「场景选句」），不能按单个词/短语的大字号渲染。
   bool get isLongPrompt =>
       kind == QuestionKind.idiomMeaning ||
+      kind == QuestionKind.idiomScene ||
+      kind == QuestionKind.poemScene ||
       kind == QuestionKind.literaturePick ||
       kind == QuestionKind.wenyanMeaning ||
       kind == QuestionKind.mathWord;
@@ -186,6 +194,10 @@ class Question {
   /// 是否为诗词线索猜诗题：题干是「朝代 + 主题」两行短线索，
   /// 判题前可能再补一条名句线索（[extraClue]），按正文小段排而不是单个大词。
   bool get isPoemRiddle => kind == QuestionKind.poemRiddle;
+
+  /// 是否为诗词场景选句题：题干是一句生活场景，选项是诗句，
+  /// 题干不是整首诗也不是单个词。
+  bool get isPoemScene => kind == QuestionKind.poemScene;
 
   String get answerText => isBlank ? answerChars.join() : options[answerIndex];
 }

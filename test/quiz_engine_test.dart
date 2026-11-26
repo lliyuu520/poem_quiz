@@ -1,11 +1,13 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poem_quiz/data/chengyu.dart';
 import 'package:poem_quiz/data/grade.dart';
 import 'package:poem_quiz/data/poems.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
 import 'package:poem_quiz/data/quiz_session.dart';
 import 'package:poem_quiz/data/topics.dart';
+import 'package:poem_quiz/models/poem.dart';
 import 'package:poem_quiz/models/question.dart';
 
 /// 用固定种子创建引擎，指向内置诗词题库。
@@ -365,8 +367,8 @@ void main() {
     });
 
     test('学龄不限制题型', () {
-      // 学龄只决定题池范围；题型由科目决定，诗词科目下五类题型都可出。
-      expect(kPoetryTopic.kinds.length, 5, reason: '诗词科目应有五类题型');
+      // 学龄只决定题池范围；题型由科目决定，诗词科目下六类题型都可出。
+      expect(kPoetryTopic.kinds.length, 6, reason: '诗词科目应有六类题型');
       final engine = engineWithSeed(83);
       final seen = <QuestionKind>{};
       for (var round = 0; round < 20; round++) {
@@ -546,6 +548,140 @@ void main() {
       );
       for (final q in qs) {
         expect(kPoemThemes, contains(q.poem.id), reason: '${q.poem.id} 未标主题却出了猜诗题');
+      }
+    });
+  });
+
+  group('诗词场景选句（poemScene）', () {
+    test('场景表里的 id 都真实存在，且引句逐字取自原诗', () {
+      final byId = <String, Poem>{for (final p in kPoems) p.id: p};
+      for (final e in kPoemScenes.entries) {
+        final poem = byId[e.key];
+        expect(poem, isNotNull, reason: '场景标注指向不存在的诗：${e.key}');
+        expect(e.value.scene.trim(), isNotEmpty, reason: '${e.key} 场景为空');
+        expect(e.value.group.trim(), isNotEmpty, reason: '${e.key} 场合大类为空');
+        // 引句必须逐字来自原诗，改一个字就是把错句教给孩子。
+        expect(poem!.lines, contains(e.value.line),
+            reason: '${e.key} 引句「${e.value.line}」不在这首诗的原文里');
+      }
+    });
+
+    test('同一场景只标一条（场景题干不重复）', () {
+      final seen = <String, String>{};
+      for (final e in kPoemScenes.entries) {
+        final key = e.value.scene;
+        expect(seen.containsKey(key), isFalse,
+            reason: '场景「$key」重复标注：${seen[key]} 与 ${e.key}');
+        seen[key] = e.key;
+      }
+    });
+
+    test('出题时答案是本条引句，干扰项来自别的大类', () {
+      final engine = engineWithSeed(707);
+      for (var round = 0; round < 20; round++) {
+        for (final q in engine.generate(
+          count: 20,
+          kinds: {QuestionKind.poemScene},
+          gradeWeights: GradeLevel.g9.weights,
+        )) {
+          expect(q.kind, QuestionKind.poemScene);
+          expect(q.options.length, 4, reason: '${q.key} 选项数不为 4');
+          final meta = kPoemScenes[q.poem.id];
+          expect(meta, isNotNull, reason: '${q.poem.id} 未标场景却出了场景题');
+          expect(q.focus, meta!.scene, reason: '${q.key} 题干不是标注的场景');
+          expect(q.answerText, meta.line, reason: '${q.key} 答案不是标注的引句');
+
+          // 干扰项不得与答案同大类，也不得内容相同——两条都说得通就是双答案。
+          final answerGroup = meta.group;
+          for (final opt in q.options) {
+            if (opt == q.answerText) continue;
+            final owner = kPoemScenes.entries.where((e) => e.value.line == opt);
+            expect(owner, isNotEmpty, reason: '${q.key} 选项「$opt」不是任何标注引句');
+            for (final o in owner) {
+              expect(o.value.group, isNot(answerGroup),
+                  reason: '${q.key} 同大类的「${o.key}」当成干扰项');
+            }
+          }
+        }
+      }
+    });
+
+    test('同 seed 两次生成 key 一致，且每档都能出场景题', () {
+      final a = engineWithSeed(808).generate(
+        count: 20,
+        kinds: {QuestionKind.poemScene},
+        gradeWeights: GradeLevel.g6.weights,
+      );
+      final b = engineWithSeed(808).generate(
+        count: 20,
+        kinds: {QuestionKind.poemScene},
+        gradeWeights: GradeLevel.g6.weights,
+      );
+      expect(a.map((q) => q.key).toList(), b.map((q) => q.key).toList());
+      for (final q in a) {
+        expect(q.key, '${q.poem.id}|scene');
+      }
+      expect(a, isNotEmpty, reason: '一年级~六年级出不了场景题');
+    });
+  });
+
+  group('成语情境套用（idiomScene）', () {
+    test('情境表里的成语都真实存在', () {
+      final titles = kChengyu.map((c) => c.title).toSet();
+      for (final e in kIdiomScenes.entries) {
+        expect(titles, contains(e.key), reason: '情境标注指向不存在的成语：${e.key}');
+        expect(e.value.context.trim(), isNotEmpty, reason: '${e.key} 情境为空');
+        expect(e.value.group.trim(), isNotEmpty, reason: '${e.key} 语义大类为空');
+      }
+    });
+
+    test('同一情境只标一条，且情境句不重复', () {
+      final seen = <String, String>{};
+      for (final e in kIdiomScenes.entries) {
+        final key = e.value.context;
+        expect(seen.containsKey(key), isFalse,
+            reason: '情境「$key」重复标注：${seen[key]} 与 ${e.key}');
+        seen[key] = e.key;
+      }
+    });
+
+    test('出题时答案是本条成语，干扰项来自别的大类', () {
+      final engine = QuizEngine(poems: kChengyu, random: Random(909));
+      for (var round = 0; round < 20; round++) {
+        for (final q in engine.generate(
+          count: 20,
+          kinds: {QuestionKind.idiomScene},
+          gradeWeights: GradeLevel.g6.weights,
+        )) {
+          expect(q.kind, QuestionKind.idiomScene);
+          expect(q.options.length, 4, reason: '${q.key} 选项数不为 4');
+          final meta = kIdiomScenes[q.poem.title];
+          expect(meta, isNotNull, reason: '${q.poem.title} 未标情境却出了情境题');
+          expect(q.focus, meta!.context, reason: '${q.key} 题干不是标注的情境');
+          expect(q.answerText, q.poem.title, reason: '${q.key} 答案不是本条成语');
+
+          for (final opt in q.options) {
+            if (opt == q.answerText) continue;
+            final other = kIdiomScenes[opt];
+            expect(other, isNotNull, reason: '${q.key} 选项「$opt」未标情境，不该当干扰项');
+            expect(other!.group, isNot(meta.group),
+                reason: '${q.key} 同大类的「$opt」当成干扰项');
+          }
+        }
+      }
+    });
+
+    test('答案释义作为反馈说明带出', () {
+      final engine = QuizEngine(poems: kChengyu, random: Random(1010));
+      final qs = engine.generate(
+        count: 10,
+        kinds: {QuestionKind.idiomScene},
+        gradeWeights: GradeLevel.g6.weights,
+      );
+      expect(qs, isNotEmpty);
+      for (final q in qs) {
+        expect(q.note, isNotEmpty, reason: '${q.key} 缺少判题后的释义说明');
+        expect(q.note, q.poem.lines.first);
       }
     });
   });

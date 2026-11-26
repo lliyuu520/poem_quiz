@@ -31,7 +31,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
 | `lib/data/math.dart` | 数学题库 `kMath`：610 条规则生成（普通算式 488：一 196 / 二 162 / 三 130；逆向填空 86 / 情境应用 36，见「思维拓展题」）；`MathExpr` 解析算式 |
-| `lib/data/chengyu.dart` | 成语题库 `kChengyu`：122 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
+| `lib/data/chengyu.dart` | 成语题库 `kChengyu`：122 条，年级 1-6 分档，四型题型（选字 / 知词义 / 读成语 / 情景套用）；末尾 `kIdiomScenes` 是情境套用的情境标注 |
 | `lib/data/literature.dart` | 文学常识题库 `kLiterature`：48 条，年级 7-9 + 拓展，一型题型 `literaturePick`（**由 `tool/gen_literature.py` 生成，不要手改**）；只考诗词考不到的并称/字号/流派/体裁/文学史常识，不做名句→作者 |
 | `lib/data/xiehouyu.dart` | 歇后语题库 `kXiehouyu`：49 条，年级 4-9 + 拓展，一型题型 `xiehouyuLink`（给前半选后半；**由 `tool/gen_xiehouyu.py` 生成，不要手改**）；后半唯一 |
 | `lib/data/typo.dart` | 错别字/形近字题库 `kTypo`：47 条，年级 4-9，一型题型 `typoCorrect`（**由 `tool/gen_typo.py` 生成，不要手改**）；`author` 存本条错写（`|` 连接）作真陷阱，其余干扰项取别的正确词 |
@@ -40,15 +40,15 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/english_audio.dart` | 英语音频键与缓存入口；共用 `speech_audio.dart` 的下载与播放 |
 | `lib/data/pinyin_audio.dart` | 拼音点读音频键：按字词 UTF-16 编码生成稳定文件名 |
 | `lib/data/speech_audio.dart` | 英语 / 拼音音频共用播放与缓存：**音频不在 APK 里**，按条目从 OSS 懒下载到本地 |
-| `lib/data/poems.dart` | 诗词题库 `kPoems`：113 首，唐 67 / 宋 34 / 其余零散 |
+| `lib/data/poems.dart` | 诗词题库 `kPoems`：113 首，唐 67 / 宋 34 / 其余零散；末尾 `kPoemThemes`（猜诗主题）与 `kPoemScenes`（场景选句场合）是两份标注表 |
 | `lib/data/grade.dart` | 学龄档位 + `gradeForBirth()` 推算 + **题池加权** `cumulativeWeights()` / `rangeWeights()` / `fullCurriculumWeights()`；`ReviewMode`（off / standard 1/3 / reinforced 1/2） |
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
-| `lib/data/quiz_engine.dart` | 出题：26 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/quiz_engine.dart` | 出题：28 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>`；`practicedEntryIds`（已练覆盖度，含答错）与 `masteredPoemIds`（答对过）是两回事 |
 | `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
-| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 26 类题型（诗词 5 / 拼音 2 / 数学 5 / 成语 3 / 文学常识 1 / 歇后语 1 / 错别字 1 / 文言 1 / 词语 2 / 英语 5） |
+| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 28 类题型（诗词 6 / 拼音 2 / 数学 5 / 成语 4 / 文学常识 1 / 歇后语 1 / 错别字 1 / 文言 1 / 词语 2 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/widgets/english_art.dart` | 英语内置矢量插图（`EnglishArt`），不引外部图片资源 |
@@ -154,6 +154,15 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 - 计分：**每题 1 分，只算对错**，年级与难度策略不影响得分（2026-11-19 取消倍率与连击加成）。答错不倒扣。**不做连击**（2026-11-20 移除局内连击条、反馈文案、结算「最高连击」与 `best_combo` 存档键），不要加回。
 - 一局内每条目只出一次题；`preferPoemIds`（错题优先）只影响前 3 题，其余打乱。
 - **未练优先**（2026-11-23 加）：`generate(practicedIds:)` 把已练过的条目排到队尾，一局先出没练过的。没有这条规则时大题库存（数学 488 条）每局都在随机撒点，单局只覆盖 2%，做十局也感觉不到在往前走——实测加规则后数学连做 10 局累计到 100 条、无一重复。**只在还剩没练过的时候生效**，全练完自动回落到原来的加权抽样，不会出空局；**只影响顺序不影响年级权重**（两个队列内部都仍按 `gradeWeights` 加权），所以不会因为「先练新的」打乱各年级配比。`practicedIds` 来自 `ProgressStore.practicedEntryIds`（含答错的条目，见「已练覆盖度」）。
+
+### 思维题（场景选句 / 情境套用）
+
+- **两份标注表是这两类题的唯一数据源**：`kPoemScenes`（`poems.dart` 末尾，场景选句）与 `kIdiomScenes`（`chengyu.dart` 末尾，成语情境套用）。未标注的条目出不了对应题型（引擎返回 null），所以标注范围就是题池范围——**宁少勿滥，拿不准就不标**。
+- **`PoemScene.line` 必须逐字取自该首 `lines`**（含标点）。测试会逐字比对，改字即红。这是内容产品，错一句就是教错一句。
+- **`group` 是双答案的唯一防线，必须标对**：干扰项只从**别的大类**取。同是「送别」的两句、同是「低落」的两个成语，在同一个场合下都说得通，一起进选项就是两个正确答案。加标注前先问：这个场合里，别的大类的哪一条其实也说得通？说得通就说明 group 标错了。
+- **场景/情境题干必须边界清楚**。模糊语义（「心情不好」「很舒服」这类）会被理解成好几种情形，另一个选项也成立。写具体的场合（「好朋友特意来送你，船已解缆，忽然听见岸上踏歌相送」），不要写抽象情绪。
+- 成语情境题的判题反馈复用 `note` 字段带出该条释义，孩子答错能看到为什么。诗词场景题的反馈是整首诗全文（既有链路）。
+- **`kKindShareCaps` 未给这两类设占比上限**：标注条目少（诗词 26 条 / 成语 40 条），实际占比受题目池结构自然限制；若日后标注大幅扩容，参照 `englishCase` 的做法加天花。
 
 ## 关键不变量
 

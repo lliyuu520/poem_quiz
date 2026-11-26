@@ -40,6 +40,7 @@ const Topic kPoetryTopic = Topic(
     QuestionKind.title,
     QuestionKind.blank,
     QuestionKind.poemRiddle,
+    QuestionKind.poemScene,
   },
   tagline: '一句一题，闲时温故',
   seal: '诗\nquiz',
@@ -228,7 +229,7 @@ const Topic kSudokuTopic = Topic(
   intro: '九宫格每行、每列、每宫 1~9 各一次。填错会标红，可以撤销重来。',
 );
 
-/// 成语科目：选字补全、看释义猜成语、按拼音认成语，按学龄分档。
+/// 成语科目：选字补全、看释义猜成语、按拼音认成语、看情境挑成语，按学龄分档。
 const Topic kChengyuTopic = Topic(
   id: 'chengyu',
   name: '成语',
@@ -244,6 +245,7 @@ const Topic kChengyuTopic = Topic(
     QuestionKind.idiomBlank,
     QuestionKind.idiomMeaning,
     QuestionKind.idiomPinyin,
+    QuestionKind.idiomScene,
   },
   nameOf: _chengyuName,
   summaryOf: _chengyuSummary,

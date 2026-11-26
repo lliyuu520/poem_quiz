@@ -2,6 +2,7 @@ import 'dart:math';
 
 import '../models/poem.dart';
 import '../models/question.dart';
+import 'chengyu.dart';
 import 'math.dart';
 import 'poems.dart';
 import 'words.dart';
@@ -202,6 +203,8 @@ class QuizEngine {
         return _blank(poem);
       case QuestionKind.poemRiddle:
         return _poemRiddle(poem, optionCount, bias);
+      case QuestionKind.poemScene:
+        return _poemScene(poem, optionCount, bias);
       case QuestionKind.pinyinOf:
         return _pinyinOf(poem, optionCount, bias);
       case QuestionKind.wordOf:
@@ -222,6 +225,8 @@ class QuizEngine {
         return _idiomMeaning(poem, optionCount, bias);
       case QuestionKind.idiomPinyin:
         return _idiomPinyin(poem, optionCount, bias);
+      case QuestionKind.idiomScene:
+        return _idiomScene(poem, optionCount, bias);
       case QuestionKind.literaturePick:
         return _literaturePick(poem, optionCount, bias);
       case QuestionKind.xiehouyuLink:
@@ -811,6 +816,79 @@ class QuizEngine {
     final hit = candidates.where((l) => l.contains(theme)).toList();
     final pool = hit.isNotEmpty ? hit : candidates;
     return pool[_random.nextInt(pool.length)];
+  }
+
+  /// 场景选句：题干是一句生活场合，从四句诗里选出这个场合最用得上的那句。
+  ///
+  /// 与猜诗题方向相反——猜诗给线索找诗名，这里给场合找诗句，考的是迁移运用。
+  /// 干扰项**只从别的大类取**（[PoemScene.group]）：同是「送别」的两句在
+  /// 同一个场合下都说得通，混进选项就是两个正确答案。选项是诗句原文，
+  /// 因此还要排除内容相同的句子（题库里没有重复句，但加条目时可能撞）。
+  Question? _poemScene(Poem poem, int optionCount, _Bias bias) {
+    final meta = kPoemScenes[poem.id];
+    if (meta == null) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: poem,
+      count: need,
+      excludePoem: (p) {
+        final other = kPoemScenes[p.id];
+        // 未标注的诗、同大类的诗都不能当干扰项；同类两句都说得通。
+        if (other == null || other.group == meta.group) return true;
+        // 内容相同的句子也不能当干扰项。
+        return other.line == meta.line;
+      },
+      pool: (p) => <String>[kPoemScenes[p.id]!.line],
+      bias: bias,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[meta.line, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.poemScene,
+      poem: poem,
+      prompt: '这个场合，用哪一句最合适？',
+      focus: meta.scene,
+      key: '${poem.id}|scene',
+      options: options,
+      answerIndex: options.indexOf(meta.line),
+    );
+  }
+
+  /// 成语情境套用：题干是一句生活情境，从四个成语里选出最贴切的那个。
+  ///
+  /// 干扰项同样只从别的大类取（[IdiomScene.group]）：同类的两个成语在
+  /// 同一个情境下往往都说得通。这条比「知词义」更靠一步——释义题问
+  /// 「这个意思说的是哪个成语」，情境题问「这个情形该用哪个成语」。
+  Question? _idiomScene(Poem entry, int optionCount, _Bias bias) {
+    final meta = kIdiomScenes[entry.title];
+    if (meta == null) return null;
+    final need = optionCount - 1;
+
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      excludePoem: (p) {
+        final other = kIdiomScenes[p.title];
+        return other == null || other.group == meta.group;
+      },
+      pool: (p) => <String>[p.title],
+      bias: bias,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>[entry.title, ...distractors]..shuffle(_random);
+    return Question(
+      kind: QuestionKind.idiomScene,
+      poem: entry,
+      prompt: '这个情形，用哪个成语最贴切？',
+      focus: meta.context,
+      key: '${entry.id}|idiomScene',
+      options: options,
+      answerIndex: options.indexOf(entry.title),
+      note: _idiomMeaningOf(entry) ?? '',
+    );
   }
 
   /// 成语选字：从四字成语中挖去一字，从其他成语里取干扰字组成字池。

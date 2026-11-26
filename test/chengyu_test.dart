@@ -46,11 +46,12 @@ void main() {
           reason: '一年级池 $g1 条，不够一局 15 题不重复');
     });
 
-    test('三个题型都在科目定义里', () {
-      expect(kChengyuTopic.kinds, hasLength(3));
+    test('四个题型都在科目定义里', () {
+      expect(kChengyuTopic.kinds, hasLength(4));
       expect(kChengyuTopic.kinds, contains(QuestionKind.idiomBlank));
       expect(kChengyuTopic.kinds, contains(QuestionKind.idiomMeaning));
       expect(kChengyuTopic.kinds, contains(QuestionKind.idiomPinyin));
+      expect(kChengyuTopic.kinds, contains(QuestionKind.idiomScene));
     });
   });
 

@@ -66,3 +66,4 @@ apk/
 
 # 本地预览截图（tool/ 临时产物）
 /preview/
+.zcode/workflow-drafts/

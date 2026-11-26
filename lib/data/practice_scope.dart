@@ -465,11 +465,14 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.mathWord: 0.8,
         QuestionKind.nextLine: 0.6,
         QuestionKind.blank: 0.6,
-        // 猜诗是思维题不是认读题，轻松档少出，留给标准与挑战档。
+        // 猜诗与场景选句都是思维题不是认读题，轻松档少出，留给标准与挑战档。
         QuestionKind.poemRiddle: 0.8,
+        QuestionKind.poemScene: 0.8,
         QuestionKind.idiomBlank: 0.6,
         QuestionKind.idiomMeaning: 1.4,
         QuestionKind.idiomPinyin: 2.0,
+        // 情境套用要读懂情境再迁移，轻松档少出。
+        QuestionKind.idiomScene: 0.8,
         // 词语：轻松多出找近义词，少出需要主动提取的反义词。
         QuestionKind.synonymOf: 2.0,
         QuestionKind.antonymOf: 1.2,
@@ -495,11 +498,15 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.mathWord: 2.2,
         QuestionKind.nextLine: 2.2,
         QuestionKind.blank: 2.2,
-        // 挑战档正好：线索不全、要靠检索记忆，比接句更进一层。
+        // 挑战档正好：线索不全、要靠检索记忆，比接句更进一层；
+        // 场景选句还要判断场合，是更高一层的迁移运用。
         QuestionKind.poemRiddle: 2.2,
+        QuestionKind.poemScene: 2.2,
         QuestionKind.idiomBlank: 2.2,
         QuestionKind.idiomMeaning: 1.2,
         QuestionKind.idiomPinyin: 0.6,
+        // 挑战档正好：情境套用要自己判断适用场合。
+        QuestionKind.idiomScene: 2.2,
         // 词语：挑战反过来，多出找反义词。
         QuestionKind.synonymOf: 0.8,
         QuestionKind.antonymOf: 2.0,

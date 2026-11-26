@@ -145,3 +145,88 @@ const List<Poem> kChengyu = <Poem>[
   Poem(title: '有的放矢', author: 'yǒu dì fàng shǐ', dynasty: '思辨智慧', grade: 6, lines: ['比喻说话做事有明确的目的和针对性。']),
   Poem(title: '独树一帜', author: 'dú shù yī zhì', dynasty: '思辨智慧', grade: 6, lines: ['比喻自成一家，独自树立旗帜。']),
 ];
+
+/// 情境套用（`idiomScene`）的情境标注：一句话生活情境 → 最贴切的那个成语。
+///
+/// 考的是**迁移**：孩子要读懂情境，再从四个成语里挑出真正贴切的那个，
+/// 而不是背释义。key 是成语（与 [Poem.title] 一致，测试校验存在性）；
+/// [IdiomScene.context] 是口语化的一句话情境，[IdiomScene.group] 是语义大类。
+///
+/// **干扰项只从别的大类取**——同是「情绪低落」的两个成语在同一个情境下
+/// 都贴切，一起进选项就是两个正确答案。标注质量决定题目质量：
+/// 宁少勿滥，情境必须只有一个在库成语明显说得通。
+const Map<String, IdiomScene> kIdiomScenes = <String, IdiomScene>{
+  // ── 专注 ──
+  '一心一意': IdiomScene(group: '专注', context: '他写作业时把玩具都收了起来，只想把题做完'),
+  '全神贯注': IdiomScene(group: '专注', context: '上课时他眼睛盯着黑板，连下课铃都没听见'),
+  '聚精会神': IdiomScene(group: '专注', context: '看动画片时他坐在那儿一动不动，谁叫他都不应'),
+  '目不转睛': IdiomScene(group: '专注', context: '魔术师表演时，孩子们眼珠一动不动地盯着他的手'),
+
+  // ── 勤奋 ──
+  '废寝忘食': IdiomScene(group: '勤奋', context: '为了解那道题，他连饭都忘了吃、觉也不想睡'),
+  '孜孜不倦': IdiomScene(group: '勤奋', context: '奶奶每天练字一小时，练了十年也不觉得累'),
+  '持之以恒': IdiomScene(group: '勤奋', context: '他每天跳绳一百下，风雨无阻坚持了整整一年'),
+  '坚持不懈': IdiomScene(group: '勤奋', context: '练了半年还是不会，他也没停下，一天都没断'),
+
+  // ── 慌乱 ──
+  '手忙脚乱': IdiomScene(group: '慌乱', context: '早上起晚了，他一边穿鞋一边找书包，差点撞到门'),
+  '七上八下': IdiomScene(group: '慌乱', context: '成绩单要发下来了，他心里咚咚跳，坐也坐不住'),
+  '鸡飞狗跳': IdiomScene(group: '慌乱', context: '小狗冲进厨房，锅碗瓢盆响成一片，全家乱成一团'),
+  '草木皆兵': IdiomScene(group: '慌乱', context: '他一个人走夜路，看见树影晃动就以为有人跟着'),
+
+  // ── 高兴 ──
+  '兴高采烈': IdiomScene(group: '高兴', context: '听说周末去动物园，他一路蹦蹦跳跳说个不停'),
+  '欣喜若狂': IdiomScene(group: '高兴', context: '收到录取通知的那一刻，他跳起来大喊大叫'),
+  '眉开眼笑': IdiomScene(group: '高兴', context: '奶奶接过孙子画的画，眉头舒展，笑得合不拢嘴'),
+
+  // ── 低落 ──
+  '垂头丧气': IdiomScene(group: '低落', context: '比赛输了，他低着头走回座位，一句话也不说'),
+  '无精打采': IdiomScene(group: '低落', context: '他昨晚没睡好，今天上课趴在桌上，提不起一点劲'),
+
+  // ── 安静 ──
+  '鸦雀无声': IdiomScene(group: '安静', context: '老师一进门，原本吵闹的教室立刻一点声音都没有了'),
+
+  // ── 人多 ──
+  '人山人海': IdiomScene(group: '人多', context: '节日的广场上挤满了人，走一步都难'),
+  '川流不息': IdiomScene(group: '人多', context: '马路上车一辆接一辆，从来没断过'),
+
+  // ── 春天 ──
+  '春暖花开': IdiomScene(group: '春天', context: '三月里天气暖和了，公园的花全开了'),
+  '鸟语花香': IdiomScene(group: '春天', context: '走进小树林，到处是鸟叫，风里还带着花香'),
+  '万紫千红': IdiomScene(group: '春天', context: '花园里各种颜色的花一起开了，看得人眼花'),
+
+  // ── 秋天 ──
+  '秋高气爽': IdiomScene(group: '秋天', context: '十月的天空又高又蓝，风吹在身上凉凉的，很舒服'),
+
+  // ── 冬天 ──
+  '冰天雪地': IdiomScene(group: '冬天', context: '外面零下二十度，河面结了冰，到处白茫茫一片'),
+  '银装素裹': IdiomScene(group: '冬天', context: '一夜大雪之后，屋顶和树枝全白了'),
+
+  // ── 山水 ──
+  '山清水秀': IdiomScene(group: '山水', context: '那个小村子四面是青山，溪水清得能看见石头'),
+  '层峦叠嶂': IdiomScene(group: '山水', context: '从山顶往下看，一座山连着一座山，望不到头'),
+  '波光粼粼': IdiomScene(group: '山水', context: '太阳照在湖面上，水面一闪一闪地发亮'),
+
+  // ── 认真 ──
+  '一丝不苟': IdiomScene(group: '认真', context: '他抄写生字，每一笔都写得端端正正，一个也不马虎'),
+  '脚踏实地': IdiomScene(group: '认真', context: '他从不空想，每天按计划一点点把事做完'),
+  '三思而行': IdiomScene(group: '认真', context: '做决定前他总要反复想几遍，才肯动手'),
+
+  // ── 互助 ──
+  '助人为乐': IdiomScene(group: '互助', context: '他常帮同学捡球、扶老人过马路，说帮上忙最开心'),
+  '同舟共济': IdiomScene(group: '互助', context: '小组比赛时大家分工合作，一起把难题攻下来'),
+
+  // ── 果断 ──
+  '破釜沉舟': IdiomScene(group: '果断', context: '他退掉所有后路，说这一仗只能赢不能退'),
+
+  // ── 见闻短浅 ──
+  '井底之蛙': IdiomScene(group: '短浅', context: '他从没出过小镇，就以为外面的世界都跟自己这儿一样'),
+  '鼠目寸光': IdiomScene(group: '短浅', context: '为了省一点小钱，他放弃了能学本领的好机会'),
+
+  // ── 多余 ──
+  '画蛇添足': IdiomScene(group: '多余', context: '文章本来已经写好了，他又硬加两段，反而显得乱'),
+  '拔苗助长': IdiomScene(group: '多余', context: '怕孩子长不高，他天天逼着加练，结果反而伤了身体'),
+
+  // ── 补救 ──
+  '亡羊补牢': IdiomScene(group: '补救', context: '考砸了一次，他马上把错题整理出来，及时补上'),
+};

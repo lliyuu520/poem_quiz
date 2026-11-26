@@ -30,3 +30,38 @@ class Poem {
   /// 出处行，例如「唐 · 李白《静夜思》」
   String get source => '$dynasty · $author《$title》';
 }
+
+/// 一条「场景选句」标注：某首诗在哪个生活场合最用得上一句诗。
+///
+/// [scene] 是场景题干（口语化的一句话场合），[line] 是**逐字取自**
+/// 该首 [Poem.lines] 的那一句。场景选句考的是迁移运用而不是背诵，
+/// 所以场景边界必须清楚——两个场合都贴切的句子不能同时出现在选项里。
+/// [group] 是场合大类（送别 / 思乡 / 咏景 / 励志），干扰项只从别的大类取。
+class PoemScene {
+  const PoemScene({
+    required this.group,
+    required this.scene,
+    required this.line,
+  });
+
+  final String group;
+  final String scene;
+
+  /// 逐字取自该首 [Poem.lines] 的一句（含句末标点）。
+  final String line;
+}
+
+/// 一条「情境套用」标注：一句话生活情境 → 最贴切的那个成语。
+///
+/// 考的是迁移运用：读懂情境，再挑出真正贴切的成语，而不是背释义。
+/// [group] 是语义大类，干扰项只从别的大类取——同类的两个成语在同一个
+/// 情境下往往都说得通，一起进选项就是两个正确答案。
+class IdiomScene {
+  const IdiomScene({
+    required this.group,
+    required this.context,
+  });
+
+  final String group;
+  final String context;
+}
