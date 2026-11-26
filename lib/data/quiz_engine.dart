@@ -212,6 +212,10 @@ class QuizEngine {
         return _mathBlank(poem, optionCount, bias);
       case QuestionKind.mathCompare:
         return _mathCompare(poem, optionCount);
+      case QuestionKind.mathReverse:
+        return _mathReverse(poem, optionCount, bias);
+      case QuestionKind.mathWord:
+        return _mathWord(poem, optionCount, bias);
       case QuestionKind.idiomBlank:
         return _idiomBlank(poem);
       case QuestionKind.idiomMeaning:
@@ -299,6 +303,9 @@ class QuizEngine {
   Question? _mathResult(Poem entry, int optionCount, _Bias bias) {
     final e = MathExpr.of(entry);
     if (e == null) return null;
+    // 逆向/情境条目的题面本身就是答案（逆向题答案写进了解题思路，
+    // 情境题直接给算式与得数），混进「算得数」是念答案送分，只给普通算式出。
+    if (_isThinkingEntry(entry)) return null;
     final need = optionCount - 1;
 
     // 干扰项是别的算式得数，按与正确答案的接近程度取（7 的邻居比 90 更有迷惑性）；
@@ -337,7 +344,7 @@ class QuizEngine {
   /// 只有一个未知数，方程的解唯一，所以干扰项只要排除相同数值就保证答案唯一。
   Question? _mathBlank(Poem entry, int optionCount, _Bias bias) {
     final e = MathExpr.of(entry);
-    if (e == null) return null;
+    if (e == null || _isThinkingEntry(entry)) return null;
     final need = optionCount - 1;
 
     // 挖位：两个运算数都可能缺，先随机挑一个；挑中的位置若凑不齐干扰项
@@ -380,7 +387,7 @@ class QuizEngine {
   /// 若固定写成「算式 □ 得数」，答案恒为「=」，孩子闭眼选等号就行。
   Question? _mathCompare(Poem entry, int optionCount) {
     final e = MathExpr.of(entry);
-    if (e == null) return null;
+    if (e == null || _isThinkingEntry(entry)) return null;
 
     const signs = <String>['>', '=', '<'];
     final delta = <int>[-1, 0, 1][_random.nextInt(3)];
@@ -397,6 +404,161 @@ class QuizEngine {
       answerIndex: answer,
       note: MathExpr.hintOf(entry),
       key: '${entry.id}|mathCompare|$target',
+    );
+  }
+
+  /// 思维题条目（逆向填空 / 情境应用）：`math.dart` 的生成器按分组标记，
+  /// 题面写进 `lines` 首行。这两类条目只由各自的思维题型出题，见
+  /// [_mathReverse] 与 [_mathWord]。
+  static bool _isThinkingEntry(Poem entry) =>
+      entry.dynasty == kMathReverseGroup || entry.dynasty == kMathWordGroup;
+
+  /// 逆向填空（思维拓展题 T2）：题面是含 □ 的等式（如「7 − 4 = □ + 3」），
+  /// 孩子先算出已知一侧，再反推 □ 里填几。
+  ///
+  /// □ 的解由题面方程反解：把题面按 □ 拆成两半，各自只含一个未知槽位，
+  /// 遍历 0~10 找让等式成立的唯一值（生成器保证解在口算范围内）。
+  /// `entry.author` 是验算式的得数（见 math.dart 的 [_reverseEntries]），
+  /// 不是答案——答案只认方程的解。干扰项是数值相近的其他数且排除解本身，
+  /// 保证唯一正确。
+  Question? _mathReverse(Poem entry, int optionCount, _Bias bias) {
+    if (entry.dynasty != kMathReverseGroup || entry.lines.isEmpty) return null;
+    final equation = entry.lines.first;
+    if (!equation.contains('□')) return null;
+    final solution = _solveReverse(equation);
+    if (solution == null) return null;
+    final need = optionCount - 1;
+
+    // 干扰项与 _mathBlank 同源：别的条目的得数按接近程度取，排除解本身。
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      pool: (p) => <String>[p.author],
+      numericHint: solution,
+      excludeText: '$solution',
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>['$solution', ...distractors]..shuffle(_random);
+    return _mathQuestion(
+      kind: QuestionKind.mathReverse,
+      entry: entry,
+      prompt: '想一想，□ 里填几两边才相等？',
+      focus: equation,
+      options: options,
+      answerIndex: options.indexOf('$solution'),
+      note: MathExpr.hintOf(entry),
+    );
+  }
+
+  /// 反解逆向题面：方程恰有一个 □，其余数字已知。把题面按 □ 所在侧分成
+  /// 「已知侧」（纯算式或单独数字，先求值）与「未知侧」（三段式带 x 或
+  /// 单独 □），在 0~10 里找唯一让等式成立的解。生成器保证解唯一，多解
+  /// 说明题面有歧义，返回 null 拒出（条目出不了题，不崩）。
+  int? _solveReverse(String equation) {
+    final sides = equation.split('=');
+    if (sides.length != 2) return null;
+    final leftHasBlank = sides[0].contains('□');
+    final rightHasBlank = sides[1].contains('□');
+    // 恰一个 □，两侧各至多一个；两侧都无 □ 不是逆向题。
+    if (leftHasBlank == rightHasBlank) return null;
+    final knownSide = (leftHasBlank ? sides[1] : sides[0]).trim();
+    final unknownSide = (leftHasBlank ? sides[0] : sides[1]).trim();
+
+    // 已知侧可能是单独数字（「a − □ = c」的 c），也可能是算式（混合形态）。
+    final known = _knownValueOf(knownSide);
+    if (known == null) return null;
+
+    // 未知侧：「□ op k」/「k op □」/ 单独 □，x 在 0~10 里找唯一解。
+    final parts = unknownSide.split(' ').where((s) => s.isNotEmpty).toList();
+    if (parts.isEmpty || parts.length > 3) return null;
+    int? solution;
+    for (var x = 0; x <= 10; x++) {
+      final ok = switch (parts.length) {
+        1 => parts[0] == '□',
+        3 => _evalWithBlank(parts, x) == known,
+        _ => false,
+      };
+      if (!ok) continue;
+      if (solution != null) return null; // 多解说明题面有歧义，拒出。
+      solution = x;
+    }
+    return solution;
+  }
+
+  /// 已知侧求值：单独数字或三段式纯算式。
+  int? _knownValueOf(String expr) {
+    final single = int.tryParse(expr);
+    if (single != null) return single;
+    return _evalPlain(expr);
+  }
+
+  /// 纯算式求值（不含 □），格式与 [MathExpr] 相同的三段式。
+  int? _evalPlain(String expr) {
+    final parts = expr.split(' ').where((s) => s.isNotEmpty).toList();
+    if (parts.length != 3) return null;
+    final a = int.tryParse(parts[0]);
+    final b = int.tryParse(parts[2]);
+    if (a == null || b == null) return null;
+    return switch (parts[1]) {
+      '+' => a + b,
+      '-' => a - b,
+      '×' => a * b,
+      '÷' => b == 0 ? null : a ~/ b,
+      _ => null,
+    };
+  }
+
+  /// 带 □ 的三段式「x op k」或「k op x」求值。
+  int? _evalWithBlank(List<String> parts, int x) {
+    int? readSide(String s) => s == '□' ? x : int.tryParse(s);
+    final l = readSide(parts[0]);
+    final r = readSide(parts[2]);
+    if (l == null || r == null) return null;
+    return switch (parts[1]) {
+      '+' => l + r,
+      '-' => l - r,
+      '×' => l * r,
+      '÷' => r == 0 ? null : l ~/ r,
+      _ => null,
+    };
+  }
+
+  /// 情境应用题（思维拓展题 T2）：一句话情境 + 四选一得数。
+  ///
+  /// 情境句在 `lines` 首行，孩子自己从情境里提取算式再算得数；题干按长正文
+  /// 渲染（[Question.isLongPrompt]），算式与思路留在反馈卡的 note 里，
+  /// 判题后对答案用。
+  Question? _mathWord(Poem entry, int optionCount, _Bias bias) {
+    if (entry.dynasty != kMathWordGroup || entry.lines.isEmpty) return null;
+    final e = MathExpr.of(entry);
+    if (e == null) return null;
+    final scene = entry.lines.first;
+    final need = optionCount - 1;
+
+    // 干扰项沿用 numericHint 近邻机制：数值接近得数的选项更有迷惑性。
+    final distractors = _pickFromOthers(
+      exclude: entry,
+      count: need,
+      pool: (p) => <String>[p.author],
+      numericHint: e.result,
+      excludeText: '${e.result}',
+      bias: bias,
+      preferGroup: (p) => p.dynasty == entry.dynasty,
+    );
+    if (distractors.length < need) return null;
+
+    final options = <String>['${e.result}', ...distractors]..shuffle(_random);
+    return _mathQuestion(
+      kind: QuestionKind.mathWord,
+      entry: entry,
+      prompt: '从情境里列算式，得数是多少？',
+      focus: scene,
+      options: options,
+      answerIndex: options.indexOf('${e.result}'),
+      note: '${entry.title} = ${e.result}（${MathExpr.hintOf(entry)}）',
     );
   }
 

@@ -14,8 +14,56 @@ QuizEngine mathEngine(int seed) => QuizEngine(poems: kMath, random: Random(seed)
 /// 覆盖数学题库全部年级的题池权重（用于不限制年级的生成测试）。
 const Map<int, double> allMathGrades = <int, double>{1: 1, 2: 1, 3: 1};
 
+/// 思维题条目的分组名（math.dart 公开常量）。
+const reverseGroup = kMathReverseGroup;
+const wordGroup = kMathWordGroup;
+
+/// 普通算式条目（不含逆向 / 情境）。
+final List<Poem> plainMath =
+    kMath.where((e) => e.dynasty != reverseGroup && e.dynasty != wordGroup).toList();
+
 /// 按条目 id 建索引，便于把题目还原成算式。
 Map<String, Poem> get byId => <String, Poem>{for (final e in kMath) e.id: e};
+
+/// 情境题干扰项与得数的距离上限（近邻机制的存在性断言用）。
+int nearCap(int answer) => answer > 20 ? answer : 20;
+
+/// 独立实现：反解逆向题面方程（与引擎逻辑解耦，测试自证解唯一）。
+/// 方程恰有一个 □，支持两侧任意含 □ 的三段式或单 □。
+int? solveForTest(String equation) {
+  final sides = equation.split('=');
+  if (sides.length != 2) return null;
+  if ('□'.allMatches(equation).length != 1) return null;
+  int? solution;
+  for (var x = 0; x <= 20; x++) {
+    final left = evalSides(sides[0], x);
+    final right = evalSides(sides[1], x);
+    if (left != null && left == right) {
+      if (solution != null) return null; // 多解拒绝。
+      solution = x;
+    }
+  }
+  return solution;
+}
+
+/// 对题面一侧求值，□ 换成 [x]。单 □ 直接返回 x；三段式按运算符算；
+/// 两侧的 □ 数量应合计为 1（由调用方保证）。解析失败返回 null。
+int? evalSides(String side, int x) {
+  final parts = side.trim().split(' ').where((s) => s.isNotEmpty).toList();
+  int? read(String s) => s == '□' ? x : int.tryParse(s);
+  if (parts.length == 1) return read(parts[0]);
+  if (parts.length != 3) return null;
+  final l = read(parts[0]);
+  final r = read(parts[2]);
+  if (l == null || r == null) return null;
+  return switch (parts[1]) {
+    '+' => l + r,
+    '-' => l - r,
+    '×' => l * r,
+    '÷' => r == 0 ? null : l ~/ r,
+    _ => null,
+  };
+}
 
 void main() {
   group('数学题库', () {
@@ -59,6 +107,8 @@ void main() {
           '表内除法',
           '万以内加减',
           '两位数乘一位数',
+          '逆向填空',
+          '情境应用',
         },
         reason: '分组应包含一到三年级全部口算类型：$groups',
       );
@@ -77,12 +127,20 @@ void main() {
       }
     });
 
-    test('题库顺序稳定：两次构建完全一致', () {
-      // 错题本与生涯进度按 id 存，题库重建必须得到同一批 id。
-      final ids = kMath.map((e) => e.id).toList();
-      expect(ids.first, kMath.first.id);
-      expect(ids.last, kMath.last.id);
-      expect(ids.length, kMath.length);
+    test('题库顺序稳定：固定锚点不漂移', () {
+      // 错题本与生涯进度按 id 存，题库重建必须得到同一批 id 与顺序。
+      // 生成器是纯固定循环（无 Random/DateTime/shuffle），这里用锚点钉住顺序。
+      expect(kMath.length, 610);
+      expect(kMath.first.id, '10以内加法|2|1 + 1');
+      expect(kMath.last.id, '情境应用|350|700 - 350');
+      final reverseFirst = kMath.indexWhere((e) => e.dynasty == reverseGroup);
+      final wordFirst = kMath.indexWhere((e) => e.dynasty == wordGroup);
+      expect(reverseFirst, 488, reason: '逆向条目应紧接普通算式之后');
+      expect(wordFirst, 574, reason: '情境条目应紧接逆向条目之后');
+      expect(kMath[reverseFirst].id, '逆向填空|3|2 + 1');
+      expect(kMath[wordFirst - 1].id, '逆向填空|10|8 + 2');
+      expect(kMath[wordFirst].id, '情境应用|5|2 + 3');
+      expect(kMath.last.id, '情境应用|350|700 - 350');
     });
 
     test('按学龄标注年级，一到三年级都有内容', () {
@@ -114,6 +172,8 @@ void main() {
         QuestionKind.mathResult,
         QuestionKind.mathBlank,
         QuestionKind.mathCompare,
+        QuestionKind.mathReverse,
+        QuestionKind.mathWord,
       });
       final entry = kMath.firstWhere((e) => e.title == '3 + 4');
       expect(kMathTopic.displayNameOf(entry), '3 + 4');
@@ -311,6 +371,249 @@ void main() {
     });
   });
 
+  group('逆向填空（思维题 T2）', () {
+    test('题库条目：题面含恰一个 □，title/author 是自洽的验算式', () {
+      final reverses = kMath.where((e) => e.dynasty == reverseGroup).toList();
+      expect(reverses, isNotEmpty, reason: '逆向填空条目不能为空');
+      for (final e in reverses) {
+        final expr = MathExpr.of(e);
+        expect(expr, isNotNull, reason: '${e.id} 解析不出验算式');
+        // title/author 与普通条目同构：得数 = 算式结果（验算式）。
+        expect(expr!.result, expr.computed, reason: '${e.id} 验算式不自洽');
+        // 题面是 lines 首行：恰有一个 □，不含括号思路。
+        final equation = e.lines.first;
+        expect('□'.allMatches(equation).length, 1, reason: '$equation 应恰有一个 □');
+        expect(equation.contains('（'), isFalse,
+            reason: '思路不能混进题面行：$equation');
+        // 解题思路在第二行，与验算式对应。
+        expect(e.lines.length, 2, reason: '${e.id} 应有题面 + 思路两行');
+        expect(e.lines[1], contains('${e.title} = ${e.author}'));
+      }
+    });
+
+    test('题库条目：每个方程的解唯一且落在口算范围，题面方程两侧成立', () {
+      final reverses = kMath.where((e) => e.dynasty == reverseGroup).toList();
+      for (final e in reverses) {
+        final equation = e.lines.first;
+        // 用引擎同一个求解逻辑反解 □（题面数字全已知，一元方程）。
+        final solution = solveForTest(equation);
+        expect(solution, isNotNull, reason: '$equation 反解不出解');
+        expect(solution, inInclusiveRange(1, 10),
+            reason: '$equation 的解 $solution 超出口算范围');
+        // 带入验证：两侧相等，且换成别的数不成立（解唯一）。
+        final sides = equation.split('=');
+        final left = evalSides(sides[0], solution!);
+        final right = evalSides(sides[1], solution);
+        expect(left, right, reason: '$equation 填 $solution 两边不相等');
+        var otherSolutions = 0;
+        for (var x = 0; x <= 20; x++) {
+          if (x == solution) continue;
+          final l = evalSides(sides[0], x);
+          final r = evalSides(sides[1], x);
+          if (l == r) otherSolutions++;
+        }
+        expect(otherSolutions, 0, reason: '$equation 在 0~20 内还有别的解');
+      }
+    });
+
+    test('各年级都能出满题池容量，答案取方程的解而非 author', () {
+      final reverses = kMath.where((e) => e.dynasty == reverseGroup).toList();
+      final engine = mathEngine(51);
+      final total = reverses.length;
+      final seen = <String>{};
+      for (var round = 0; round < 30; round++) {
+        final qs = engine.generate(
+          count: total,
+          kinds: {QuestionKind.mathReverse},
+          gradeWeights: allMathGrades,
+        );
+        seen.addAll(qs.map((q) => q.poem.id));
+        expect(qs.length, total,
+            reason: '逆向填空应能出满题池 $total 题，实际 ${qs.length}');
+        for (final q in qs) {
+          expect(q.focus.contains('□'), isTrue, reason: '${q.focus} 缺 □');
+          final solution = solveForTest(q.focus)!;
+          // 关键：答案是方程的解。author 是验算式得数，两者可能不同
+          // （如「7 − 4 = □ + 1」author=3、解 2）。
+          expect(q.answerText, '$solution',
+              reason: '${q.poem.id} 答案应为解 $solution，实际 ${q.answerText}');
+          expect(q.options.length, 4);
+          expect(q.options.toSet().length, q.options.length,
+              reason: '选项重复: ${q.options}');
+          expect(q.options.where((o) => o == q.answerText).length, 1,
+              reason: '答案出现多次: ${q.options}');
+        }
+      }
+      expect(seen.length, total, reason: '多轮后应覆盖全部逆向条目，实际 ${seen.length}');
+    });
+
+    test('一年级学龄能出满逆向填空（不与普通题型挤占空档）', () {
+      final engine = mathEngine(53);
+      final reverses = kMath.where((e) => e.dynasty == reverseGroup).length;
+      var count = 0;
+      for (var round = 0; round < 10; round++) {
+        count += engine
+            .generate(
+              count: 30,
+              kinds: kMathTopic.kinds,
+              gradeWeights: GradeLevel.g1.weights,
+            )
+            .where((q) => q.kind == QuestionKind.mathReverse)
+            .length;
+      }
+      expect(count, greaterThanOrEqualTo(reverses),
+          reason: '十局内逆向题应至少覆盖一遍题池（$count / $reverses）');
+    });
+
+    test('普通算式条目不出逆向题，逆向条目不出普通算式题', () {
+      final engine = mathEngine(57);
+      for (var round = 0; round < 10; round++) {
+        for (final q in engine.generate(
+          count: 20,
+          kinds: {QuestionKind.mathResult, QuestionKind.mathBlank, QuestionKind.mathCompare},
+          gradeWeights: allMathGrades,
+        )) {
+          expect(q.poem.dynasty, isNot(anyOf(reverseGroup, wordGroup)),
+              reason: '思维题条目漏进了普通算式题：${q.poem.id}');
+        }
+        for (final q in engine.generate(
+          count: 10,
+          kinds: {QuestionKind.mathReverse},
+          gradeWeights: allMathGrades,
+        )) {
+          expect(q.poem.dynasty, reverseGroup,
+              reason: '非逆向条目出了逆向题：${q.poem.id}');
+        }
+      }
+    });
+  });
+
+  group('情境应用题（思维题 T2）', () {
+    test('题库条目：一句话情境、可解析、得数正确', () {
+      final words = kMath.where((e) => e.dynasty == wordGroup).toList();
+      expect(words, isNotEmpty, reason: '情境应用条目不能为空');
+      for (final e in words) {
+        final expr = MathExpr.of(e);
+        expect(expr, isNotNull, reason: '${e.id} 解析不出算式');
+        expect(expr!.result, expr.computed, reason: '${e.id} 得数不对');
+        // 一句话为限：单行、以问号结尾、不含换行与括号思路。
+        final scene = e.lines.first;
+        expect(e.lines.length, 2, reason: '${e.id} 应有情境 + 算式思路两行');
+        expect(scene.contains('\n'), isFalse, reason: '情境句应为单行：$scene');
+        expect(scene.endsWith('？'), isTrue, reason: '情境句应以问号收尾：$scene');
+        expect(scene.contains('（'), isFalse,
+            reason: '思路不能混进情境行：$scene');
+        // 宽松长度断言：一句话为限，一年级孩子要能读完。
+        expect(scene.length, lessThanOrEqualTo(30), reason: '情境句太长：$scene');
+        // 思路行与完整算式对应。
+        expect(e.lines[1], contains('${e.title} = ${e.author}'));
+      }
+    });
+
+    test('情境句无算式泄题：不含答案数字旁的「=」', () {
+      final words = kMath.where((e) => e.dynasty == wordGroup).toList();
+      for (final e in words) {
+        final scene = e.lines.first;
+        // 情境句是文字描述，不应出现「=」或「算式」字样直接泄题。
+        expect(scene.contains('='), isFalse, reason: '情境句泄题：$scene');
+        expect(scene.contains('×') || scene.contains('÷'), isFalse,
+            reason: '情境句用文字描述运算，不写运算符：$scene');
+      }
+    });
+
+    test('各年级都能出满题池容量，情境题面与选项正确', () {
+      final words = kMath.where((e) => e.dynasty == wordGroup).toList();
+      expect(words.map((e) => e.grade).toSet(), <int>{1, 2, 3},
+          reason: '情境应用应覆盖三个年级');
+      for (final grade in <int>[1, 2, 3]) {
+        final pool = words.where((e) => e.grade == grade).toList();
+        final engine = mathEngine(61 + grade);
+        final qs = engine.generate(
+          count: pool.length,
+          kinds: {QuestionKind.mathWord},
+          gradeWeights: <int, double>{grade: 1},
+        );
+        expect(qs.length, pool.length,
+            reason: '$grade 年级情境题应出满题池 ${pool.length} 题，实际 ${qs.length}');
+        for (final q in qs) {
+          expect(q.kind, QuestionKind.mathWord);
+          expect(q.poem.grade, grade);
+          expect(q.focus, q.poem.lines.first, reason: '题干应是情境句');
+          expect(q.isLongPrompt, isTrue, reason: '情境题按长正文渲染');
+          final e = MathExpr.of(q.poem)!;
+          expect(q.answerText, '${e.result}');
+          expect(q.options.length, 4);
+          expect(q.options.toSet().length, q.options.length,
+              reason: '选项重复: ${q.options}');
+          expect(q.note, contains('${q.poem.title} = ${e.result}'),
+              reason: '反馈卡应带算式与得数');
+        }
+      }
+    });
+
+    test('干扰项是数值接近的其他得数，且不与答案重复', () {
+      final engine = mathEngine(67);
+      for (var round = 0; round < 20; round++) {
+        for (final q in engine.generate(
+          count: 10,
+          kinds: {QuestionKind.mathWord},
+          gradeWeights: allMathGrades,
+        )) {
+          final answer = int.parse(q.answerText);
+          for (final o in q.options) {
+            if (o == q.answerText) continue;
+            final n = int.parse(o);
+            // 近邻机制：干扰项与得数同量级（相差不超过得数本身与 20 的较大者），
+            // 不会出现「3 + 4 问 100」这类一眼排除的选项。
+            expect((n - answer).abs(), lessThanOrEqualTo(max(answer, 20)),
+                reason: '${q.poem.id} 的干扰项 $n 离答案 $answer 太远');
+          }
+        }
+      }
+    });
+  });
+
+  group('思维题条目与生成顺序', () {
+    test('题库顺序稳定：逆向与情境条目锚点不漂移', () {
+      // 错题本与生涯进度按 id 存，生成器扩类后重建必须得到同一批 id 与顺序。
+      final reverses = kMath.where((e) => e.dynasty == reverseGroup).toList();
+      final words = kMath.where((e) => e.dynasty == wordGroup).toList();
+      expect(reverses.length, 86);
+      expect(words.length, 36);
+      expect(reverses.first.id, '逆向填空|3|2 + 1');
+      expect(reverses.last.id, '逆向填空|10|8 + 2');
+      expect(words.first.id, '情境应用|5|2 + 3');
+      expect(words.last.id, '情境应用|350|700 - 350');
+      // 逆向/情境条目在题库尾部连续排列，不与普通算式交错。
+      final reverseStart = kMath.indexWhere((e) => e.dynasty == reverseGroup);
+      final wordStart = kMath.indexWhere((e) => e.dynasty == wordGroup);
+      expect(reverseStart, 488);
+      expect(wordStart, 574);
+      expect(
+        kMath.sublist(reverseStart, wordStart).every((e) => e.dynasty == reverseGroup),
+        isTrue,
+        reason: '逆向段不应混入其他分组',
+      );
+      expect(
+        kMath.sublist(wordStart).every((e) => e.dynasty == wordGroup),
+        isTrue,
+        reason: '情境段不应混入其他分组',
+      );
+    });
+
+    test('思维题条目 id 唯一且与普通算式不冲突', () {
+      final ids = kMath.map((e) => e.id).toList();
+      expect(ids.toSet().length, ids.length, reason: '思维题条目引入了重复 id');
+      // 逆向条目复用普通算式（如 7 - 3），id 靠分组区分，不能撞。
+      final reverseTitles = kMath
+          .where((e) => e.dynasty == reverseGroup)
+          .map((e) => e.title)
+          .toList();
+      expect(reverseTitles.toSet().length, reverseTitles.length,
+          reason: '逆向条目算式重复');
+    });
+  });
+
   group('会话', () {
     test('数学会话带科目与学龄，可按年级出题', () {
       final s1 = buildSession(
@@ -355,14 +658,18 @@ void main() {
   });
 
   group('题型标签', () {
-    test('数学三题型有自己的标签，且被识别为算式题', () {
+    test('数学五题型有自己的标签，且被识别为算式题', () {
       expect(QuestionKind.mathResult.label, '算得数');
       expect(QuestionKind.mathBlank.label, '填数');
       expect(QuestionKind.mathCompare.label, '比大小');
+      expect(QuestionKind.mathReverse.label, '逆向填空');
+      expect(QuestionKind.mathWord.label, '应用题');
       for (final k in <QuestionKind>[
         QuestionKind.mathResult,
         QuestionKind.mathBlank,
         QuestionKind.mathCompare,
+        QuestionKind.mathReverse,
+        QuestionKind.mathWord,
       ]) {
         expect(isMathKind(k), isTrue);
         expect(isPinyinKind(k), isFalse);

@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poem_quiz/data/grade.dart';
+import 'package:poem_quiz/data/math.dart';
 import 'package:poem_quiz/data/profile.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/quiz_engine.dart';
@@ -587,8 +588,8 @@ void main() {
           () => QuizPage(session: session, onFinish: (_) async {}),
         );
         expect(find.textContaining('1 / '), findsOneWidget);
-        // 题型标签必须是数学那三个之一。
-        final mathLabels = <String>['算得数', '填数', '比大小'];
+        // 题型标签必须是数学那五个之一（T2 扩了逆向填空与应用题）。
+        final mathLabels = <String>['算得数', '填数', '比大小', '逆向填空', '应用题'];
         expect(
           mathLabels.any((l) => find.text(l).evaluate().isNotEmpty),
           isTrue,
@@ -774,6 +775,78 @@ void main() {
     // 每档宽度一个独立 testWidgets（文件惯例）：pumpWidget 会按 type 复用
     // 上一个 QuizPage 的 State，同一个 testWidgets 里连 pump 两档宽度会把
     // 第一轮的揭示状态带进第二轮。
+    for (final (name, size) in <(String, Size)>[
+      ('手机', phone),
+      ('平板横屏', tabletLandscape),
+    ]) {
+      testWidgets('逆向填空与情境应用题（$name）：题干按新题型渲染无溢出', (tester) async {
+        // 逆向题：□ 走写字格；情境题：一句话长正文渲染。
+        // 数学条目按「情境应用|得数|算式」id 取，找不到就退回首条（生成器改动时兜底）。
+        final reverse = kMathTopic.entries.firstWhere(
+          (e) => e.dynasty == kMathReverseGroup,
+          orElse: () => kMathTopic.entries.first,
+        );
+        final word = kMathTopic.entries.firstWhere(
+          (e) => e.dynasty == kMathWordGroup,
+          orElse: () => kMathTopic.entries.first,
+        );
+        for (final (question, isReverse) in <(Question, bool)>[
+          (
+            Question(
+              kind: QuestionKind.mathReverse,
+              poem: reverse,
+              prompt: '想一想，□ 里填几两边才相等？',
+              focus: reverse.lines.first,
+              key: 'reverse-lt',
+              options: const <String>['2', '3', '4', '5'],
+              answerIndex: 0,
+            ),
+            true,
+          ),
+          (
+            Question(
+              kind: QuestionKind.mathWord,
+              poem: word,
+              prompt: '从情境里列算式，得数是多少？',
+              focus: word.lines.first,
+              key: 'word-lt',
+              options: const <String>['5', '6', '7', '8'],
+              answerIndex: 0,
+            ),
+            false,
+          ),
+        ]) {
+          final session = QuizSession(
+            questions: <Question>[question],
+            total: 1,
+            topic: kMathTopic,
+            plan: planOfGrade(GradeLevel.g1, kMathTopic),
+            careerMode: false,
+          );
+          await pumpAt(
+            tester,
+            size,
+            () => QuizPage(session: session, onFinish: (_) async {}),
+          );
+          if (isReverse) {
+            // □ 被 _plainFocus 拆成写字格 WidgetSpan，整串文本匹配不到；
+            // 断言「去掉 □ 的左半段」可见 + 页面里出现了写字格。
+            final leftPart = question.focus.split('□').first.trim();
+            expect(find.textContaining(leftPart), findsOneWidget,
+                reason: '$name：逆向题干应展示「$leftPart」一侧');
+          } else {
+            expect(find.textContaining(question.focus), findsOneWidget,
+                reason: '$name：情境题干应展示情境句');
+          }
+          expect(find.text(question.kind.label), findsOneWidget,
+              reason: '$name：应出现题型标签 ${question.kind.label}');
+          expect(tester.takeException(), isNull);
+          // 下一题前重置，避免 State 复用残留。
+          await tester.pumpWidget(const SizedBox.shrink());
+        }
+      });
+    }
+
     for (final (name, size) in <(String, Size)>[
       ('手机', phone),
       ('平板横屏', tabletLandscape),

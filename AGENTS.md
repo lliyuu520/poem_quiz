@@ -30,7 +30,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/topics.dart` | `kTopics`（诗词、拼音、成语、文学常识、歇后语、错别字、文言实词、词语、数学、英语、数独）、`kSubjectGroups`（语文/数学/英语三组，数独不入组）、`kDefaultTopic`；新增科目在这里加一条 |
 | `lib/data/practice_scope.dart` | **练习范围 + 难度策略**：`PracticeScope` / `ScopeKind` / `ChallengeTier` / `PracticePlan`，把范围选择解析成出题计划 |
 | `lib/data/pinyin.dart` | 拼音题库 `kPinyin`：320 条，年级 1-6 分档（**由 `tool/gen_pinyin.py` 生成，不要手改**） |
-| `lib/data/math.dart` | 数学题库 `kMath`：488 条规则生成（一年级 196 / 二年级 162 / 三年级 130）；`MathExpr` 解析算式 |
+| `lib/data/math.dart` | 数学题库 `kMath`：610 条规则生成（普通算式 488：一 196 / 二 162 / 三 130；逆向填空 86 / 情境应用 36，见「思维拓展题」）；`MathExpr` 解析算式 |
 | `lib/data/chengyu.dart` | 成语题库 `kChengyu`：122 条，年级 1-6 分档，三型题型（选字 / 知词义 / 读成语） |
 | `lib/data/literature.dart` | 文学常识题库 `kLiterature`：48 条，年级 7-9 + 拓展，一型题型 `literaturePick`（**由 `tool/gen_literature.py` 生成，不要手改**）；只考诗词考不到的并称/字号/流派/体裁/文学史常识，不做名句→作者 |
 | `lib/data/xiehouyu.dart` | 歇后语题库 `kXiehouyu`：49 条，年级 4-9 + 拓展，一型题型 `xiehouyuLink`（给前半选后半；**由 `tool/gen_xiehouyu.py` 生成，不要手改**）；后半唯一 |
@@ -43,12 +43,12 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `lib/data/poems.dart` | 诗词题库 `kPoems`：113 首，唐 67 / 宋 34 / 其余零散 |
 | `lib/data/grade.dart` | 学龄档位 + `gradeForBirth()` 推算 + **题池加权** `cumulativeWeights()` / `rangeWeights()` / `fullCurriculumWeights()`；`ReviewMode`（off / standard 1/3 / reinforced 1/2） |
 | `lib/data/profile.dart` | 全局个人档案 `UserProfile`：出生年月存裸键（不带科目前缀），学龄由它推算 |
-| `lib/data/quiz_engine.dart` | 出题：24 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
+| `lib/data/quiz_engine.dart` | 出题：26 类题型 + 干扰项选取 + 填空挖空；`poems` 为必填参数 |
 | `lib/data/sudoku.dart` | 数独：五档难度（一星~五星，逐级解锁）+ 固定终盘合法置换 + 挖空（每挖一格校验唯一解）；支持 4×4 与 9×9 |
 | `lib/data/quiz_session.dart` | 一局状态：进度、计分 |
 | `lib/data/progress_store.dart` | 存档：SharedPreferences + JSON 字符串，**按科目分键** `<topicId>_<字段>`；`practicedEntryIds`（已练覆盖度，含答错）与 `masteredPoemIds`（答对过）是两回事 |
 | `lib/data/update_service.dart` | 检查更新：单一来源 OSS CDN（`manifestUrl`） |
-| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 24 类题型（诗词 5 / 拼音 2 / 数学 3 / 成语 3 / 文学常识 1 / 歇后语 1 / 错别字 1 / 文言 1 / 词语 2 / 英语 5） |
+| `lib/models/` | `Poem` / `Question` 数据结构；`QuestionKind` 26 类题型（诗词 5 / 拼音 2 / 数学 5 / 成语 3 / 文学常识 1 / 歇后语 1 / 错别字 1 / 文言 1 / 词语 2 / 英语 5） |
 | `lib/pages/` | 首页 / 答题 / 结算 / 学习 / 错题本 / 设置 / 数独，页面内私有 Widget 就地定义 |
 | `lib/widgets/adaptive.dart` | 断点（600/840）+ `ContentFrame` 限宽容器，平板适配的唯一入口 |
 | `lib/widgets/english_art.dart` | 英语内置矢量插图（`EnglishArt`），不引外部图片资源 |
@@ -59,7 +59,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 | `test/progress_store_test.dart` | 存档键隔离、范围与策略持久化、生涯与错题本 |
 | `test/layout_test.dart` | 三种窗口宽度下的渲染与横屏分栏（布局改动必跑） |
 | `test/pinyin_test.dart` | 拼音题库完整性、声调标注、分年级题池、两种拼音题型 |
-| `test/math_test.dart` | 数学题库、算式解析、三种算式题型、评语与摘要格式 |
+| `test/math_test.dart` | 数学题库、算式解析、五种算式题型（含逆向与情境）、评语与摘要格式 |
 | `test/chengyu_test.dart` | 成语题库完整性、三种题型（选字/知词义/读成语）、干扰项与题池容量 |
 | `test/sudoku_test.dart` | 数独终盘合法性、题面唯一解、档位映射、首页与盘面渲染 |
 | `tool/` | 一次性辅助脚本（图标、拼音题库、英语题库与音频校验、文学常识/歇后语/错别字/文言题库、adb 驱动答题），不参与构建 |
@@ -82,6 +82,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
   - **只在 `scope.isRecommended` 时判超纲**——显式选年级是主动挑战，不算超纲；未设置出生年月时推荐值不可信，也不判。
   - 判据只在一处：`isAboveRecommendedLevel()` / `minSchoolGradeOf()` / `maxSchoolGradeOf()`（`grade.dart`，`Topic.minSchoolGrade` 是同源的便捷读法）。范围面板的年级 chip 按 `Topic.minSchoolGrade`~`maxSchoolGrade` 裁剪，不列题库没有的年级。**新增高年级起步的科目时不必改代码，这套逻辑自动生效**。
 - **数学三年级不全穷举**：三位数加减若全组合近百万条，会把低年级题池彻底淹没。`_addSubWithin1000()` 只收整百±整百、整百+整十、整千-整百这类能在脑子里算的形态；`_twoDigitMul()` 只收 11~34 × 2~5。**有余数除法暂时进不来**——`MathExpr` 只支持单个得数，表达不了「7 ÷ 2 = 3 余 1」，要加得先扩解析器。
+- **数学思维题条目与普通算式互斥出题**（2026-11-26 思维拓展题 T2）：逆向填空（`kMathReverseGroup`，86 条，题面如「7 − 4 = □ + 3」）与情境应用（`kMathWordGroup`，36 条，一句话情境）只由 `mathReverse` / `mathWord` 出题；`_mathResult` / `_mathBlank` / `_mathCompare` 用 `_isThinkingEntry()` 守卫把这两组条目排除——它们的 `lines` 首行是题面（题面里写着答案或情境），混进普通算式题等于念答案送分。两个铁律：① **`title`/`author` 必须存不含 □ 的验算式与它的得数**（全题库共用「author = 算式结果」约定，不为思维题开口子），□ 的解由引擎 `_solveReverse()` 从题面方程反解（□ 在哪侧都行，已知侧可以是单独数字）；② 情境条目的 `lines` 首行是一句话情境（≤30 字，不写「=」与运算符），思路行在 `lines.last`——`MathExpr.hintOf` 取 `last` 就是为此。改生成器后 `test/math_test.dart` 有解唯一性（0~20 穷举）与题面泄题用例钉着。
 - **展示文案全走科目**：`nameOf` / `summaryOf` / `detailOf` / `summaryFromId` / `marks` 都是可选钩子，页面一律调 `displayNameOf()` / `displaySummaryOf()` / `displayDetailOf()` / `summaryOfId()` / `markFor()`，不要自己拼书名号或写死评语。诗词是「《静夜思》」与「唐 · 李白《静夜思》」，拼音是「重」与「重 · zhòng」，数学是「3 + 4」与「3 + 4 = 7」，成语是「一心一意」与「一心一意 · yì xīn yí yì」。
 - `Topic` 的条目暂复用 `Poem`：`title` 当条目名，`author` 当副信息，`dynasty` 当分组值，`lines` 当正文。字段真的不够用时再建新类型，不提前抽象。
 - **棋盘玩法科目（数独）**：`Topic.mode = TopicMode.sudoku`，`entries` 与 `kinds` 为空。盘面由 `Sudoku.open(difficulty)` 按难度档现生成，不走 `QuizEngine`。这类科目 `graded` 恒为 true（空题库推导），首页把练习范围卡换成**难度关卡列表**（一星~五星），并隐藏玩法卡、学习模式与错题本——它们都建立在题库之上。新增棋盘类玩法时复用 `TopicMode` 与首页的 `isBoardGame` 分支，不要再往题库抽象里塞。

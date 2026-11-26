@@ -1,6 +1,6 @@
 import 'poem.dart';
 
-/// 题型。前四种针对诗句，中间两种针对拼音读音，后三种针对算式，
+/// 题型。前五种针对诗句，中间两种针对拼音读音，算式题型见 [isMathKind]，
 /// 成语三型针对成语，文学常识/歇后语/错别字/文言各一型，词语两型针对同义/反义，
 /// 诗词线索猜诗插在诗词题型之后，最后五种针对英语（以听为主）。
 ///
@@ -16,6 +16,8 @@ enum QuestionKind {
   mathResult,
   mathBlank,
   mathCompare,
+  mathReverse,
+  mathWord,
   idiomBlank,
   idiomMeaning,
   idiomPinyin,
@@ -44,6 +46,8 @@ extension QuestionKindLabel on QuestionKind {
         QuestionKind.mathResult => '算得数',
         QuestionKind.mathBlank => '填数',
         QuestionKind.mathCompare => '比大小',
+        QuestionKind.mathReverse => '逆向填空',
+        QuestionKind.mathWord => '应用题',
         QuestionKind.idiomBlank => '选字',
         QuestionKind.idiomMeaning => '知词义',
         QuestionKind.idiomPinyin => '读成语',
@@ -95,7 +99,9 @@ bool isEnglishKind(QuestionKind kind) =>
 bool isMathKind(QuestionKind kind) =>
     kind == QuestionKind.mathResult ||
     kind == QuestionKind.mathBlank ||
-    kind == QuestionKind.mathCompare;
+    kind == QuestionKind.mathCompare ||
+    kind == QuestionKind.mathReverse ||
+    kind == QuestionKind.mathWord;
 
 /// 是否为文学常识题型。
 bool isLiteratureKind(QuestionKind kind) => kind == QuestionKind.literaturePick;
@@ -169,12 +175,13 @@ class Question {
   /// 拼音题同样用 [focus] 展示题干、[options] 展示候选，只是文字是拼音。
   bool get isPinyin => isPinyinKind(kind);
 
-  /// 题干是长释义/例句（成语「知词义」、文学常识「知常识」、文言「解文言」），
-  /// 不能按单个词/短语的大字号渲染。
+  /// 题干是长释义/例句/一句话情境（成语「知词义」、文学常识「知常识」、
+  /// 文言「解文言」、数学「应用题」），不能按单个词/短语的大字号渲染。
   bool get isLongPrompt =>
       kind == QuestionKind.idiomMeaning ||
       kind == QuestionKind.literaturePick ||
-      kind == QuestionKind.wenyanMeaning;
+      kind == QuestionKind.wenyanMeaning ||
+      kind == QuestionKind.mathWord;
 
   /// 是否为诗词线索猜诗题：题干是「朝代 + 主题」两行短线索，
   /// 判题前可能再补一条名句线索（[extraClue]），按正文小段排而不是单个大词。

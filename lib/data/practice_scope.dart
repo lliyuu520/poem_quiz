@@ -460,6 +460,9 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.mathResult: 2.2,
         QuestionKind.mathBlank: 1.2,
         QuestionKind.mathCompare: 1.2,
+        // 逆向与情境是思维题（见 math.dart 思维拓展题 T2），轻松档少出。
+        QuestionKind.mathReverse: 0.8,
+        QuestionKind.mathWord: 0.8,
         QuestionKind.nextLine: 0.6,
         QuestionKind.blank: 0.6,
         // 猜诗是思维题不是认读题，轻松档少出，留给标准与挑战档。
@@ -487,6 +490,9 @@ Map<QuestionKind, double> kindWeightsFor(ChallengeTier tier) {
         QuestionKind.mathResult: 0.8,
         QuestionKind.mathBlank: 1.4,
         QuestionKind.mathCompare: 1.4,
+        // 挑战档正好：逆向要反推、情境要自己列式，比算得数更进一层。
+        QuestionKind.mathReverse: 2.2,
+        QuestionKind.mathWord: 2.2,
         QuestionKind.nextLine: 2.2,
         QuestionKind.blank: 2.2,
         // 挑战档正好：线索不全、要靠检索记忆，比接句更进一层。

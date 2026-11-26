@@ -112,11 +112,13 @@ final Topic kMathTopic = Topic(
     QuestionKind.mathResult,
     QuestionKind.mathBlank,
     QuestionKind.mathCompare,
+    QuestionKind.mathReverse,
+    QuestionKind.mathWord,
   },
   nameOf: _mathName,
   summaryOf: _mathSummary,
   tagline: '懂算理，会口算',
-  intro: '按学龄练口算：一年级加减与整十数，二年级表内乘除。高年级会带着复习低年级。',
+  intro: '按学龄练口算：一年级加减与整十数，二年级表内乘除，三年级万以内加减与乘法，还有逆向填空和情境应用题。高年级会带着复习低年级。',
   seal: '算\nquiz',
   accent: AppColors.math,
   accentSoft: AppColors.mathSoft,
@@ -128,7 +130,8 @@ final Topic kMathTopic = Topic(
 /// 数学的 `lines` 是「3 + 4 = 7（把 3 和 4 合起来是 7）」，展开时按行看更清楚。
 String _mathDetail(Poem p) => p.lines.join('\n');
 
-/// 数学条目 id 是「分组|得数|算式」，摘要要写成「3 + 4 = 7」。
+/// 数学条目 id 是「分组|得数|算式」，摘要要写成「3 + 4 = 7」；
+/// 情境应用条目的算式本身没有情境信息，摘要沿用同一格式。
 String _mathSummaryFromId(List<String> parts) =>
     parts.length >= 3 ? '${parts[2]} = ${parts[1]}' : parts.join(' · ');
 
