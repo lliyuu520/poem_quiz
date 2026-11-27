@@ -181,7 +181,7 @@ class Question {
   /// 拼音题同样用 [focus] 展示题干、[options] 展示候选，只是文字是拼音。
   bool get isPinyin => isPinyinKind(kind);
 
-  /// 题干是长释义/例句/一句话情境（成语「知词义」「情景套用」、文学常识「知常识」、
+  /// 题干是长释义/例句/一句话情境（成语「知词义」「情境套用」、文学常识「知常识」、
   /// 文言「解文言」、数学「应用题」、诗词「场景选句」），不能按单个词/短语的大字号渲染。
   bool get isLongPrompt =>
       kind == QuestionKind.idiomMeaning ||
