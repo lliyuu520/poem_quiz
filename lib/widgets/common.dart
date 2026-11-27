@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// 背景：宣纸底色 + 极淡的竖纹，模拟纸面质感。
+/// 背景：宣纸底色 + 极淡的纸面渐变。
+///
+/// 早先在中段叠了一道每 28px 一道的竖向水痕，截图里能明显看到规律竖线，
+/// 压在正文下面会分散注意力——那属于装饰压过内容，现已去掉。渐变也收在
+/// 底部约 20%，上半屏保持干净的纸色。
 class PaperBackground extends StatelessWidget {
   const PaperBackground({super.key, required this.child});
 
@@ -15,34 +19,13 @@ class PaperBackground extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: <Color>[AppColors.paper, AppColors.paperDeep],
+          colors: <Color>[AppColors.paper, AppColors.paper, AppColors.paperDeep],
+          stops: <double>[0, 0.8, 1],
         ),
       ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          CustomPaint(painter: _GrainPainter()),
-          child,
-        ],
-      ),
+      child: child,
     );
   }
-}
-
-class _GrainPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.line.withValues(alpha: 0.35)
-      ..strokeWidth = 1;
-    // 每 28px 一道竖线，弱到只提供纸感，不干扰阅读。
-    for (double x = 14; x < size.width; x += 28) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// 朱红印章样式的小标签。
@@ -76,14 +59,18 @@ class SealTag extends StatelessWidget {
 }
 
 /// 卡片：米白底 + 细描边，无明显阴影，贴合纸面气质。
+///
+/// 默认描边用 [AppColors.lineStrong]——`card` 与 `paper` 的色差很小，只靠
+/// 早期那条 1.38:1 的浅线，卡片边界在纸底上几乎看不出来。纯装饰容器可以
+/// 显式传 `borderColor: AppColors.line`。
 class InkCard extends StatelessWidget {
   const InkCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(20),
+    this.padding = const EdgeInsets.all(16),
     this.color,
     this.borderColor,
-    this.radius = 14,
+    this.radius = AppMetric.radiusCard,
   });
 
   final Widget child;
@@ -99,7 +86,7 @@ class InkCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color ?? AppColors.card,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor ?? AppColors.line),
+        border: Border.all(color: borderColor ?? AppColors.lineStrong),
       ),
       child: child,
     );
@@ -107,6 +94,10 @@ class InkCard extends StatelessWidget {
 }
 
 /// 主按钮。
+///
+/// 高度走 [AppMetric.buttonHeight]（56dp），短屏可传 `compact: true` 降到 52。
+/// 按下变 [AppColors.sealPressed] 而不做缩放弹跳——孩子连点时缩放会让
+/// 触控位置飘移。禁用态保留完整标签，只换底色与文字色，不整体降透明度。
 class PrimaryButton extends StatelessWidget {
   const PrimaryButton({
     super.key,
@@ -115,6 +106,8 @@ class PrimaryButton extends StatelessWidget {
     this.icon,
     this.color,
     this.filled = true,
+    this.compact = false,
+    this.loading = false,
   });
 
   final String label;
@@ -123,48 +116,93 @@ class PrimaryButton extends StatelessWidget {
   final Color? color;
   final bool filled;
 
+  /// 短屏降一档高度，仍不低于 48dp 的触控底线。
+  final bool compact;
+
+  /// 加载中：左侧换成环形进度，并忽略重复点击。
+  final bool loading;
+
   @override
   Widget build(BuildContext context) {
     final c = color ?? AppColors.seal;
-    final enabled = onPressed != null;
-    final fg = filled ? Colors.white : c;
+    final enabled = onPressed != null && !loading;
+    final fg = filled ? AppColors.card : c;
+    final height =
+        compact ? AppMetric.buttonHeightShort : AppMetric.buttonHeight;
+    final radius = BorderRadius.circular(AppMetric.radiusButton);
+
+    // 禁用态自己画容器：FilledButton 的 side 在 Material 3 下与 shape
+    // 抢样式，禁用时边框常常不画。页面底部就是 paperDeep 渐变，没有
+    // 描边的空壳会和背景融在一起，「请先作答」整块看不见。
+    if (!enabled && filled) {
+      return SizedBox(
+        height: height,
+        width: double.infinity,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: radius,
+            border: Border.all(color: AppColors.lineStrong),
+          ),
+          child: Center(
+            child: _content(AppColors.disabledText, false),
+          ),
+        ),
+      );
+    }
 
     return SizedBox(
-      height: 52,
+      height: height,
+      width: double.infinity,
       child: filled
           ? FilledButton(
               onPressed: onPressed,
               style: FilledButton.styleFrom(
                 backgroundColor: c,
                 foregroundColor: fg,
-                disabledBackgroundColor: AppColors.line,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                disabledBackgroundColor: AppColors.card,
+                disabledForegroundColor: AppColors.disabledText,
+                shape: RoundedRectangleBorder(borderRadius: radius),
+                overlayColor: AppColors.sealPressed,
               ),
-              child: _content(fg),
+              child: _content(fg, loading),
             )
           : OutlinedButton(
               onPressed: onPressed,
               style: OutlinedButton.styleFrom(
-                foregroundColor: enabled ? fg : AppColors.inkFaint,
-                side: BorderSide(color: enabled ? c.withValues(alpha: 0.5) : AppColors.line),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                foregroundColor: enabled ? c : AppColors.disabledText,
+                side: BorderSide(
+                  color:
+                      enabled ? c.withValues(alpha: 0.6) : AppColors.lineStrong,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: radius),
               ),
-              child: _content(enabled ? fg : AppColors.inkFaint),
+              child: _content(enabled ? fg : AppColors.disabledText, loading),
             ),
     );
   }
 
-  Widget _content(Color fg) {
+  Widget _content(Color fg, bool busy) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
-        if (icon != null) ...<Widget>[
-          Icon(icon, size: 18, color: fg),
-          const SizedBox(width: 8),
-        ],
+        if (busy)
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+          )
+        else if (icon != null)
+          Icon(icon, size: 20, color: fg),
+        if (busy || icon != null) const SizedBox(width: 8),
         Text(
           label,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 2, color: fg),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1,
+            color: fg,
+          ),
         ),
       ],
     );
@@ -187,10 +225,15 @@ class RuleDivider extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
               label!,
-              style: const TextStyle(fontSize: 12, color: AppColors.inkFaint, letterSpacing: 2),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.inkSoft,
+                letterSpacing: 1,
+              ),
             ),
           ),
-        if (label != null) const Expanded(child: Divider(color: AppColors.line, height: 1)),
+        if (label != null)
+          const Expanded(child: Divider(color: AppColors.line, height: 1)),
       ],
     );
   }

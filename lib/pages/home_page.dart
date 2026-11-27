@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../data/account_service.dart';
@@ -314,8 +316,6 @@ class _HomePageState extends State<HomePage> {
                             ),
                             child: _homeColumn(
                               context,
-                              wide: false,
-                              roomy: false,
                               viewportHeight: constraints.maxHeight,
                             ),
                           ),
@@ -331,6 +331,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _wideHomeBody(BuildContext context) {
+    final isBoard = widget.topic.isBoardGame;
+    final aboveLevel = !isBoard && _plan.aboveLevel;
+    final roomy = MediaQuery.sizeOf(context).height >= 1000;
     return LayoutBuilder(
       builder: (context, constraints) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -349,20 +352,121 @@ class _HomePageState extends State<HomePage> {
             onSelectGroup: _onSelectGroup,
             onSelectTopic: _onSelectTopic,
           ),
+          const SizedBox(height: 16),
           Expanded(
             child: LayoutBuilder(
               builder: (context, inner) => SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: inner.maxHeight),
-                  // 用 Center 而不是 IntrinsicHeight：玩法卡里有 LayoutBuilder
-                  // 等动态内容，intrinsic 不可靠；超高竖屏切换 roomy 变体。
+                  constraints:
+                      BoxConstraints(minHeight: inner.maxHeight),
+                  // 主体簇在页签以下的剩余空间里垂直居中：只给顶部加固定
+                  // 间距的话，所有空白都会堆在底部，视觉重心顶置。
+                  // 用 Center 而非 IntrinsicHeight——玩法卡里有 LayoutBuilder。
                   child: Center(
-                    child: _homeColumn(
-                      context,
-                      wide: true,
-                      roomy: inner.maxHeight >= 1000,
-                      viewportHeight: inner.maxHeight,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        Expanded(
+                          flex: 44,
+                          child: isBoard
+                              ? _SudokuStages(
+                                  store: _store,
+                                  selected: _difficulty,
+                                  onSelect: (d) =>
+                                      setState(() => _difficulty = d),
+                                  horizontal: false,
+                                )
+                              : (aboveLevel
+                                  ? _LevelNotice(
+                                      plan: _plan, topic: widget.topic)
+                                  : widget.topic.graded
+                                      ? _ScopeCard(
+                                          plan: _plan,
+                                      topic: widget.topic,
+                                      onTap: _pickScope,
+                                    )
+                                  : _TopicIntro(topic: widget.topic)),
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          flex: 56,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              if (!isBoard) ...<Widget>[
+                                // stretch 让三张卡强制等高：卡片内容行数不同
+                                // 时，默认居中会让选中卡比邻居矮一截，选中态
+                                // 看起来像被压下去了。
+                                IntrinsicHeight(
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: <Widget>[
+                                      for (final mode
+                                          in GameMode.values) ...<Widget>[
+                                        Expanded(
+                                          child: _ModeChip(
+                                            mode: mode,
+                                            topic: widget.topic,
+                                            selected: mode == _mode,
+                                            onTap: () =>
+                                                setState(() => _mode = mode),
+                                            wide: true,
+                                            roomy: roomy,
+                                          ),
+                                        ),
+                                        if (mode != GameMode.values.last)
+                                          const SizedBox(width: 12),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(height: roomy ? 28 : 20),
+                              ],
+                              PrimaryButton(
+                                label: isBoard
+                                    ? '开始${_difficulty.title}'
+                                    : aboveLevel
+                                        ? '本科目高于当前学龄'
+                                        : (_mode.isCareer
+                                            ? '开始生涯'
+                                            : '开始答题'),
+                                icon: isBoard
+                                    ? Icons.play_arrow_rounded
+                                    : aboveLevel
+                                        ? Icons.lock_outline
+                                        : Icons.play_arrow_rounded,
+                                onPressed: aboveLevel ? null : _start,
+                              ),
+                              if (!isBoard) ...<Widget>[
+                                SizedBox(height: roomy ? 18 : 14),
+                                _SecondaryEntries(
+                                  store: _store,
+                                  topic: widget.topic,
+                                ),
+                              ],
+                              SizedBox(height: roomy ? 24 : 20),
+                              Center(
+                                child: Text(
+                                  isBoard
+                                      ? '离线可玩 · 共 ${SudokuDifficulty.values.length} 档'
+                                      : '共 ${widget.topic.entries.length} ${widget.topic.unit} · '
+                                          '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.inkFaint,
+                                    letterSpacing: 0.5,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -374,12 +478,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// 首页主体。窄屏整列滚动（含标题与页签）；宽屏作为一簇被
-  /// [_wideHomeBody] 居中，标题与页签由它钉在外层。
+  /// 窄屏首页主体：整列可滚动（含标题与页签）。宽屏走 [_wideHomeBody] 的双栏。
   Widget _homeColumn(
     BuildContext context, {
-    required bool wide,
-    required bool roomy,
     required double viewportHeight,
   }) {
     final isBoard = widget.topic.isBoardGame;
@@ -389,29 +490,27 @@ class _HomePageState extends State<HomePage> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        if (!wide) ...<Widget>[
-          _TitleBlock(
-            store: _store,
-            topic: widget.topic,
-            onSettings: _openSettings,
-            onPlaySudoku: _onPlaySudoku,
-          ),
-          const SizedBox(height: 14),
-          _TopicTabs(
-            currentTopic: widget.topic,
-            topics: widget.topics ?? kTopics,
-            isTopicLocked: _isBlocked,
-            onSelectGroup: _onSelectGroup,
-            onSelectTopic: _onSelectTopic,
-          ),
-          const SizedBox(height: 16),
-        ],
+        _TitleBlock(
+          store: _store,
+          topic: widget.topic,
+          onSettings: _openSettings,
+          onPlaySudoku: _onPlaySudoku,
+        ),
+        const SizedBox(height: 14),
+        _TopicTabs(
+          currentTopic: widget.topic,
+          topics: widget.topics ?? kTopics,
+          isTopicLocked: _isBlocked,
+          onSelectGroup: _onSelectGroup,
+          onSelectTopic: _onSelectTopic,
+        ),
+        const SizedBox(height: 16),
         if (isBoard)
           _SudokuStages(
             store: _store,
             selected: _difficulty,
             onSelect: (d) => setState(() => _difficulty = d),
-            horizontal: wide,
+            horizontal: false,
           )
         else ...<Widget>[
           if (aboveLevel)
@@ -424,7 +523,7 @@ class _HomePageState extends State<HomePage> {
             )
           else
             _TopicIntro(topic: widget.topic),
-          SizedBox(height: roomy ? 20 : 14),
+          const SizedBox(height: 14),
           Row(
             children: <Widget>[
               for (final mode in GameMode.values) ...<Widget>[
@@ -434,8 +533,6 @@ class _HomePageState extends State<HomePage> {
                     topic: widget.topic,
                     selected: mode == _mode,
                     onTap: () => setState(() => _mode = mode),
-                    wide: wide,
-                    roomy: roomy,
                   ),
                 ),
                 if (mode != GameMode.values.last) const SizedBox(width: 8),
@@ -444,7 +541,7 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
         // 主操作紧跟选择项。
-        SizedBox(height: roomy ? 28 : 20),
+        const SizedBox(height: 20),
         PrimaryButton(
           label: isBoard
               ? '开始${_difficulty.title}'
@@ -459,13 +556,10 @@ class _HomePageState extends State<HomePage> {
           onPressed: aboveLevel ? null : _start,
         ),
         if (!isBoard) ...<Widget>[
-          SizedBox(height: roomy ? 18 : 12),
+          const SizedBox(height: 12),
           _SecondaryEntries(store: _store, topic: widget.topic),
         ],
-        if (wide)
-          const SizedBox(height: 16)
-        else
-          SizedBox(height: viewportHeight > 620 ? 12 : 0),
+        SizedBox(height: viewportHeight > 620 ? 12 : 0),
         Center(
           child: Text(
             isBoard
@@ -474,9 +568,10 @@ class _HomePageState extends State<HomePage> {
                       '已掌握 ${_store.masteredPoemIds.length} · 离线可玩',
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.inkSoft,
-              letterSpacing: 1,
+              fontSize: 14,
+              color: AppColors.inkFaint,
+              letterSpacing: 0.5,
+              height: 1.4,
             ),
           ),
         ),
@@ -488,23 +583,28 @@ class _HomePageState extends State<HomePage> {
 /// 玩法配置。放在这里而不是散落在 UI 里，方便后续调参。
 ///
 /// 副标题里的 `{name}` 按当前科目替换——诗词说「答对的诗」，数学说「答对的数学」。
+/// 保留替换能力：说明文案里可能再引入科目名，不必改调用处。
 enum GameMode {
   quick(
     title: '快问快答',
-    subtitle: '各题型随机出',
+    // 与另两张卡一样按语义分行：三张卡的说明都是「题数＋两行说明」，
+    // 等高拉伸后视觉节奏才统一。单行会让这张卡的说明上方多出空白。
+    subtitle: '各题型\n随机出',
     icon: Icons.bolt_outlined,
     count: 10,
   ),
   review(
     title: '错题重练',
-    subtitle: '从错题本里挑题，答对即移出',
+    subtitle: '从错题本里挑题\n答对即移出',
     icon: Icons.history_edu_outlined,
     count: 10,
     useWrongBook: true,
   ),
   career(
     title: '生涯模式',
-    subtitle: '答对的{name}不再出现，逐步通关全库',
+    // 每段都在卡片宽度内放得下，不靠系统折行——「答对的诗词不再出现」这种
+    // 长句会被折成「不再」「出现」两行，句意被拆开。
+    subtitle: '答对的不再出现\n逐步通关全库',
     icon: Icons.military_tech_outlined,
     count: 15,
     isCareer: true,
@@ -558,7 +658,14 @@ class _TopicTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 当前组的子科目，只有多科目组才渲染二级块。数独不挂组，不会走到这里。
+    // 数独不挂学科组（group == 'other'）：一级三组与二级块都不该出现在它的
+    // 首页上，否则数独页顶栏会挂着「语文 / 数学 / 英语」三组却一个都没选中。
+    // 只留在页脚渲染一条分隔线，保持标题区与主体之间的视觉停顿。
+    final inGroup = kSubjectGroups.any((g) => g.id == currentTopic.group);
+    if (!inGroup) {
+      return const Divider(color: AppColors.line, height: 1);
+    }
+    // 当前组的子科目，只有多科目组才渲染二级块。
     final groupTopics = topics.where((t) => t.group == currentTopic.group).toList();
     final showSubTabs = groupTopics.length > 1;
 
@@ -584,38 +691,82 @@ class _TopicTabs extends StatelessWidget {
           ),
           if (showSubTabs)
             Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 10),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // 窄屏要守住「首页整页不滚动」：块压到 44dp 高、四列均分，
-                  // 语文 8 个正好两行。宽屏给足 48dp 触控与呼吸间距。
-                  final narrow = constraints.maxWidth < 600;
-                  return Wrap(
-                    spacing: narrow ? 6 : 8,
-                    runSpacing: narrow ? 6 : 8,
-                    children: <Widget>[
-                      for (final topic in groupTopics)
-                        SizedBox(
-                          width: narrow
-                              ? (constraints.maxWidth - 6 * 3) / 4
-                              : null,
-                          child: _TopicChip(
-                            label: topic.displayTabLabel,
-                            selected: topic.id == currentTopic.id,
-                            // 高于学龄的子科目置灰不可点：一年级点进
-                            // 文学常识（题库 7-9 年级）只会出超纲题。
-                            locked: isTopicLocked(topic),
-                            onTap: () => onSelectTopic(topic),
-                            compact: narrow,
-                          ),
-                        ),
-                    ],
-                  );
-                },
+              padding: const EdgeInsets.only(top: 10, bottom: 12),
+              child: _TopicGrid(
+                topics: groupTopics,
+                currentTopic: currentTopic,
+                isTopicLocked: isTopicLocked,
+                onSelectTopic: onSelectTopic,
               ),
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 二级子科目的固定四列网格。
+///
+/// **不能用 `Wrap`**：宽屏时每个块没有宽度约束，`Wrap` 会让它们各自占满
+/// 一整行——语文 8 个子科目就变成 8 条全宽色块，把下方范围卡与玩法卡挤出
+/// 屏幕（1280×800 实测）。这里按行切分并显式等分宽度，窄屏宽屏都是四列。
+///
+/// 每行最多四个：语文 8 个正好两行；将来某组只有 5 个，第二行也只有 1 个，
+/// 不会拉伸成一个超宽块。
+class _TopicGrid extends StatelessWidget {
+  const _TopicGrid({
+    required this.topics,
+    required this.currentTopic,
+    required this.isTopicLocked,
+    required this.onSelectTopic,
+  });
+
+  final List<Topic> topics;
+  final Topic currentTopic;
+  final bool Function(Topic topic) isTopicLocked;
+  final void Function(Topic topic) onSelectTopic;
+
+  static const int _columns = 4;
+  static const double _gap = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < 600;
+        final cellWidth =
+            (constraints.maxWidth - _gap * (_columns - 1)) / _columns;
+        final rows = <List<Topic>>[
+          for (var i = 0; i < topics.length; i += _columns)
+            topics.sublist(i, math.min(i + _columns, topics.length)),
+        ];
+        return Column(
+          children: <Widget>[
+            for (var r = 0; r < rows.length; r++) ...<Widget>[
+              if (r > 0) const SizedBox(height: _gap),
+              Row(
+                children: <Widget>[
+                  for (var c = 0; c < rows[r].length; c++) ...<Widget>[
+                    if (c > 0) const SizedBox(width: _gap),
+                    SizedBox(
+                      width: cellWidth,
+                      child: _TopicChip(
+                        label: rows[r][c].displayTabLabel,
+                        selected: rows[r][c].id == currentTopic.id,
+                        // 高于学龄的子科目置灰不可点：一年级点进
+                        // 文学常识（题库 7-9 年级）只会出超纲题。
+                        locked: isTopicLocked(rows[r][c]),
+                        onTap: () => onSelectTopic(rows[r][c]),
+                        compact: narrow,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -799,45 +950,48 @@ class _TitleBlock extends StatelessWidget {
                 children: <Widget>[
                   Text(
                     topic.quizTitle,
-                    style: serif(32, weight: FontWeight.w700, spacing: 6),
+                    style: serif(32, weight: FontWeight.w700, spacing: 4),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     topic.tagline,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 15,
                       color: AppColors.inkSoft,
-                      letterSpacing: 2,
+                      letterSpacing: 1,
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
             if (!topic.isBoardGame) ...<Widget>[
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
               Material(
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: onPlaySudoku,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AppMetric.radiusChip),
                   child: Container(
                     height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: AppColors.sealSoft,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AppMetric.radiusChip),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        Icon(Icons.grid_view_outlined, size: 17,
-                            color: AppColors.seal),
-                        const SizedBox(width: 5),
-                        Text(
+                        const Icon(Icons.grid_view_outlined,
+                            size: 18, color: AppColors.seal),
+                        const SizedBox(width: 6),
+                        const Text(
+                          // 保留「玩数独」而非「数独」：数独页的标题本身就是
+                          // 「数独」，入口与标题同名会让读屏与测试都分不清。
                           '玩数独',
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: AppColors.seal,
                             letterSpacing: 1,
@@ -849,27 +1003,13 @@ class _TitleBlock extends StatelessWidget {
                 ),
               ),
             ],
+            // 书本图标入口已删除：它和底部的「学习模式」去的是同一页，
+            // 重复入口只会让儿童多一次误点。设置保留独立图标。
             IconButton(
               onPressed: onSettings,
-              icon: const Icon(Icons.settings_outlined, size: 22),
+              icon: const Icon(Icons.settings_outlined, size: 24),
               color: AppColors.inkSoft,
               tooltip: '设置',
-              // 触控目标保持 ≥48dp：compact 会压到 40dp，孩子和大屏上更易误触。
-            ),
-            const SizedBox(width: 6),
-            Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.sealSoft,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.auto_stories_outlined,
-                size: 20,
-                color: AppColors.seal,
-              ),
             ),
           ],
         ),
@@ -954,47 +1094,72 @@ class _ScopeCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppMetric.radiusCard),
         child: InkCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.sealSoft,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Icon(_icon, size: 19, color: AppColors.seal),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      plan.label,
-                      style: serif(16, weight: FontWeight.w600, spacing: 2),
+              Row(
+                children: <Widget>[
+                  Container(
+                    width: 42,
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.sealSoft,
+                      borderRadius: BorderRadius.circular(AppMetric.radiusChip),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
+                    child: Icon(_icon, size: 21, color: AppColors.seal),
+                  ),
+                  const SizedBox(width: 12),
+                  // 标题自己占满剩余宽度、允许折两行：「跟随推荐 · 1-3 年级
+                  // 起步」在宽屏左栏里换行是对的，硬挤成一行会把「起步」甩到
+                  // 第二行更难看。次级信息与「调整」放下面单独一行。
+                  Expanded(
+                    child: Text(
+                      plan.label,
+                      maxLines: 2,
+                      style: serif(18, weight: FontWeight.w600, spacing: 1),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
                       _summary,
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 14,
                         color: AppColors.inkSoft,
-                        height: 1.35,
+                        height: 1.45,
+                        letterSpacing: 0.5,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              const Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: AppColors.inkFaint,
+                  ),
+                  const SizedBox(width: 8),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          '调整',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.seal,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Icon(Icons.chevron_right,
+                            size: 20, color: AppColors.seal),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1010,9 +1175,13 @@ class _ScopeCard extends StatelessWidget {
   };
 
   /// 让「范围 = 题池」在界面上可见：本档多少、回顾多少、拓展多少。
+  ///
+  /// 未设置出生年月时给出两句完整短句，中间用换行钉住断点——原文
+  /// 「未设置出生年月 · 暂按 1-3 年级起步，点这里可调整范围」在窄栏里会被
+  /// 折成「…点／这里可调整范围」，动宾短语从中间断开。
   String get _summary {
     if (plan.needsBirthHint) {
-      return '未设置出生年月 · 暂按 1-3 年级起步，点这里可调整范围';
+      return '未设置出生年月\n暂按 1-3 年级起步';
     }
     final own = plan.targetGrade == null
         ? 0
@@ -1418,7 +1587,7 @@ class _TierTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkCard(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          borderColor: selected ? AppColors.gold : null,
+          borderColor: selected ? AppColors.seal : null,
           child: Row(
             children: <Widget>[
               Expanded(
@@ -1692,7 +1861,7 @@ class _StageCard extends StatelessWidget {
               padding: vertical
                   ? const EdgeInsets.symmetric(horizontal: 10, vertical: 14)
                   : const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              borderColor: selected ? AppColors.gold : null,
+              borderColor: selected ? AppColors.seal : null,
               child: vertical
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
@@ -1799,57 +1968,81 @@ class _ModeChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 140),
+            // stretch 拉伸后高度由 Row 决定；width 未定，minHeight 只是
+            // 兜底下限（单张卡单独渲染时的最小高度）。
             constraints: BoxConstraints(
-              minHeight: roomy ? 132 : (wide ? 92 : 68),
+              minHeight: roomy ? 148 : (wide ? 132 : 92),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: wide ? 12 : 8,
+              vertical: wide ? 14 : 12,
+            ),
             decoration: BoxDecoration(
               color: selected ? AppColors.sealSoft : AppColors.card,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppMetric.radiusChip),
               border: Border.all(
-                color: selected ? AppColors.seal : AppColors.line,
-                width: selected ? 1.6 : 1,
+                color: selected ? AppColors.seal : AppColors.lineStrong,
+                width: selected ? 2 : 1,
               ),
             ),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              // 宽屏下外层 IntrinsicHeight + stretch 要把三张卡拉到同高，
+              // mainAxisSize.min 会让 Column 只取内容高度、不跟着拉伸。
+              mainAxisSize: wide ? MainAxisSize.max : MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 Icon(
                   mode.icon,
-                  size: roomy ? 24 : (wide ? 20 : 18),
+                  size: roomy ? 26 : (wide ? 24 : 22),
                   color: selected ? AppColors.seal : AppColors.inkSoft,
                 ),
-                SizedBox(height: roomy ? 10 : (wide ? 7 : 5)),
+                SizedBox(height: roomy ? 10 : (wide ? 8 : 6)),
                 Text(
                   mode.title,
                   textAlign: TextAlign.center,
                   style: serif(
-                    roomy ? 15 : (wide ? 13 : 12),
+                    roomy ? 17 : (wide ? 17 : 15),
                     weight: FontWeight.w600,
                     spacing: 1,
                     color: selected ? AppColors.seal : AppColors.ink,
                   ),
                 ),
-                SizedBox(height: roomy ? 7 : (wide ? 5 : 2)),
+                SizedBox(height: roomy ? 7 : (wide ? 6 : 4)),
+                // 宽屏双栏后玩法卡只有约 1/3 栏宽。题数单独一行，说明用
+                // `\n` 钉住断点（见 GameMode 的 subtitle），避免「10 题 ·
+                // 各题型」「随机出」这种把句意拆开的折行。
                 if (wide)
-                  Text(
-                    '${mode.count} 题 · ${mode.subtitleFor(topic)}',
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: roomy ? 12 : 11,
-                      color: AppColors.inkSoft,
-                      height: 1.35,
+                  Flexible(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          '${mode.count} 题',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.inkFaint,
+                            height: 1.4,
+                          ),
+                        ),
+                        Text(
+                          mode.subtitleFor(topic),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.inkSoft,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
                     ),
                   )
                 else
                   Text(
                     '${mode.count} 题',
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       color: AppColors.inkSoft,
+                      height: 1.4,
                     ),
                   ),
               ],
@@ -1927,43 +2120,60 @@ class _EntryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: InkCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-          child: Row(
-            children: <Widget>[
-              Icon(icon, size: 18, color: AppColors.inkSoft),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.ink,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      badge,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: onTap == null
-                            ? AppColors.inkFaint
-                            : AppColors.inkSoft,
-                      ),
-                    ),
-                  ],
+    final enabled = onTap != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppMetric.radiusCard),
+          child: InkCard(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            // 禁用卡的描边降一档：与可点的「学习模式」用同强度描边时，
+            // 只能靠一个「空」字判断它不能点。
+            borderColor: enabled ? null : AppColors.line,
+            child: Row(
+              children: <Widget>[
+                Icon(
+                  icon,
+                  size: 22,
+                  color: enabled ? AppColors.seal : AppColors.disabledText,
                 ),
-              ),
-            ],
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: enabled ? AppColors.ink : AppColors.disabledText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        badge,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: enabled
+                              ? AppColors.inkSoft
+                              : AppColors.disabledText,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -200,32 +200,83 @@ class _QuizPageState extends State<QuizPage> {
   /// 宽屏（平板横屏）：舞台式双栏。
   ///
   /// 题干在左栏垂直居中，判题前后纹丝不动（填空题的字块要原位补字）；
-  /// 选项在右栏垂直居中，反馈卡与主按钮收在右栏底部，出现/收起走
-  /// AnimatedSize 平滑过渡，选项只轻微上移不跳变。
+  /// 选项在右栏垂直居中，反馈卡与主按钮收在右栏底部。
+  ///
+  /// 底部操作区占**固定高度**，左右两栏都从可用高度里扣掉这块，因此两栏的
+  /// 视觉中心始终对齐、也不随判题变化。早先让底部区按内容撑高时有两个问题：
+  /// 判题后反馈卡比占位高，右栏选项会被顶上去；把底部区移到两栏之外则会让
+  /// 左栏变矮、题干随位移。
+  ///
+  /// 取值＝12 间距 + 反馈槽 96 + 12 间距 + 按钮 56 + 余量。反馈卡正文
+  /// 超出 96 时在槽位内部滚动（见 [footer]），不再撑高。
+  static const double _wideFooterReserve = 184;
+
   Widget _wideLayout(BuildContext context) {
+    final footer = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const SizedBox(height: 12),
+        Expanded(
+          // 反馈内容超高时在槽位内部滚动，不撑破固定高度把选项顶走。
+          // 贴底部对齐：短内容紧邻主按钮，中间不留一段空白；反馈卡变高时
+          // 向上长，按钮位置不变。
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: SingleChildScrollView(
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                alignment: Alignment.topCenter,
+                child: _verdict == null
+                    ? const _FeedbackPlaceholder()
+                    : _Feedback(
+                        question: _question,
+                        correct: _verdict!,
+                        topic: widget.session.topic,
+                      ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _nextButton(),
+      ],
+    );
+
     return ContentFrame(
       maxWidth: 1200,
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Expanded(
             flex: 3,
-            child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  // 用 Center 而不是 IntrinsicHeight：作答区的字块池里有
-                  // LayoutBuilder，不支持求 intrinsic 尺寸。
-                  child: Center(
-                    child: _QuestionCard(
-                      question: _question,
-                      picked: _pickedChars,
-                      verdict: _verdict,
-                      topic: widget.session.topic,
-                      enlarged: true,
-                      clueRevealed: _clueRevealed,
-                      onRevealClue: () => setState(() => _clueRevealed = true),
+            child: Padding(
+              // 左栏同样扣掉底栏预留，题干中心才与右侧选项中心平齐。
+              padding: const EdgeInsets.only(bottom: _wideFooterReserve),
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    // 用 Center 而不是 IntrinsicHeight：作答区的字块池里有
+                    // LayoutBuilder，不支持求 intrinsic 尺寸。
+                    child: Center(
+                      child: ConstrainedBox(
+                        // 题干卡不横向拉满整栏：宽屏一栏 700dp 时，一行四五
+                        // 个字的题干会被撑成又宽又扁的长条。收在 560dp 内。
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: _QuestionCard(
+                          question: _question,
+                          picked: _pickedChars,
+                          verdict: _verdict,
+                          topic: widget.session.topic,
+                          enlarged: true,
+                          clueRevealed: _clueRevealed,
+                          onRevealClue: () =>
+                              setState(() => _clueRevealed = true),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -249,28 +300,7 @@ class _QuizPageState extends State<QuizPage> {
                     ),
                   ),
                 ),
-                // 反馈与主按钮常驻右栏底部，避免长内容把它挤出屏幕；
-                // AnimatedSize 让出现与收起的高度变化平滑展开。
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
-                  alignment: Alignment.bottomCenter,
-                  child: _verdict == null
-                      ? const SizedBox(width: double.infinity)
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: <Widget>[
-                            const SizedBox(height: 12),
-                            _Feedback(
-                              question: _question,
-                              correct: _verdict!,
-                              topic: widget.session.topic,
-                            ),
-                            const SizedBox(height: 12),
-                            _nextButton(),
-                          ],
-                        ),
-                ),
+                SizedBox(height: _wideFooterReserve, child: footer),
               ],
             ),
           ),
@@ -304,25 +334,27 @@ class _QuizPageState extends State<QuizPage> {
                   ),
                   const SizedBox(height: 20),
                   _answerArea(),
-                  if (_verdict != null) ...<Widget>[
-                    const SizedBox(height: 20),
-                    // GlobalKey 只在窄屏挂：宽屏反馈卡常驻右栏底部，
-                    // 不经滚动容器，不需要滚到它。
+                  const SizedBox(height: 20),
+                  // 反馈槽位在判题前也保留：判题后卡片直接填进这块空间，
+                  // 不再把上面刚点过的选项顶上去。未作答时只放一行提示。
+                  if (_verdict != null)
                     _Feedback(
                       key: _feedbackKey,
                       question: _question,
                       correct: _verdict!,
                       topic: widget.session.topic,
-                    ),
-                  ],
+                    )
+                  else
+                    const _FeedbackPlaceholder(),
                 ],
               ),
             ),
           ),
-          if (_verdict != null) ...<Widget>[
-            const SizedBox(height: 12),
-            _nextButton(),
-          ],
+          // 底部动作常驻：未作答时占住同一个槽位并禁用，判题后只换文案与状态。
+          // 之前判题前整块不渲染，按钮从无到有会把下面的内容顶下去，孩子刚
+          // 点完选项就发现按钮换了位置。
+          const SizedBox(height: 12),
+          _nextButton(),
         ],
       ),
     );
@@ -350,10 +382,15 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   Widget _nextButton() {
+    final answered = _verdict != null;
     return PrimaryButton(
-      label: widget.session.finished ? '查看结果' : '下一题',
-      icon: widget.session.finished ? Icons.flag_outlined : Icons.arrow_forward,
-      onPressed: _next,
+      label: !answered
+          ? '请先作答'
+          : (widget.session.finished ? '查看结果' : '下一题'),
+      icon: !answered
+          ? null
+          : (widget.session.finished ? Icons.flag_outlined : Icons.arrow_forward),
+      onPressed: answered ? _next : null,
     );
   }
 
@@ -839,8 +876,45 @@ class _Slot extends StatelessWidget {
   }
 }
 
-class _OptionList extends StatelessWidget {
-  const _OptionList({
+/// 判题前的反馈占位。
+///
+/// 它存在的唯一目的是**占住高度**：判题后反馈卡填进同一块空间，上面刚点过的
+/// 选项不会被顶走。文案给孩子一个明确的下一步（选一个答案），不是空白。
+class _FeedbackPlaceholder extends StatelessWidget {
+  const _FeedbackPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(AppMetric.radiusCard),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.touch_app_outlined,
+              size: 20, color: AppColors.inkFaint),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '选一个答案，解析会出现在这里',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.inkFaint,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OptionList extends StatelessWidget {  const _OptionList({
     required this.question,
     required this.selectedIndex,
     required this.verdict,
@@ -862,7 +936,7 @@ class _OptionList extends StatelessWidget {
       children: <Widget>[
         for (var i = 0; i < question.options.length; i++)
           Padding(
-            padding: EdgeInsets.only(bottom: enlarged ? 12 : 10),
+            padding: EdgeInsets.only(bottom: enlarged ? 12 : 12),
             child: _OptionTile(
               label: String.fromCharCode(0x41 + i),
               text: question.options[i],
@@ -911,51 +985,75 @@ class _OptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 答错不再复用朱印色：seal 是主按钮与「当前选中」的色，答错用它会让
+    // 「确认动作」与「出错」看起来是同一类信号。
     final (border, bg, fg) = switch (state) {
-      _TileState.idle => (AppColors.line, AppColors.card, AppColors.ink),
-      _TileState.selected => (AppColors.gold, AppColors.card, AppColors.ink),
+      _TileState.idle => (AppColors.lineStrong, AppColors.card, AppColors.ink),
+      _TileState.selected => (
+        AppColors.goldInk,
+        AppColors.card,
+        AppColors.ink,
+      ),
       _TileState.correct => (
         AppColors.jade,
         AppColors.jadeSoft,
         AppColors.jade,
       ),
-      _TileState.wrong => (AppColors.seal, AppColors.sealSoft, AppColors.seal),
+      _TileState.wrong => (
+        AppColors.error,
+        AppColors.errorSoft,
+        AppColors.error,
+      ),
     };
+    // 未作答时是「可点」的卡片，边线要看得见（lineStrong 3.05:1）；
+    // 判题后整组禁用，边线退回装饰性的 line，避免一堆醒目的框抢注意力。
+    final activeBorder = state == _TileState.idle && onTap == null;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppMetric.radiusButton),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
+          constraints: BoxConstraints(
+            minHeight: enlarged
+                ? AppMetric.optionHeight + 8
+                : AppMetric.optionHeight,
+          ),
           padding: EdgeInsets.symmetric(
-            horizontal: enlarged ? 18 : 14,
-            vertical: enlarged ? 19 : 14,
+            horizontal: enlarged ? 18 : 16,
+            vertical: enlarged ? 18 : 14,
           ),
           decoration: BoxDecoration(
             color: bg,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppMetric.radiusButton),
             border: Border.all(
-              color: border,
-              width: state == _TileState.idle ? 1 : 1.6,
+              color: activeBorder ? AppColors.line : border,
+              width: state == _TileState.idle ? 1 : 2,
             ),
           ),
           child: Row(
             children: <Widget>[
               Container(
-                width: enlarged ? 28 : 24,
-                height: enlarged ? 28 : 24,
+                width: enlarged ? 32 : 30,
+                height: enlarged ? 32 : 30,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: fg.withValues(alpha: 0.45)),
+                  color: state == _TileState.correct ||
+                          state == _TileState.wrong
+                      ? fg.withValues(alpha: 0.12)
+                      : null,
+                  border: Border.all(color: fg.withValues(alpha: 0.5)),
                 ),
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontSize: enlarged ? 13 : 12,
-                    color: fg,
+                    fontSize: enlarged ? 15 : 14,
+                    color: state == _TileState.idle
+                        ? AppColors.inkSoft
+                        : fg,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -965,10 +1063,10 @@ class _OptionTile extends StatelessWidget {
                 child: Text(
                   text,
                   style: serif(
-                    enlarged ? 19 : 17,
+                    enlarged ? 20 : 18,
                     color: fg,
-                    height: 1.45,
-                    spacing: 1.5,
+                    height: 1.4,
+                    spacing: 1,
                     content: pinyin,
                   ),
                 ),
@@ -976,14 +1074,14 @@ class _OptionTile extends StatelessWidget {
               if (state == _TileState.correct)
                 Icon(
                   Icons.check_circle,
-                  size: enlarged ? 22 : 20,
+                  size: enlarged ? 24 : 22,
                   color: AppColors.jade,
                 )
               else if (state == _TileState.wrong)
                 Icon(
                   Icons.cancel,
-                  size: enlarged ? 22 : 20,
-                  color: AppColors.seal,
+                  size: enlarged ? 24 : 22,
+                  color: AppColors.error,
                 ),
             ],
           ),
@@ -1224,15 +1322,16 @@ class _FeedbackState extends State<_Feedback> {
   Widget build(BuildContext context) {
     final question = widget.question;
     final topic = widget.topic;
-    final color = widget.correct ? AppColors.jade : AppColors.seal;
+    // 答错用 error 而不是 seal：见 _OptionTile 里的同一处说明。
+    final color = widget.correct ? AppColors.jade : AppColors.error;
     final icon = widget.correct
         ? Icons.check_circle_outline
-        : Icons.error_outline;
-    final body = _clampedBody(15);
+        : Icons.cancel_outlined;
+    final body = _clampedBody(16);
 
     return InkCard(
-      color: widget.correct ? AppColors.jadeSoft : AppColors.sealSoft,
-      borderColor: color.withValues(alpha: 0.35),
+      color: widget.correct ? AppColors.jadeSoft : AppColors.errorSoft,
+      borderColor: color.withValues(alpha: 0.45),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1242,14 +1341,14 @@ class _FeedbackState extends State<_Feedback> {
             children: <Widget>[
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Icon(icon, size: 18, color: color),
+                child: Icon(icon, size: 20, color: color),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   widget.correct ? '答对了' : '答错了',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 17,
                     fontWeight: FontWeight.w600,
                     color: color,
                   ),
@@ -1262,7 +1361,7 @@ class _FeedbackState extends State<_Feedback> {
                     question.answerText,
                     textAlign: TextAlign.end,
                     style: serif(
-                      15,
+                      16,
                       color: color,
                       spacing: 1,
                       content: question.isPinyin,
@@ -1290,8 +1389,9 @@ class _FeedbackState extends State<_Feedback> {
                       Text(
                         topic.displaySummaryOf(question.poem),
                         style: TextStyle(
-                          fontSize: 12,
-                          color: color.withValues(alpha: 0.85),
+                          fontSize: 14,
+                          color: AppColors.inkSoft,
+                          height: 1.45,
                         ),
                       ),
                       const SizedBox(height: 6),
@@ -1302,7 +1402,7 @@ class _FeedbackState extends State<_Feedback> {
                             ? question.note
                             : question.poem.fullText,
                         style: serif(
-                          15,
+                          16,
                           color: AppColors.ink,
                           height: 1.7,
                           spacing: 1.5,
@@ -1317,8 +1417,9 @@ class _FeedbackState extends State<_Feedback> {
             Text(
               topic.displaySummaryOf(question.poem),
               style: TextStyle(
-                fontSize: 12,
-                color: color.withValues(alpha: 0.85),
+                fontSize: 14,
+                color: AppColors.inkSoft,
+                height: 1.45,
               ),
             ),
             const SizedBox(height: 6),
