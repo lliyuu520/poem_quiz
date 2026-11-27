@@ -1,7 +1,7 @@
 name: poem_quiz
 description: "拾 —— 语文 · 数学 · 英语答题本，离线自用。"
 publish_to: 'none'
-version: 0.5.4+17
+version: 0.5.5+18
 
 environment:
   sdk: ^3.13.4
