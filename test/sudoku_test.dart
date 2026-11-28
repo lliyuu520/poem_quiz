@@ -945,6 +945,76 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('9×9 手机再来一局重回总览且清空落子历史', (tester) async {
+      await pumpSudoku(
+        tester,
+        phone,
+        difficulty: SudokuDifficulty.two,
+        random: Random(7),
+      );
+      final probe = probeOf(tester);
+      final back = find.byKey(const ValueKey<String>('sudoku-zoom-back'));
+      for (final (r, c) in probe.puzzle.blanks) {
+        if (back.evaluate().isNotEmpty) {
+          await tester.tap(back);
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(cellFinder(probe.labelOf(r, c)));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(
+            ValueKey<String>('sudoku-digit-${probe.puzzle.solutionAt(r, c)}'),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('填满了'), findsOneWidget);
+
+      await tester.tap(find.text('再来一局'));
+      await tester.pumpAndSettle();
+      expect(find.text('轻触任意格子，放大后再填数'), findsOneWidget);
+      expect(back, findsNothing);
+      expect(find.text('擦除'), findsNothing);
+      final restarted = probeOf(tester);
+      expect(restarted.history, isEmpty);
+      expect(restarted.values, restarted.puzzle.given);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('宽屏点格后缩窄仍从总览进入放大且保留落子', (tester) async {
+      await pumpSudoku(
+        tester,
+        tabletLandscape,
+        difficulty: SudokuDifficulty.two,
+        random: Random(7),
+      );
+      final state = tester.state(find.byType(SudokuPage));
+      final probe = probeOf(tester);
+      final (r, c) = probe.puzzle.blanks.first;
+      final index = r * probe.puzzle.size + c;
+      await tester.tap(cellFinder(probe.labelOf(r, c)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey<String>('sudoku-digit-1')));
+      await tester.pumpAndSettle();
+      expect(probeOf(tester).values[index], 1);
+
+      tester.view.physicalSize = phone;
+      await tester.pumpAndSettle();
+      expect(tester.state(find.byType(SudokuPage)), same(state));
+      expect(find.text('轻触任意格子，放大后再填数'), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('sudoku-zoom-back')), findsNothing);
+      expect(find.text('擦除'), findsNothing);
+      expect(probeOf(tester).values[index], 1);
+      expect(probeOf(tester).history, hasLength(1));
+
+      final current = probeOf(tester);
+      await tester.tap(cellFinder(current.labelOf(r, c)));
+      await tester.pumpAndSettle();
+      expect(find.text('第 ${r ~/ 3 * 3 + c ~/ 3 + 1} 宫'), findsOneWidget);
+      expect(find.text('擦除'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('4×4 手机不进放大态：整盘加键盘一屏直接填', (tester) async {
       await pumpSudoku(tester, phone);
       expect(find.text('轻触任意格子，放大后再填数'), findsNothing);

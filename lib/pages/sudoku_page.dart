@@ -120,6 +120,7 @@ class _SudokuPageState extends State<SudokuPage> {
     _values = List<int>.from(_puzzle.given);
     _history.clear();
     _wrongCells = <int>{};
+    _zoom = false;
     _selected = _puzzle.blanks.isEmpty
         ? null
         : _puzzle.blanks.first.$1 * _puzzle.size + _puzzle.blanks.first.$2;
@@ -135,12 +136,12 @@ class _SudokuPageState extends State<SudokuPage> {
 
   bool get _filled => _values.every((v) => v != 0);
 
-  void _select(int index) {
+  void _select(int index, {bool zoom = false}) {
     if (_settled) return;
     setState(() {
       _selected = index;
-      // 总览里点格：选中它并进入放大填格（9×9）。放大态内再点只换选中格。
-      if (_puzzle.size == 9) _zoom = true;
+      // 只有窄屏 9×9 的点格进入放大态，宽屏选格不留下隐藏的放大状态。
+      _zoom = zoom && _puzzle.size == 9;
     });
   }
 
@@ -474,7 +475,7 @@ class _SudokuPageState extends State<SudokuPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                _boardArea(),
+                _boardArea(zoom: true),
                 const SizedBox(height: 16),
                 const Text(
                   '轻触任意格子，放大后再填数',
@@ -550,14 +551,14 @@ class _SudokuPageState extends State<SudokuPage> {
             size: _puzzle.size,
             wrong: _wrongCells,
             selected: _selected,
-            onTap: _select,
+            onTap: (index) => _select(index, zoom: true),
           ),
         ),
       ),
     );
   }
 
-  Widget _boardArea({double maxSide = 460}) {
+  Widget _boardArea({double maxSide = 460, bool zoom = false}) {
     return Center(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxSide),
@@ -570,7 +571,7 @@ class _SudokuPageState extends State<SudokuPage> {
             boxDim: _puzzle.boxDim,
             wrong: _wrongCells,
             selected: _selected,
-            onTap: _select,
+            onTap: (index) => _select(index, zoom: zoom),
           ),
         ),
       ),
