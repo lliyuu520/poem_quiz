@@ -193,247 +193,166 @@ class _SettingsPageState extends State<SettingsPage> {
     final mastered = store.masteredPoemIds.length;
     final total = widget.topic.entries.length;
     final profile = widget.profile;
-
-    // 分区先拼好，窄屏顺序单列、宽屏两列并排（学龄+范围 | 生涯+关于）。
-    final birthSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        const Padding(
-          padding: EdgeInsets.only(left: 12),
-          child: RuleDivider(label: '学龄'),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: _BirthTile(profile: profile, onTap: _pickBirth),
-        ),
-      ],
-    );
-
-    final scopeSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        const SizedBox(height: 16),
-        const Padding(
-          padding: EdgeInsets.only(left: 12),
-          child: RuleDivider(label: '练习范围'),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: InkCard(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  store.practiceScope.describe(
-                    recommendForBirth(profile.birthYear, profile.birthMonth),
-                  ),
-                  style: serif(15, weight: FontWeight.w600, spacing: 1),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '难度 ${store.challengeTier.title} · 在首页「练习范围」里可随时调整',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.inkSoft,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: PrimaryButton(
-            label: '恢复跟随推荐',
-            icon: Icons.restart_alt,
-            filled: false,
-            onPressed:
-                store.practiceScope.isRecommended &&
-                    store.challengeTier == ChallengeTier.standard
-                ? null
-                : _resetScope,
-          ),
-        ),
-      ],
-    );
-
-    final careerSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        const SizedBox(height: 16),
-        const Padding(
-          padding: EdgeInsets.only(left: 12),
-          child: RuleDivider(label: '生涯模式'),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: InkCard(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        '已掌握 $mastered / $total',
-                        style: serif(16, weight: FontWeight.w600, spacing: 1),
-                      ),
-                    ),
-                    Text(
-                      mastered == 0
-                          ? '暂无进度'
-                          : '${(mastered / total * 100).round()}%',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.inkFaint,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: LinearProgressIndicator(
-                    value: total == 0 ? 0 : mastered / total,
-                    minHeight: 4,
-                    backgroundColor: AppColors.line,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      AppColors.jade,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  '答对的${widget.topic.name}不再出现在生涯模式里。'
-                  '全部通关后用这里重置，重新开始。',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.inkSoft,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: PrimaryButton(
-            label: '重置生涯进度',
-            icon: Icons.restart_alt,
-            filled: false,
-            onPressed: mastered == 0 ? null : _confirmResetCareer,
-          ),
-        ),
-      ],
-    );
-
     final account = widget.account;
-    final accountSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+
+    // 分区 = 一张外卡（卡内标题 + 行分隔），窄屏顺序单列、宽屏两列并排
+    // （学龄+范围+账号 | 生涯+关于）。不再用悬浮的 RuleDivider 标题：
+    // 标题贴着它描述的行，分组边界由卡片描边自己表达。
+    final birthSection = _SectionCard(
+      title: '学龄',
+      children: <Widget>[_BirthRow(profile: profile, onTap: _pickBirth)],
+    );
+
+    final scopeRecommended =
+        store.practiceScope.isRecommended &&
+        store.challengeTier == ChallengeTier.standard;
+    final scopeSection = _SectionCard(
+      title: '练习范围',
       children: <Widget>[
-        const SizedBox(height: 16),
-        const Padding(
-          padding: EdgeInsets.only(left: 12),
-          child: RuleDivider(label: '账号与同步'),
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: InkCard(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Icon(
-                      account.isLoggedIn
-                          ? Icons.cloud_done_outlined
-                          : Icons.cloud_off_outlined,
-                      size: 18,
-                      color: account.isLoggedIn
-                          ? AppColors.jade
-                          : AppColors.inkFaint,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        account.isLoggedIn
-                            ? '已登录 · ${account.username ?? ''}'
-                            : '未登录 · 进度仅存本机',
-                        style: serif(15,
-                            weight: FontWeight.w600, spacing: 1),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  account.isLoggedIn
-                      ? '进度不会自动上传，进入云同步手动选择科目上传或下载。'
-                      : '登录可在多台设备间同步进度；不登录也能照常离线使用。',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.inkSoft,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
+        KeyValueRow(
+          label: '当前范围',
+          value: store.practiceScope.describe(
+            recommendForBirth(profile.birthYear, profile.birthMonth),
           ),
+          crossAxisAlignment: CrossAxisAlignment.start,
         ),
         const SizedBox(height: 10),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: account.isLoggedIn
-              ? Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '云同步',
-                        icon: Icons.sync,
-                        filled: false,
-                        onPressed: _openSync,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: PrimaryButton(
-                        label: '退出登录',
-                        icon: Icons.logout,
-                        filled: false,
-                        onPressed: _logout,
-                      ),
-                    ),
-                  ],
-                )
-              : PrimaryButton(
-                  label: '登录 / 注册',
-                  icon: Icons.login,
-                  filled: false,
-                  onPressed: _openLogin,
-                ),
+        KeyValueRow(label: '难度', value: store.challengeTier.title),
+        const SizedBox(height: 10),
+        const Text(
+          '在首页「练习范围」卡里可随时调整',
+          style: TextStyle(fontSize: 11, color: AppColors.inkFaint, height: 1.4),
+        ),
+        const SizedBox(height: 12),
+        PrimaryButton(
+          label: '恢复跟随推荐',
+          icon: Icons.restart_alt,
+          filled: false,
+          onPressed: scopeRecommended ? null : _resetScope,
         ),
       ],
     );
 
-    final aboutSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final accountSection = _SectionCard(
+      title: '账号与同步',
       children: <Widget>[
-        const SizedBox(height: 24),
-        const RuleDivider(label: '关于'),
+        Row(
+          children: <Widget>[
+            Icon(
+              account.isLoggedIn
+                  ? Icons.cloud_done_outlined
+                  : Icons.cloud_off_outlined,
+              size: 18,
+              color: account.isLoggedIn ? AppColors.jade : AppColors.inkFaint,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                account.isLoggedIn
+                    ? '已登录 · ${account.username ?? ''}'
+                    : '未登录 · 进度仅存本机',
+                style: serif(15, weight: FontWeight.w600, spacing: 1),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          account.isLoggedIn
+              ? '进度不会自动上传，进入云同步手动选择科目上传或下载。'
+              : '登录可在多台设备间同步进度；不登录也能照常离线使用。',
+          style: const TextStyle(
+            fontSize: 11,
+            color: AppColors.inkSoft,
+            height: 1.4,
+          ),
+        ),
         const SizedBox(height: 12),
-        const _UpdateSection(),
+        if (account.isLoggedIn)
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: PrimaryButton(
+                  label: '云同步',
+                  icon: Icons.sync,
+                  filled: false,
+                  onPressed: _openSync,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: PrimaryButton(
+                  label: '退出登录',
+                  icon: Icons.logout,
+                  filled: false,
+                  onPressed: _logout,
+                ),
+              ),
+            ],
+          )
+        else
+          PrimaryButton(
+            label: '登录 / 注册',
+            icon: Icons.login,
+            filled: false,
+            onPressed: _openLogin,
+          ),
       ],
+    );
+
+    final careerSection = _SectionCard(
+      title: '生涯模式',
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                '已掌握 $mastered / $total',
+                style: serif(16, weight: FontWeight.w600, spacing: 1),
+              ),
+            ),
+            Text(
+              mastered == 0
+                  ? '暂无进度'
+                  : '${(mastered / total * 100).round()}%',
+              style: const TextStyle(fontSize: 12, color: AppColors.inkFaint),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: total == 0 ? 0 : mastered / total,
+            minHeight: 4,
+            backgroundColor: AppColors.line,
+            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.jade),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          '答对的${widget.topic.name}不再出现在生涯模式里。'
+          '全部通关后用这里重置，重新开始。',
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.inkSoft,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 14),
+        PrimaryButton(
+          label: '重置生涯进度',
+          icon: Icons.restart_alt,
+          filled: false,
+          onPressed: mastered == 0 ? null : _confirmResetCareer,
+        ),
+      ],
+    );
+
+    final aboutSection = _SectionCard(
+      title: '关于',
+      children: const <Widget>[_UpdateSection()],
     );
 
     return Scaffold(
@@ -445,35 +364,32 @@ class _SettingsPageState extends State<SettingsPage> {
             builder: (context, size) {
               final wide = size.isExpanded;
               return ContentFrame(
-                padding: const EdgeInsets.fromLTRB(8, 8, 20, 28),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
                 child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      Padding(
-                        padding: const EdgeInsets.only(left: 0),
-                        child: Row(
-                          children: <Widget>[
-                            IconButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              icon: const Icon(
-                                Icons.arrow_back,
-                                size: 20,
-                                color: AppColors.inkSoft,
-                              ),
-                              tooltip: '返回',
+                      Row(
+                        children: <Widget>[
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(
+                              Icons.arrow_back,
+                              size: 20,
+                              color: AppColors.inkSoft,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '设置',
-                              style: serif(
-                                20,
-                                weight: FontWeight.w600,
-                                spacing: 3,
-                              ),
+                            tooltip: '返回',
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '设置',
+                            style: serif(
+                              20,
+                              weight: FontWeight.w600,
+                              spacing: 3,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       if (wide)
@@ -485,16 +401,22 @@ class _SettingsPageState extends State<SettingsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: <Widget>[
                                   birthSection,
+                                  _sectionGap,
                                   scopeSection,
+                                  _sectionGap,
                                   accountSection,
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 24),
+                            const SizedBox(width: 16),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: <Widget>[careerSection, aboutSection],
+                                children: <Widget>[
+                                  careerSection,
+                                  _sectionGap,
+                                  aboutSection,
+                                ],
                               ),
                             ),
                           ],
@@ -504,9 +426,13 @@ class _SettingsPageState extends State<SettingsPage> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: <Widget>[
                             birthSection,
+                            _sectionGap,
                             scopeSection,
+                            _sectionGap,
                             accountSection,
+                            _sectionGap,
                             careerSection,
+                            _sectionGap,
                             aboutSection,
                           ],
                         ),
@@ -520,11 +446,37 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
+
+  static const SizedBox _sectionGap = SizedBox(height: 16);
 }
 
-/// 出生年月设置项：展示当前值与推算出的学龄档位，点击弹两级选择。
-class _BirthTile extends StatelessWidget {
-  const _BirthTile({required this.profile, required this.onTap});
+/// 外卡分组：一张卡一个分区，卡内顶部是分区标题，下面是行分隔的内容。
+/// 代替旧版「悬浮 RuleDivider 标题 + 多张零散小卡」的组合。
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkCard(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: serif(15, weight: FontWeight.w600, spacing: 2)),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+/// 出生年月行：整行可点，值与推算学龄上下排布，长文案自然换行。
+class _BirthRow extends StatelessWidget {
+  const _BirthRow({required this.profile, required this.onTap});
 
   final UserProfile profile;
   final VoidCallback onTap;
@@ -539,36 +491,30 @@ class _BirthTile extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        child: InkCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Container(
-                width: 38,
-                height: 38,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.sealSoft,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: const Icon(
-                  Icons.cake_outlined,
-                  size: 19,
-                  color: AppColors.seal,
-                ),
-              ),
-              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
+                    const Text(
+                      '出生年月',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.inkSoft,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
                     Text(
                       hasBirth
                           ? '${profile.birthYear} 年 ${profile.birthMonth} 月'
                           : '设置出生年月',
-                      style: serif(16, weight: FontWeight.w600, spacing: 2),
+                      style: serif(17, weight: FontWeight.w600, spacing: 2),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(
                       hasBirth
                           ? '推荐学龄：${rec.title} · ${rec.subtitle}'
@@ -582,10 +528,14 @@ class _BirthTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(
-                Icons.chevron_right,
-                size: 18,
-                color: AppColors.inkFaint,
+              const SizedBox(width: 8),
+              const Padding(
+                padding: EdgeInsets.only(top: 14),
+                child: Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: AppColors.inkFaint,
+                ),
               ),
             ],
           ),
@@ -799,94 +749,94 @@ class _UpdateSectionState extends State<_UpdateSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: InkCard(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    // 外层的「关于」外卡提供标题与边框，这里只画内容行。
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    _currentName.isEmpty ? '拾' : '拾 v$_currentName',
-                    style: serif(14, weight: FontWeight.w600, spacing: 1),
-                  ),
-                ),
-                if (_state == 'checking' || _state == 'downloading')
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  TextButton(
-                    onPressed: _check,
-                    child: const Text('检查更新', style: TextStyle(fontSize: 13)),
-                  ),
-              ],
-            ),
-            if (_state == 'downloading') ...<Widget>[
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: LinearProgressIndicator(
-                  value: _progress,
-                  minHeight: 4,
-                  backgroundColor: AppColors.line,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppColors.seal,
-                  ),
-                ),
-              ),
-            ],
-            if (_message.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                _message,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: _state == 'failed'
-                      ? AppColors.seal
-                      : AppColors.inkSoft,
-                  height: 1.5,
-                ),
-              ),
-            ],
-            // 未授权「安装未知应用」时给出可点的入口，而不是只留一句提示。
-            if (_state == 'needPermission') ...<Widget>[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _openPermission,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.seal,
-                    side: BorderSide(
-                      color: AppColors.seal.withValues(alpha: 0.5),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('去开启授权', style: TextStyle(fontSize: 13)),
-                ),
-              ),
-            ],
-            const SizedBox(height: 6),
-            Text(
-              '新版本下载后由系统安装器完成安装，可能需要「安装未知应用」授权。'
-              '仅点击检查时联网。',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.inkFaint,
-                height: 1.5,
+            Expanded(
+              child: Text(
+                _currentName.isEmpty ? '拾' : '拾 v$_currentName',
+                style: serif(14, weight: FontWeight.w600, spacing: 1),
               ),
             ),
+            if (_state == 'checking' || _state == 'downloading')
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              TextButton(
+                onPressed: _check,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.seal,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(64, 48),
+                ),
+                child: const Text(
+                  '检查更新',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
           ],
         ),
-      ),
+        if (_state == 'downloading') ...<Widget>[
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              value: _progress,
+              minHeight: 4,
+              backgroundColor: AppColors.line,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.seal),
+            ),
+          ),
+        ],
+        if (_message.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(
+            _message,
+            style: TextStyle(
+              fontSize: 12,
+              // 失败提示用 error 令牌：seal 是主按钮与选中态的色，
+              // 出错不该和「确认动作」同色。
+              color: _state == 'failed' ? AppColors.error : AppColors.inkSoft,
+              height: 1.5,
+            ),
+          ),
+        ],
+        // 未授权「安装未知应用」时给出可点的入口，而不是只留一句提示。
+        if (_state == 'needPermission') ...<Widget>[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _openPermission,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.seal,
+                minimumSize: const Size(64, 48),
+                side: BorderSide(color: AppColors.seal.withValues(alpha: 0.5)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('去开启授权', style: TextStyle(fontSize: 14)),
+            ),
+          ),
+        ],
+        const SizedBox(height: 6),
+        const Text(
+          '新版本下载后由系统安装器完成安装，可能需要「安装未知应用」授权。'
+          '仅点击检查时联网。',
+          style: TextStyle(
+            fontSize: 11,
+            color: AppColors.inkFaint,
+            height: 1.5,
+          ),
+        ),
+      ],
     );
   }
 }

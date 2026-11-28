@@ -344,13 +344,45 @@ void main() {
       final store = await ProgressStore.load(topicId: kPoetryTopic.id);
       await pumpAt(tester, WrongBookPage(store: store, topic: kPoetryTopic));
       expect(find.byTooltip('返回'), findsOneWidget);
-      expect(find.byTooltip('移出错题本'), findsOneWidget);
-      expect(find.byTooltip('标记为已掌握'), findsNothing);
+      // 移出动作在展开区里：收起时不出现，展开后带着文字出现，
+      // 且绝不写成「标记为已掌握」——那是一个不同的功能。
+      expect(find.byTooltip('移出错题本'), findsNothing);
       await tester.tap(
         find.text(kPoetryTopic.displayNameOf(kPoetryTopic.entries.first)),
       );
       await tester.pumpAndSettle();
       expect(find.text(kPoetryTopic.entries.first.fullText), findsOneWidget);
+      expect(find.byTooltip('移出错题本'), findsOneWidget);
+      expect(find.byTooltip('标记为已掌握'), findsNothing);
+
+      // 点「移出错题本」条目真的离开清单，回到空态。
+      await tester.tap(find.byTooltip('移出错题本'));
+      await tester.pumpAndSettle();
+      expect(store.wrongPoemIds, isEmpty);
+      expect(find.text('还没有错题'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('学习页展开区有掌握文字动作，点击后徽标与计数更新', (tester) async {
+      final store = await ProgressStore.load(topicId: kPoetryTopic.id);
+      await pumpAt(tester, StudyPage(store: store, topic: kPoetryTopic));
+      final entry = kPoetryTopic.entries.first;
+      await tester.tap(find.text(kPoetryTopic.displayNameOf(entry)));
+      await tester.pumpAndSettle();
+      expect(find.text('标记为已掌握'), findsOneWidget);
+
+      await tester.tap(find.text('标记为已掌握'));
+      await tester.pumpAndSettle();
+      expect(store.masteredPoemIds, contains(entry.id));
+      expect(find.text('取消掌握'), findsOneWidget);
+      expect(find.text('已掌握 1 / ${kPoetryTopic.entries.length}'),
+          findsOneWidget);
+
+      // 再点一次取消掌握，动作文案与计数回到原样。
+      await tester.tap(find.text('取消掌握'));
+      await tester.pumpAndSettle();
+      expect(store.masteredPoemIds, isNot(contains(entry.id)));
+      expect(find.text('标记为已掌握'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });
@@ -379,7 +411,9 @@ void main() {
       expect(find.text('答对'), findsWidgets);
       expect(find.text('答错'), findsWidgets);
       expect(find.text('正确率'), findsOneWidget);
-      expect(find.textContaining('${session.correctCount} 题'), findsOneWidget);
+      // 答对/答错只在统计卡报一次；明细卡不再逐行重复。
+      expect(find.text('范围'), findsOneWidget);
+      expect(find.text('难度'), findsOneWidget);
       expect(find.text(plan.label), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
