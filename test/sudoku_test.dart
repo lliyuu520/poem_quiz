@@ -7,6 +7,7 @@ import 'package:poem_quiz/data/grade.dart';
 import 'package:poem_quiz/data/profile.dart';
 import 'package:poem_quiz/data/progress_store.dart';
 import 'package:poem_quiz/data/sudoku.dart';
+import 'package:poem_quiz/data/topic.dart';
 import 'package:poem_quiz/data/topics.dart';
 import 'package:poem_quiz/pages/home_page.dart';
 import 'package:poem_quiz/pages/sudoku_page.dart';
@@ -552,6 +553,41 @@ void main() {
       // 一星、二星已开，后面三档还锁着。
       expect(find.byIcon(Icons.lock_outline), findsNWidgets(3));
       expect(find.text('开始二星'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('数独首页「去学习」能切回上次停留的学科', (tester) async {
+      // 数独不挂学科组、一级 tab 不渲染，「去学习」是唯一的切科出口；
+      // 缺了它进了数独就回不到主界面。
+      final poetryStore = await ProgressStore.load(topicId: kPoetryTopic.id);
+      final sudokuStore = await ProgressStore.load(topicId: kSudokuTopic.id);
+      final profile = await UserProfile.load();
+      Topic current = kPoetryTopic;
+      await pumpAt(
+        tester,
+        phone,
+        // StatefulBuilder 模拟根壳：切科只换指针重建 HomePage。
+        () => StatefulBuilder(
+          builder: (context, setState) => HomePage(
+            store: current.isBoardGame ? sudokuStore : poetryStore,
+            topic: current,
+            profile: profile,
+            topics: kTopics,
+            onSwitchTopic: (t) => setState(() => current = t),
+          ),
+        ),
+      );
+      // 语文首页点「玩数独」进入数独。
+      await tester.tap(find.text('玩数独'));
+      await tester.pumpAndSettle();
+      expect(current.id, kSudokuTopic.id);
+      // 数独首页没有「玩数独」，但有「去学习」。
+      expect(find.text('玩数独'), findsNothing);
+      expect(find.text('去学习'), findsOneWidget);
+      // 点「去学习」回到诗词。
+      await tester.tap(find.text('去学习'));
+      await tester.pumpAndSettle();
+      expect(current.id, kPoetryTopic.id);
       expect(tester.takeException(), isNull);
     });
 

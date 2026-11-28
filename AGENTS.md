@@ -75,7 +75,7 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 同一 app 内切换科目，进度与错题本**按科目隔离**。
 
 - 页面一律从 `Topic` 取数，**不再直接引用 `kPoems`**。`kPoems` 只应出现在 `topics.dart` 的科目定义里。
-- **科目切换入口是首页顶部的两层 `_TopicTabs`**，不是设置页：一级遍历 `kSubjectGroups`（语文 / 数学 / 英语三组），二级遍历当前组内的科目，文案用 `Topic.displayTabLabel`（即 `tabLabel ?? name`），仅当组内科目数 > 1 时渲染（当前只有语文触发）。**语文有 8 个子科目，二级用块状方格**（`_TopicChip` + `Wrap`）而不是等分 tab：窄屏四列两行、44dp 高，宽屏 48dp——一行等分每格只剩约 40dp 读不清。**数独不在 tab 行**，走标题区的「玩数独」独立入口。每组记住上次选中的子科目（`_HomePageState._lastSubTopic` 内存 Map，不落盘）。切换只换根壳里的 `_topic` / `_store` 指针——启动时所有科目的 `ProgressStore` 已一次读齐，切换路径上没有磁盘 IO。
+- **科目切换入口是首页顶部的两层 `_TopicTabs`**，不是设置页：一级遍历 `kSubjectGroups`（语文 / 数学 / 英语三组），二级遍历当前组内的科目，文案用 `Topic.displayTabLabel`（即 `tabLabel ?? name`），仅当组内科目数 > 1 时渲染（当前只有语文触发）。**语文有 8 个子科目，二级用块状方格**（`_TopicChip` + `Wrap`）而不是等分 tab：窄屏四列两行、44dp 高，宽屏 48dp——一行等分每格只剩约 40dp 读不清。**数独不在 tab 行**，走标题区的「玩数独」独立入口；数独首页的一级 tab 不渲染，标题区同位置有「去学习」chip（回 `_HomePageState._lastSubjectId` 记的上个学科）——它是数独唯一的切科出口，别删。每组记住上次选中的子科目（`_HomePageState._lastSubTopic` 内存 Map，不落盘）。切换只换根壳里的 `_topic` / `_store` 指针——启动时所有科目的 `ProgressStore` 已一次读齐，切换路径上没有磁盘 IO。
 - 新增科目 = 在 `topics.dart` 加一个 `Topic`：给 `id`（存储键前缀）、`group`（学科组 id，语文填 `'chinese'`）、`tabLabel`（二级块两字短名）、`entries`、`groupOf`（学习页分组维度）、`metaOf`（列表副标题）、`kinds`（本科目能出的题型）、`tagline`/`intro`（首页文案）、`unit`/`searchHint` 等文案。`seal` 仍是必填构造参数（填个两行字应付即可），但**不要给 `accent`/`accentSoft`/`seal` 接 UI**——字段保留兼容，界面已统一朱红。
 - **题型随科目走，不随玩法走**：`Topic.kinds` 决定本科目能出哪些题型，`buildSession` 不传 `kinds` 时自动取科目题型，不会跨科目混题。玩法只决定题数与是否用错题本/生涯。
 - **学龄分档**：诗词、拼音、数学、成语、文学常识、歇后语、错别字、文言实词、词语都按学龄分档，`buildSession` 的 `grade` 必填。拼音的年级不是「几年级学拼音」（拼音集中在一上教完），而是**题目难度分档**：一年级声韵母与拼读、二年级复韵母与轻声、三年级平翘舌与前后鼻音、四年级易错声韵母、五六年级多音字与进阶易错音。

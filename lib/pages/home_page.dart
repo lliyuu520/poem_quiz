@@ -69,10 +69,15 @@ class _HomePageState extends State<HomePage> {
   /// 只存内存，重启回默认——落盘要给存档加字段，不值当。
   final Map<String, String> _lastSubTopic = <String, String>{};
 
+  /// 最近停留的学科科目 id（非数独）。数独首页的「去学习」入口用它回去；
+  /// 启动直接落在数独时没有记录，回落默认科目。只存内存，同 [_lastSubTopic]。
+  String? _lastSubjectId;
+
   @override
   void initState() {
     super.initState();
     _difficulty = _highestUnlocked;
+    if (!widget.topic.isBoardGame) _lastSubjectId = widget.topic.id;
     _lastSubTopic[widget.topic.group] = widget.topic.id;
   }
 
@@ -87,6 +92,8 @@ class _HomePageState extends State<HomePage> {
     _scope = widget.store.practiceScope;
     _tier = widget.store.challengeTier;
     _mode = GameMode.quick;
+    // 离开学科（如进数独）时记住它，「去学习」好回去。
+    if (!oldWidget.topic.isBoardGame) _lastSubjectId = oldWidget.topic.id;
     if (!widget.topic.isBoardGame) _lastSubTopic[widget.topic.group] = widget.topic.id;
   }
 
@@ -103,6 +110,17 @@ class _HomePageState extends State<HomePage> {
     final board = (widget.topics ?? kTopics).where((t) => t.isBoardGame);
     if (board.isEmpty) return;
     widget.onSwitchTopic(board.first);
+  }
+
+  /// 数独首页的「去学习」入口：回到最近停留的学科科目。它是数独首页唯一的
+  /// 切科出口（数独不挂学科组，一级 tab 在这里不渲染）——没有它，进了数独
+  /// 就只能杀进程退出。记录缺失或科目已不在题库时回落默认科目。
+  void _onExitSudoku() {
+    final topics = widget.topics ?? kTopics;
+    final target = _lastSubjectId == null
+        ? null
+        : topics.where((t) => t.id == _lastSubjectId).firstOrNull;
+    _onSelectTopic(target ?? kDefaultTopic);
   }
 
   /// 点一级学科组：切到该组上次选中的子科目（默认第一个）。
@@ -343,6 +361,7 @@ class _HomePageState extends State<HomePage> {
             topic: widget.topic,
             onSettings: _openSettings,
             onPlaySudoku: _onPlaySudoku,
+            onExitSudoku: _onExitSudoku,
           ),
           const SizedBox(height: 14),
           _TopicTabs(
@@ -495,6 +514,7 @@ class _HomePageState extends State<HomePage> {
           topic: widget.topic,
           onSettings: _openSettings,
           onPlaySudoku: _onPlaySudoku,
+          onExitSudoku: _onExitSudoku,
         ),
         const SizedBox(height: 14),
         _TopicTabs(
@@ -915,12 +935,14 @@ class _TitleBlock extends StatelessWidget {
     required this.topic,
     required this.onSettings,
     required this.onPlaySudoku,
+    required this.onExitSudoku,
   });
 
   final ProgressStore store;
   final Topic topic;
   final VoidCallback onSettings;
   final VoidCallback onPlaySudoku;
+  final VoidCallback onExitSudoku;
 
   /// 已解锁的档数，数独统计里用。
   String get _unlockedCount {
@@ -934,6 +956,47 @@ class _TitleBlock extends StatelessWidget {
       }
     }
     return '$n / ${SudokuDifficulty.values.length}';
+  }
+
+  /// 标题区右侧的动作 chip：学科页是「玩数独」，数独页是「去学习」。
+  /// 同款样式，两个方向互为镜像。
+  Widget _titleAction({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppMetric.radiusChip),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.sealSoft,
+            borderRadius: BorderRadius.circular(AppMetric.radiusChip),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 18, color: AppColors.seal),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.seal,
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -965,43 +1028,24 @@ class _TitleBlock extends StatelessWidget {
                 ],
               ),
             ),
-            if (!topic.isBoardGame) ...<Widget>[
+            ...<Widget>[
               const SizedBox(width: 8),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
+              if (!topic.isBoardGame)
+                _titleAction(
+                  // 保留「玩数独」而非「数独」：数独页的标题本身就是
+                  // 「数独」，入口与标题同名会让读屏与测试都分不清。
+                  label: '玩数独',
+                  icon: Icons.grid_view_outlined,
                   onTap: onPlaySudoku,
-                  borderRadius: BorderRadius.circular(AppMetric.radiusChip),
-                  child: Container(
-                    height: 48,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.sealSoft,
-                      borderRadius: BorderRadius.circular(AppMetric.radiusChip),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        const Icon(Icons.grid_view_outlined,
-                            size: 18, color: AppColors.seal),
-                        const SizedBox(width: 6),
-                        const Text(
-                          // 保留「玩数独」而非「数独」：数独页的标题本身就是
-                          // 「数独」，入口与标题同名会让读屏与测试都分不清。
-                          '玩数独',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.seal,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                )
+              else
+                // 数独不挂学科组，一级 tab 在数独首页不渲染——这颗 chip 是
+                // 唯一的切科出口，没有它进了数独就只能杀进程退出。
+                _titleAction(
+                  label: '去学习',
+                  icon: Icons.auto_stories_outlined,
+                  onTap: onExitSudoku,
                 ),
-              ),
             ],
             // 书本图标入口已删除：它和底部的「学习模式」去的是同一页，
             // 重复入口只会让儿童多一次误点。设置保留独立图标。
