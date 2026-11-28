@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../data/pinyin_audio.dart';
 import '../data/progress_store.dart';
 import '../data/topic.dart';
 import '../models/poem.dart';
 import '../theme/app_theme.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart';
-import '../widgets/english_art.dart';
-import '../widgets/speech.dart';
+import '../widgets/entry_tile.dart';
 
 /// 学习模式：浏览本科目全部条目，按科目定义的分组筛选，可标记已掌握。
 class StudyPage extends StatefulWidget {
@@ -150,15 +148,15 @@ class _StudyPageState extends State<StudyPage> {
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.line),
+                        borderSide: const BorderSide(color: AppColors.lineStrong),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.line),
+                        borderSide: const BorderSide(color: AppColors.lineStrong),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.gold),
+                        borderSide: const BorderSide(color: AppColors.goldInk, width: 1.6),
                       ),
                     ),
                   ),
@@ -225,24 +223,9 @@ class _StudyPageState extends State<StudyPage> {
                                   ),
                                   itemCount: poems.length,
                                   separatorBuilder: (_, _) =>
-                                      const SizedBox(height: 10),
-                                  itemBuilder: (context, i) => _StudyTile(
-                                    name: widget.topic.displayNameOf(poems[i]),
-                                    group: widget.topic.groupOf(poems[i]),
-                                    pinyin: widget.topic.id == 'pinyin',
-                                    meta: widget.topic.metaOf(poems[i]),
-                                    detail: widget.topic.displayDetailOf(
-                                      poems[i],
-                                    ),
-                                    mastered: mastered.contains(poems[i].id),
-                                    onToggleMastered: () =>
-                                        widget.store.markMastered(
-                                          poems[i].id,
-                                          mastered: !mastered.contains(
-                                            poems[i].id,
-                                          ),
-                                        ),
-                                  ),
+                                      const SizedBox(height: 12),
+                                  itemBuilder: (context, i) =>
+                                      _studyTile(context, poems[i], mastered),
                                 ),
                         ),
                 ),
@@ -254,25 +237,38 @@ class _StudyPageState extends State<StudyPage> {
     );
   }
 
+  /// 单张条目卡：整卡可点展开，「标记为已掌握」在展开区里以文字动作出现。
+  Widget _studyTile(BuildContext context, Poem poem, Set<String> mastered) {
+    final isMastered = mastered.contains(poem.id);
+    return EntryTile(
+      name: widget.topic.displayNameOf(poem),
+      group: widget.topic.groupOf(poem),
+      pinyin: widget.topic.id == 'pinyin',
+      meta: widget.topic.metaOf(poem),
+      detail: widget.topic.displayDetailOf(poem),
+      showMasteredBadge: isMastered,
+      borderColor: isMastered
+          ? AppColors.jade.withValues(alpha: 0.45)
+          : null,
+      footer: TileAction(
+        label: isMastered ? '取消掌握' : '标记为已掌握',
+        icon: isMastered ? Icons.bookmark : Icons.bookmark_border,
+        color: isMastered ? AppColors.jade : AppColors.inkSoft,
+        tooltip: isMastered ? '取消掌握' : '标记为已掌握',
+        onPressed: () => widget.store.markMastered(
+          poem.id,
+          mastered: !isMastered,
+        ),
+      ),
+    );
+  }
+
   /// 宽屏双列中的一列：按奇偶下标分摊条目，列内仍是可展开卡。
   Widget _tileColumn(List<Poem> poems, int offset, Set<String> mastered) {
     final tiles = <Widget>[];
     for (var i = offset; i < poems.length; i += 2) {
-      if (tiles.isNotEmpty) tiles.add(const SizedBox(height: 10));
-      tiles.add(
-        _StudyTile(
-          name: widget.topic.displayNameOf(poems[i]),
-          group: widget.topic.groupOf(poems[i]),
-          pinyin: widget.topic.id == 'pinyin',
-          meta: widget.topic.metaOf(poems[i]),
-          detail: widget.topic.displayDetailOf(poems[i]),
-          mastered: mastered.contains(poems[i].id),
-          onToggleMastered: () => widget.store.markMastered(
-            poems[i].id,
-            mastered: !mastered.contains(poems[i].id),
-          ),
-        ),
-      );
+      if (tiles.isNotEmpty) tiles.add(const SizedBox(height: 12));
+      tiles.add(_studyTile(context, poems[i], mastered));
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -302,7 +298,9 @@ class _GroupChip extends StatelessWidget {
         color: selected ? AppColors.seal : AppColors.card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: selected ? AppColors.seal : AppColors.line),
+          side: BorderSide(
+            color: selected ? AppColors.seal : AppColors.lineStrong,
+          ),
         ),
         child: InkWell(
           onTap: onTap,
@@ -325,173 +323,6 @@ class _GroupChip extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 单条条目：点击展开全文，右侧可标记已掌握。
-class _StudyTile extends StatefulWidget {
-  const _StudyTile({
-    required this.name,
-    required this.pinyin,
-    required this.meta,
-    required this.detail,
-    required this.mastered,
-    required this.onToggleMastered,
-    this.group = '',
-  });
-
-  /// 列表主标题，由科目决定（诗词带书名号，拼音直接显示字词）。
-  final String name;
-
-  /// 拼音科目用文楷渲染副标题与正文（教学体 a/g）。
-  final bool pinyin;
-
-  /// 副标题，由科目决定（诗词是「朝代 · 作者」）。
-  final String meta;
-
-  /// 展开后的正文，由科目决定（诗词全文、拼音组词示例、数学算式与思路）。
-  final String detail;
-  final bool mastered;
-  final VoidCallback onToggleMastered;
-
-  /// 条目分组。英语用它区分字母与其它条目，决定喇叭读字母名还是读词。
-  final String group;
-
-  @override
-  State<_StudyTile> createState() => _StudyTileState();
-}
-
-class _StudyTileState extends State<_StudyTile> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkCard(
-      padding: EdgeInsets.zero,
-      borderColor: widget.mastered
-          ? AppColors.jade.withValues(alpha: 0.45)
-          : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Semantics(
-            button: true,
-            expanded: _expanded,
-            child: InkWell(
-              onTap: () => setState(() => _expanded = !_expanded),
-              borderRadius: BorderRadius.circular(14),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-                child: Row(
-                  children: <Widget>[
-                    // 英语词条配缩略插画：浏览词表本身就是「认图 + 认词」的时机，
-                    // 与答题页不同，这里露图不涉及作答。
-                    if (hasEnglishArt(widget.name)) ...<Widget>[
-                      EnglishArt(name: widget.name, size: 44),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Flexible(
-                                child: Text(
-                                  widget.name,
-                                  style: serif(
-                                    17,
-                                    weight: FontWeight.w600,
-                                    spacing: 1,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (widget.mastered) ...<Widget>[
-                                const SizedBox(width: 6),
-                                const Icon(
-                                  Icons.check_circle,
-                                  size: 14,
-                                  color: AppColors.jade,
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            widget.meta,
-                            style: widget.pinyin
-                                ? serif(
-                                    12,
-                                    color: AppColors.inkSoft,
-                                    content: true,
-                                  )
-                                : const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.inkSoft,
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (widget.pinyin)
-                      SpeakButton(
-                        audioKey: PinyinAudioKeys.word(widget.name),
-                        size: 48,
-                        color: AppColors.seal,
-                      )
-                    else if (EntrySpeakButton.audioKeyForEntry(
-                          widget.name,
-                          widget.group,
-                        ) !=
-                        null)
-                      EntrySpeakButton(title: widget.name, group: widget.group),
-                    IconButton(
-                      onPressed: widget.onToggleMastered,
-                      icon: Icon(
-                        widget.mastered
-                            ? Icons.bookmark
-                            : Icons.bookmark_border,
-                        size: 19,
-                      ),
-                      color: widget.mastered
-                          ? AppColors.jade
-                          : AppColors.inkFaint,
-                      tooltip: widget.mastered ? '取消掌握' : '标记为已掌握',
-                      // 触控目标保持 ≥48dp：compact 会压到 40dp，孩子和大屏上更易误触。
-                    ),
-                    Icon(
-                      _expanded ? Icons.expand_less : Icons.expand_more,
-                      size: 20,
-                      color: AppColors.inkFaint,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  const Divider(color: AppColors.line, height: 16),
-                  Text(
-                    widget.detail,
-                    style: serif(
-                      16,
-                      height: 1.8,
-                      spacing: 2,
-                      content: widget.pinyin,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
       ),
     );
   }

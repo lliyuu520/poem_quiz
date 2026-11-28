@@ -209,6 +209,60 @@ class PrimaryButton extends StatelessWidget {
   }
 }
 
+/// 「标签 …… 值」信息行，结算页与设置页共用。
+///
+/// 值一列用 [Expanded] 收缩换行：大字体或长范围文案（「跟随推荐 · 三年级」）
+/// 自然折行，不缩小字体，也不把左侧标签挤出卡片。标签保持不约束——
+/// 它们都是两四个字的短词，不该跟着值一起变形。
+class KeyValueRow extends StatelessWidget {
+  const KeyValueRow({
+    super.key,
+    required this.label,
+    required this.value,
+    this.trailing,
+    this.crossAxisAlignment = CrossAxisAlignment.center,
+  });
+
+  final String label;
+  final String value;
+
+  /// 值之后的尾部控件（如「查看 ›」箭头）。
+  final Widget? trailing;
+
+  /// 值折成多行时顶部对齐读起来更顺；默认垂直居中。
+  final CrossAxisAlignment crossAxisAlignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: crossAxisAlignment,
+      children: <Widget>[
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, color: AppColors.inkSoft),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.ink,
+              fontWeight: FontWeight.w600,
+              height: 1.4,
+            ),
+          ),
+        ),
+        if (trailing != null) ...<Widget>[
+          const SizedBox(width: 4),
+          trailing!,
+        ],
+      ],
+    );
+  }
+}
+
 /// 分隔用的细线 + 中间小字。
 class RuleDivider extends StatelessWidget {
   const RuleDivider({super.key, this.label});

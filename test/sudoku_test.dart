@@ -786,8 +786,162 @@ void main() {
           );
         }
       }
+      // 总览态没有键盘：填数在放大态里做，总览只负责看盘与选格。
+      expect(find.text('轻触任意格子，放大后再填数'), findsOneWidget);
+      expect(find.text('擦除'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('9×9 手机：总览点格进入放大填格，宫内格子不低于 48dp', (tester) async {
+      await pumpSudoku(
+        tester,
+        phone,
+        difficulty: SudokuDifficulty.two,
+        random: Random(7),
+      );
+      final probe = probeOf(tester);
+      final blank = probe.puzzle.blanks.first;
+      final index = blank.$1 * probe.puzzle.size + blank.$2;
+      final block = blank.$1 ~/ 3 * 3 + blank.$2 ~/ 3;
+
+      // 总览点格 → 放大态：宫号出现，键盘回来，提示消失。
+      await tester.tap(cellFinder(probe.labelOf(blank.$1, blank.$2)),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('第 ${block + 1} 宫'), findsOneWidget);
+      expect(find.text('轻触任意格子，放大后再填数'), findsNothing);
       expect(find.text('擦除'), findsOneWidget);
       expect(find.text('撤销'), findsOneWidget);
+      expect(probeOf(tester).selected, index, reason: '点中的格应被选中');
+
+      // 放大态只渲染当前宫的 9 格，每格双向 ≥48dp。
+      for (var i = 0; i < 9; i++) {
+        final r = blank.$1 ~/ 3 * 3 + i ~/ 3;
+        final c = blank.$2 ~/ 3 * 3 + i % 3;
+        final size = tester.getSize(cellFinder(probe.labelOf(r, c)));
+        expect(size.width, greaterThanOrEqualTo(48), reason: '($r,$c) 宽度');
+        expect(size.height, greaterThanOrEqualTo(48), reason: '($r,$c) 高度');
+      }
+
+      // 放大态里填数走同一条落子链路。
+      await tester.tap(
+        find.byKey(ValueKey<String>('sudoku-digit-1')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      expect(probeOf(tester).values[index], 1);
+      expect(probeOf(tester).history.length, 1);
+
+      // 回总览：宫号与键盘消失，提示回来。
+      await tester.tap(find.byKey(const ValueKey<String>('sudoku-zoom-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('第 ${block + 1} 宫'), findsNothing);
+      expect(find.text('擦除'), findsNothing);
+      expect(find.text('轻触任意格子，放大后再填数'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('放大态宫间箭头切换并跟随撤销跳回', (tester) async {
+      await pumpSudoku(
+        tester,
+        phone,
+        difficulty: SudokuDifficulty.two,
+        random: Random(7),
+      );
+      final probe = probeOf(tester);
+      final blank = probe.puzzle.blanks.first;
+      final startBlock = blank.$1 ~/ 3 * 3 + blank.$2 ~/ 3;
+
+      await tester.tap(cellFinder(probe.labelOf(blank.$1, blank.$2)),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('第 ${startBlock + 1} 宫'), findsOneWidget);
+
+      IconButton prevButton() => tester.widget<IconButton>(
+            find.ancestor(
+              of: find.byTooltip('上一宫'),
+              matching: find.byType(IconButton),
+            ),
+          );
+      IconButton nextButton() => tester.widget<IconButton>(
+            find.ancestor(
+              of: find.byTooltip('下一宫'),
+              matching: find.byType(IconButton),
+            ),
+          );
+
+      // 起始宫不一定在第 1 宫：先用「上一宫」退到头。
+      while (prevButton().onPressed != null) {
+        await tester.tap(find.byTooltip('上一宫'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('第 1 宫'), findsOneWidget);
+      expect(prevButton().onPressed, isNull, reason: '第 1 宫再往前没有宫');
+
+      // 先落一子，撤销才有历史可回退。
+      await tester.tap(
+        find.byKey(ValueKey<String>('sudoku-digit-1')),
+        warnIfMissed: false,
+      );
+      await tester.pumpAndSettle();
+      final filledIndex = probeOf(tester).selected!;
+
+      // 「下一宫」：宫号 +1，选中格跳到目标宫的第一个可填格。
+      await tester.tap(find.byTooltip('下一宫'));
+      await tester.pumpAndSettle();
+      expect(find.text('第 2 宫'), findsOneWidget);
+      final nextSelected = probeOf(tester).selected!;
+      expect(nextSelected ~/ 9 ~/ 3 * 3 + nextSelected % 9 ~/ 3, 1);
+
+      // 撤销把选中格挪回落子处，放大视图跟着跳回第 1 宫。
+      await tester.tap(find.text('撤销'));
+      await tester.pumpAndSettle();
+      expect(find.text('第 1 宫'), findsOneWidget);
+      expect(probeOf(tester).selected, filledIndex);
+
+      // 一路「下一宫」到第 9 宫后箭头禁用。
+      for (var i = 0; i < 8; i++) {
+        await tester.tap(find.byTooltip('下一宫'));
+        await tester.pumpAndSettle();
+      }
+      expect(find.text('第 9 宫'), findsOneWidget);
+      expect(nextButton().onPressed, isNull);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('4×4 手机不进放大态：整盘加键盘一屏直接填', (tester) async {
+      await pumpSudoku(tester, phone);
+      expect(find.text('轻触任意格子，放大后再填数'), findsNothing);
+      expect(find.text('第 1 宫'), findsNothing);
+      expect(find.text('擦除'), findsOneWidget);
+      expect(find.text('撤销'), findsOneWidget);
+
+      // 点格只选中，不出现放大态顶栏。
+      final probe = probeOf(tester);
+      final blank = probe.puzzle.blanks.first;
+      await tester.tap(cellFinder(probe.labelOf(blank.$1, blank.$2)),
+          warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('第 1 宫'), findsNothing);
+      expect(probeOf(tester).selected, blank.$1 * probe.puzzle.size + blank.$2);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('平板横屏不出现放大态入口，数字键与擦除撤销同屏', (tester) async {
+      await pumpSudoku(
+        tester,
+        tabletLandscape,
+        difficulty: SudokuDifficulty.two,
+        random: Random(7),
+      );
+      expect(find.text('第 1 宫'), findsNothing);
+      expect(find.text('擦除'), findsOneWidget);
+      for (var d = 1; d <= 9; d++) {
+        expect(
+          find.byKey(ValueKey<String>('sudoku-digit-$d')),
+          findsOneWidget,
+        );
+      }
       expect(tester.takeException(), isNull);
     });
   });

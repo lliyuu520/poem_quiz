@@ -205,9 +205,12 @@ flutter build apk --release           # → build/app/outputs/flutter-apk/app-re
 
 ## 视觉规范
 
-宣纸底（`#F8F2E6`）+ 墨色文字 + 朱印（`#A63A2E`）点缀，衬线字体、字距 1~6、无强阴影、卡片用 1px 描边而非 elevation。颜色一律取 `AppColors` 常量，不写裸色值。
+宣纸底（`#F8F2E6`）+ 墨色文字 + 朱印（`#A63A2E`）点缀，衬线字体、字距 1~6、无强阴影、卡片用 1px 描边而非 elevation。颜色一律取 `AppColors` 常量，不写裸色值。对比度与度量令牌见 `lib/theme/app_theme.dart` 与 `docs/ui-redesign-plan.md` §2。
 
 - **全科目统一朱红**：tab 选中线、主按钮、chip 都用 `AppColors.seal`，不按科目换色——切科目换整套配色会让人觉得换了另一个 App。
+- **语义色各司其职，不要混用**（2026-11-28 全量落地）：答对 `jade`/`jadeSoft`，答错 `error`/`errorSoft`——答错**不复用 `seal`**，朱印是主按钮与「当前选中」的色，「确认」和「出错」不能是同一种信号；可读金文字与焦点框用 `goldInk`，装饰金 `gold` 对纸底只有 2.88:1，**禁止做文字或唯一焦点指示**；非交互边界（分隔线、进度轨、禁用描边）用 `line`，**可点击边界（选项、可点卡片、输入框、可用键）必须 `lineStrong`**；禁用文字用 `disabledText`，不用低透明度雾化。
+- **共享组件**：`InkCard` / `PrimaryButton` / `KeyValueRow`（标签左值右、值列 `Expanded` 可换行）在 `lib/widgets/common.dart`；学习页与错题本的条目卡共用 `EntryTile`（整卡点按展开，动作是展开区里的 `TileAction` 文字按钮，不放无文字图标）。
+- **数独 9×9 手机是「总览 → 放大填格」两步交互**（2026-11-28）：总览态整盘 + 引导文案、没有键盘；点任意格进入放大态，渲染单宫 3×3（每格 ≥48dp），键盘在放大态出现；放大哪一宫由选中格推导，撤销挪动选中格时视图自动跟跳。**不要回退成单屏小格直接填**——360dp 手机单格只有 36~41dp，低于触控底线且 TalkBack 点不准。4×4 与平板维持整盘直填。
 - `AppColors` 里仍有科目色（`pinyin` 青 / `math` 赭 / `sudoku` 靛 / `chengyu` 绛紫 / `english` 靛青），以及 `Topic.accent` / `Topic.accentSoft` / `Topic.seal` 字段。**这些当前不接 UI**，保留兼容；新增科目不用管它们。
 - **首页整页不滚动**：窄屏 `Column + Expanded + Spacer`，玩法是横排三个紧凑 `_ModeChip`（约 68dp）；宽屏标题与页签钉顶、玩法簇整体垂直居中（`_wideHomeBody`，玩法簇内部才允许滚动），超高竖屏切 roomy 变体。没有「关卡/练习范围/玩法」分隔标题。加区块前先确认整页放得下，优先压缩而不是改成滚动。
 - 首页右上角是书本图标 `Icons.auto_stories_outlined`，不再有印章文案。

@@ -78,6 +78,13 @@ class _SudokuPageState extends State<SudokuPage> {
 
   int? _selected;
 
+  /// 手机 9×9 的放大填格模式。9×9 在 360dp 手机上单格只有约 36~41dp，
+  /// 物理上凑不到 48dp 触控底线，TalkBack 也点不准，所以分两步：
+  /// 「总览」看整盘并选格，「填格」把当前宫放大到每格 100dp 以上再落子。
+  /// 只在窄屏 + 9×9 生效（4×4 格子天生够大）；放大态展示哪一宫
+  /// 由 [_selected] 推导，撤销挪动选中格时视图自动跟着跳。
+  bool _zoom = false;
+
   /// 最近一次校验判为填错的格子。只在填满触发校验时更新；
   /// 改动其中一格就撤掉那格的标记，等下一次校验重新判定。
   Set<int> _wrongCells = <int>{};
@@ -130,7 +137,38 @@ class _SudokuPageState extends State<SudokuPage> {
 
   void _select(int index) {
     if (_settled) return;
-    setState(() => _selected = index);
+    setState(() {
+      _selected = index;
+      // 总览里点格：选中它并进入放大填格（9×9）。放大态内再点只换选中格。
+      if (_puzzle.size == 9) _zoom = true;
+    });
+  }
+
+  /// 选中格所在宫（0~8，按行优先）；没有选中格时看第 1 宫。
+  int get _zoomBlock {
+    final s = _selected;
+    if (s == null) return 0;
+    return (s ~/ _puzzle.size) ~/ 3 * 3 + (s % _puzzle.size) ~/ 3;
+  }
+
+  /// 宫间移动：把选中格挪到相邻宫的第一个可填格
+  /// （整宫都是题面数字时选首格，只为高亮定位）。
+  void _shiftBlock(int delta) {
+    final target = _zoomBlock + delta;
+    if (target < 0 || target >= 9) return;
+    setState(() => _selected = _firstEditableOfBlock(target));
+  }
+
+  int _firstEditableOfBlock(int block) {
+    final originRow = block ~/ 3 * 3;
+    final originCol = block % 3 * 3;
+    final first = originRow * _puzzle.size + originCol;
+    for (var i = 0; i < 9; i++) {
+      final r = originRow + i ~/ 3;
+      final c = originCol + i % 3;
+      if (!_puzzle.isGiven(r, c)) return r * _puzzle.size + c;
+    }
+    return first;
   }
 
   void _input(int digit) {
@@ -347,7 +385,7 @@ class _SudokuPageState extends State<SudokuPage> {
                     icon: Icons.edit_note_outlined,
                     text: '错 ${_wrongCells.length}',
                     color: _wrongCells.isNotEmpty
-                        ? AppColors.seal
+                        ? AppColors.error
                         : AppColors.inkSoft,
                   ),
                 ],
@@ -360,13 +398,13 @@ class _SudokuPageState extends State<SudokuPage> {
   }
 
   /// 宽屏（平板横屏）：盘面在左，数字键在右，视线不用来回移动。
-  /// 键盘在右栏垂直居中，盘面放大到 560dp，吃满平板的横竖空间。
+  /// 两组都以行高中线垂直居中，左右重心一致。
   Widget _wideLayout() {
     return ContentFrame(
       maxWidth: 1100,
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           Expanded(flex: 3, child: _boardArea(maxSide: 560)),
           const SizedBox(width: 28),
@@ -389,18 +427,131 @@ class _SudokuPageState extends State<SudokuPage> {
     );
   }
 
-  /// 窄屏：盘面在上，数字键在下。
+  /// 窄屏。9×9 分两步走：总览看整盘选格，放大态填数；
+  /// 4×4 格子天生够大（360dp 上一格 85dp+），保持整盘加键盘一屏直接填。
   Widget _narrowLayout() {
+    if (_puzzle.size != 9) {
+      return ContentFrame(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _boardArea(),
+              const SizedBox(height: 18),
+              _keypadArea(),
+            ],
+          ),
+        ),
+      );
+    }
+    if (_zoom) {
+      return ContentFrame(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              _zoomToolbar(),
+              const SizedBox(height: 10),
+              _zoomBoardArea(),
+              const SizedBox(height: 12),
+              _keypadArea(),
+            ],
+          ),
+        ),
+      );
+    }
     return ContentFrame(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _boardArea(),
-            const SizedBox(height: 18),
-            _keypadArea(),
-          ],
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          // 总览内容不足一屏时在剩余空间里居中，避免盘面下大面积死白；
+          // 大字体内容超屏时 ConstrainedBox 的 minHeight 不生效，照常滚动。
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _boardArea(),
+                const SizedBox(height: 16),
+                const Text(
+                  '轻触任意格子，放大后再填数',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.inkSoft,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 放大态顶栏：回总览 + 迷你位置图 + 宫间移动。放大哪一宫由选中格推导，
+  /// 箭头把选中格挪进相邻宫的第一个可填格。
+  Widget _zoomToolbar() {
+    final block = _zoomBlock;
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 116,
+          child: _ActionKey(
+            key: const ValueKey<String>('sudoku-zoom-back'),
+            icon: Icons.grid_view_outlined,
+            label: '总览',
+            enabled: true,
+            onTap: () => setState(() => _zoom = false),
+          ),
+        ),
+        const Spacer(),
+        // 迷你位置图：告诉孩子当前宫在整盘的哪里——只看「第 N 宫」
+        // 数字，孩子未必换算得出九宫方位。
+        ExcludeSemantics(
+          child: _BlockMap(block: block),
+        ),
+        const SizedBox(width: 10),
+        IconButton(
+          onPressed: block > 0 ? () => _shiftBlock(-1) : null,
+          icon: const Icon(Icons.chevron_left, size: 22),
+          color: AppColors.inkSoft,
+          tooltip: '上一宫',
+        ),
+        Text(
+          '第 ${block + 1} 宫',
+          style: serif(15, weight: FontWeight.w600, spacing: 2),
+        ),
+        IconButton(
+          onPressed: block < 8 ? () => _shiftBlock(1) : null,
+          icon: const Icon(Icons.chevron_right, size: 22),
+          color: AppColors.inkSoft,
+          tooltip: '下一宫',
+        ),
+      ],
+    );
+  }
+
+  /// 放大态的宫盘面：3×3 的格子每格约 (盘面宽)/3，360dp 手机上 110dp+。
+  Widget _zoomBoardArea() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460),
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: _BlockZoom(
+            block: _zoomBlock,
+            values: _values,
+            given: _puzzle.given,
+            size: _puzzle.size,
+            wrong: _wrongCells,
+            selected: _selected,
+            onTap: _select,
+          ),
         ),
       ),
     );
@@ -429,22 +580,49 @@ class _SudokuPageState extends State<SudokuPage> {
   Widget _keypadArea() {
     final selectedValue = _selected == null ? 0 : _values[_selected!];
     final editable = !_isSelectedGiven;
+    final n = _puzzle.size;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          alignment: WrapAlignment.center,
-          children: <Widget>[
-            for (var d = 1; d <= _puzzle.size; d++)
-              _NumberKey(
-                digit: d,
-                enabled: editable,
-                onTap: () => _input(d),
-              ),
-          ],
-        ),
+        // 数字键走规则网格而不是自由换行：9 个键 3×3、4 个键一行，
+        // 键宽随容器撑满，落点稳定也更好按。
+        if (n == 4)
+          Row(
+            children: <Widget>[
+              for (var d = 1; d <= n; d++) ...<Widget>[
+                if (d > 1) const SizedBox(width: 10),
+                Expanded(
+                  child: _NumberKey(
+                    digit: d,
+                    enabled: editable,
+                    onTap: () => _input(d),
+                  ),
+                ),
+              ],
+            ],
+          )
+        else
+          Column(
+            children: <Widget>[
+              for (var row = 0; row < 3; row++) ...<Widget>[
+                if (row > 0) const SizedBox(height: 10),
+                Row(
+                  children: <Widget>[
+                    for (var col = 0; col < 3; col++) ...<Widget>[
+                      if (col > 0) const SizedBox(width: 10),
+                      Expanded(
+                        child: _NumberKey(
+                          digit: row * 3 + col + 1,
+                          enabled: editable,
+                          onTap: () => _input(row * 3 + col + 1),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ],
+          ),
         const SizedBox(height: 14),
         Row(
           children: <Widget>[
@@ -613,6 +791,7 @@ class _Cell extends StatelessWidget {
     required this.boxBottom,
     required this.boxRight,
     required this.onTap,
+    this.fontSize = 20,
   });
 
   final int row;
@@ -631,6 +810,9 @@ class _Cell extends StatelessWidget {
   final bool boxRight;
   final VoidCallback onTap;
 
+  /// 数字字号。放大态的格子约 110dp，用大字号让数字占住格子。
+  final double fontSize;
+
   String get _semanticLabel {
     final parts = <String>[
       '第 ${row + 1} 行第 ${column + 1} 列',
@@ -647,18 +829,22 @@ class _Cell extends StatelessWidget {
     if (selected) {
       bg = AppColors.sealSoft;
     } else if (wrong) {
-      bg = AppColors.sealSoft;
+      // 填错用 error/errorSoft：seal 是主按钮与「当前选中」的色，
+      // 错格复用它会把「这一格选着」和「这一格错了」混成一种信号。
+      bg = AppColors.errorSoft;
     } else if (sameValue) {
       bg = AppColors.paperDeep;
     } else if (related) {
       bg = AppColors.paperDeep.withValues(alpha: 0.55);
     }
 
+    // 玩家填的数字用 goldInk（对纸底 5.99:1）；装饰金 gold 只有 2.88:1，
+    // 做文字读不清。题面数字维持墨色加粗。
     final fg = wrong
-        ? AppColors.seal
+        ? AppColors.error
         : isGiven
         ? AppColors.ink
-        : AppColors.gold;
+        : AppColors.goldInk;
 
     final thick = AppColors.ink.withValues(alpha: 0.55);
     const thin = AppColors.line;
@@ -674,9 +860,8 @@ class _Cell extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        // 9×9 手机上单格约 36dp，物理上凑不到 48dp 触控目标。
-        // 方案是缩小页面边距保持整盘同屏，并把点击范围严格留在格内：
-        // 不向外扩展热区、不与相邻格重叠，避免误触。
+        // 点击范围严格留在格内：不向外扩展热区、不与相邻格重叠，避免误触。
+        // 9×9 手机的整盘触控问题由「总览 → 放大填格」解决（见 [_BlockZoom]）。
         child: Container(
           decoration: BoxDecoration(
             color: bg,
@@ -698,11 +883,11 @@ class _Cell extends StatelessWidget {
             ),
           ),
           alignment: Alignment.center,
-          // 选中格：金色内框压在格线上，纸面「圈出这一格」的观感，
-          // 比单独一层淡底醒目得多。
+          // 选中格：金框压在格线上，纸面「圈出这一格」的观感。
+          // 用 goldInk 而不是装饰金——金框是唯一的焦点指示，必须可读。
           foregroundDecoration: selected
               ? BoxDecoration(
-                  border: Border.all(color: AppColors.gold, width: 3),
+                  border: Border.all(color: AppColors.goldInk, width: 3),
                 )
               : null,
           child: value == 0
@@ -714,7 +899,7 @@ class _Cell extends StatelessWidget {
                     child: Text(
                       '$value',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: fontSize,
                         fontWeight: isGiven ? FontWeight.w700 : FontWeight.w500,
                         color: fg,
                         fontFeatures: const <FontFeature>[
@@ -746,7 +931,10 @@ class _NumberKey extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = enabled ? AppColors.ink : AppColors.inkFaint;
+    // 可用键是「可点击边界」，描边用 lineStrong 才看得见；
+    // 禁用键退回装饰线 line，文字用 disabledText 保持完整可读。
+    final fg = enabled ? AppColors.ink : AppColors.disabledText;
+    final borderColor = enabled ? AppColors.lineStrong : AppColors.line;
     return Semantics(
       button: true,
       enabled: enabled,
@@ -758,13 +946,12 @@ class _NumberKey extends StatelessWidget {
           onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            width: 56,
             height: 56,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: AppColors.card,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.line, width: 1.2),
+              border: Border.all(color: borderColor, width: 1.2),
             ),
             child: FittedBox(
               fit: BoxFit.scaleDown,
@@ -792,6 +979,7 @@ class _NumberKey extends StatelessWidget {
 
 class _ActionKey extends StatelessWidget {
   const _ActionKey({
+    super.key,
     required this.icon,
     required this.label,
     required this.enabled,
@@ -805,7 +993,8 @@ class _ActionKey extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = enabled ? AppColors.inkSoft : AppColors.inkFaint;
+    final color = enabled ? AppColors.inkSoft : AppColors.disabledText;
+    final borderColor = enabled ? AppColors.lineStrong : AppColors.line;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -817,7 +1006,7 @@ class _ActionKey extends StatelessWidget {
           decoration: BoxDecoration(
             color: AppColors.card,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.line, width: 1.2),
+            border: Border.all(color: borderColor, width: 1.2),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -833,5 +1022,145 @@ class _ActionKey extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// 3×3 迷你位置图：当前放大的宫在整盘的九宫方位，一眼定位。
+class _BlockMap extends StatelessWidget {
+  const _BlockMap({required this.block});
+
+  /// 宫序号 0~8，按行优先。
+  final int block;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Column(
+        children: <Widget>[
+          for (var r = 0; r < 3; r++)
+            Expanded(
+              child: Row(
+                children: <Widget>[
+                  for (var c = 0; c < 3; c++)
+                    Expanded(child: _square(r * 3 + c)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _square(int index) {
+    final current = index == block;
+    return Container(
+      margin: const EdgeInsets.all(1.5),
+      decoration: BoxDecoration(
+        color: current ? AppColors.seal : Colors.transparent,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(
+          color: current ? AppColors.seal : AppColors.line,
+        ),
+      ),
+    );
+  }
+}
+
+/// 放大填格：只渲染当前宫的格子。9×9 手机的整盘单格凑不到 48dp，
+/// 这里 3×3 摆开，每格约盘面宽的三分之一，360dp 手机上也有 110dp+。
+/// 选中格、错格与格线的语义与整盘 [_Board] 完全一致，只是范围缩小。
+class _BlockZoom extends StatelessWidget {
+  const _BlockZoom({
+    required this.block,
+    required this.values,
+    required this.given,
+    required this.size,
+    required this.wrong,
+    required this.selected,
+    required this.onTap,
+  });
+
+  /// 宫序号 0~8，按行优先。
+  final int block;
+  final List<int> values;
+  final List<int> given;
+  final int size;
+
+  /// 最近一次填满校验判错的格子。
+  final Set<int> wrong;
+  final int? selected;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final originRow = block ~/ 3 * 3;
+    final originCol = block % 3 * 3;
+    final selectedValue = selected == null ? 0 : values[selected!];
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        border: Border.all(
+          color: AppColors.ink.withValues(alpha: 0.55),
+          width: 1.6,
+        ),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        children: <Widget>[
+          for (var r = 0; r < 3; r++)
+            Expanded(
+              child: Row(
+                children: <Widget>[
+                  for (var c = 0; c < 3; c++)
+                    Expanded(child: _cellAt(originRow + r, originCol + c,
+                        originRow: originRow, originCol: originCol,
+                        selectedValue: selectedValue)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cellAt(
+    int row,
+    int col, {
+    required int originRow,
+    required int originCol,
+    required int selectedValue,
+  }) {
+    final index = row * size + col;
+    return _Cell(
+      row: row,
+      column: col,
+      value: values[index],
+      isGiven: given[index] != 0,
+      wrong: wrong.contains(index),
+      selected: selected == index,
+      related: _isRelated(row, col),
+      sameValue: selectedValue != 0 && values[index] == selectedValue,
+      // 宫线只在放大块的外沿：块内相邻格之间都是细线。
+      boxTop: row == originRow,
+      boxLeft: col == originCol,
+      boxBottom: row == originRow + 2,
+      boxRight: col == originCol + 2,
+      fontSize: 40,
+      onTap: () => onTap(index),
+    );
+  }
+
+  /// 与选中格同行、同列或同宫（与 [_Board._isRelated] 同一套规则）。
+  bool _isRelated(int r, int c) {
+    final s = selected;
+    if (s == null) return false;
+    final sr = s ~/ size, sc = s % size;
+    if (sr == r && sc == c) return false;
+    return sr == r ||
+        sc == c ||
+        (sr ~/ 3 == r ~/ 3 && sc ~/ 3 == c ~/ 3);
   }
 }
